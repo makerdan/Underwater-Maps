@@ -365,6 +365,31 @@ describe("DepthColorsCard — activePresetId all-band comparison", () => {
 });
 
 describe("DepthColorsCard — server sync on palette mutations", () => {
+  it("shows and applies the Pastel preset for the current band count", () => {
+    const pastel = PALETTE_PRESETS.find((preset) => preset.id === "pastel")!;
+    render(<DepthColorsCard />);
+
+    const button = screen.getByTestId("palette-preset-pastel");
+    expect(button).toHaveTextContent("Pastel");
+    expect(button).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(button);
+    expect(h.setBandColors).toHaveBeenCalledWith(bandColorsFromPreset(pastel, 3));
+    expect(flushServerSync).toHaveBeenCalled();
+  });
+
+  it("keeps the Pastel preset sized to changed bands and leaves boundaries untouched", () => {
+    const pastel = PALETTE_PRESETS.find((preset) => preset.id === "pastel")!;
+    const boundaries = [0, 100, 300, 700, 1200, 2000];
+    h.paletteOverrides.bandColors = ["#111111", "#222222", "#333333", "#444444", "#555555"];
+    h.paletteOverrides.bandBoundaries = boundaries;
+    render(<DepthColorsCard />);
+
+    fireEvent.click(screen.getByTestId("palette-preset-pastel"));
+    expect(h.setBandColors).toHaveBeenCalledWith(bandColorsFromPreset(pastel, 5));
+    expect(h.paletteOverrides.bandBoundaries).toEqual(boundaries);
+  });
+
   it("preset selection writes band colours AND flushes server sync", () => {
     render(<DepthColorsCard />);
     const preset = PALETTE_PRESETS[0]!;

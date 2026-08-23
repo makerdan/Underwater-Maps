@@ -131,12 +131,28 @@ export interface PalettePreset {
   label: string;
   shallow: string;
   deep: string;
+  /** Optional curated stops used when a preset needs more than endpoint interpolation. */
+  stops?: readonly CustomStop[];
 }
 
 export const PALETTE_PRESETS: PalettePreset[] = [
   { id: "default", label: "Default Ocean", shallow: DEFAULT_SHALLOW, deep: DEFAULT_DEEP },
   { id: "high-contrast", label: "High-Contrast", shallow: "#ffeb3b", deep: "#000000" },
   { id: "warm", label: "Warm Shallows", shallow: "#ffd54f", deep: "#4a148c" },
+  {
+    id: "pastel",
+    label: "Pastel",
+    shallow: "#ffb3b3",
+    deep: "#c8b8e8",
+    stops: [
+      { position: 0.00, hex: "#ffb3b3" },
+      { position: 0.20, hex: "#ffd5a8" },
+      { position: 0.40, hex: "#fff3b0" },
+      { position: 0.60, hex: "#b8f0d0" },
+      { position: 0.80, hex: "#b3d4f5" },
+      { position: 1.00, hex: "#c8b8e8" },
+    ],
+  },
 ];
 
 /** A single colour stop on the (deprecated) Custom palette. */
@@ -178,6 +194,7 @@ const paletteStateScalarSchema = z.object({
  * @deprecated retained for localStorage hydration paths only.
  */
 export function customStopsFromPreset(preset: PalettePreset): CustomStop[] {
+  if (preset.stops) return preset.stops.map((stop) => ({ ...stop }));
   return [
     { position: 0.0, hex: preset.shallow },
     { position: 0.3, hex: MID1_HEX },
@@ -196,6 +213,23 @@ export function bandColorsFromPreset(
   count: number = DEFAULT_BAND_COLORS.length,
 ): string[] {
   const n = Math.max(MIN_BANDS, Math.min(MAX_BANDS, Math.round(count)));
+  if (preset.stops && preset.stops.length >= 2) {
+    const stops = [...preset.stops].sort((a, b) => a.position - b.position);
+    return Array.from({ length: n }, (_, i) => {
+      const position = n === 1 ? 0 : i / (n - 1);
+      if (position <= stops[0]!.position) return stops[0]!.hex;
+      for (let stopIndex = 0; stopIndex < stops.length - 1; stopIndex++) {
+        const lo = stops[stopIndex]!;
+        const hi = stops[stopIndex + 1]!;
+        if (position <= hi.position) {
+          const span = hi.position - lo.position;
+          const alpha = span === 0 ? 0 : (position - lo.position) / span;
+          return mixHex(lo.hex, hi.hex, alpha);
+        }
+      }
+      return stops[stops.length - 1]!.hex;
+    });
+  }
   return Array.from({ length: n }, (_, i) =>
     mixHex(preset.shallow, preset.deep, n === 1 ? 0 : i / (n - 1)),
   );

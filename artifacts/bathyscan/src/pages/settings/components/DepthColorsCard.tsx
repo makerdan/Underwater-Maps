@@ -786,7 +786,9 @@ export function DepthColorsCard() {
                     height: 14,
                     borderRadius: 2,
                     border: "1px solid rgba(0,0,0,0.4)",
-                    background: `linear-gradient(90deg, ${preset.shallow} 0%, ${MID1_HEX} 33%, ${MID2_HEX} 66%, ${preset.deep} 100%)`,
+                    background: preset.stops
+                      ? `linear-gradient(90deg, ${preset.stops.map((stop) => `${stop.hex} ${stop.position * 100}%`).join(", ")})`
+                      : `linear-gradient(90deg, ${preset.shallow} 0%, ${MID1_HEX} 33%, ${MID2_HEX} 66%, ${preset.deep} 100%)`,
                   }}
                 />
                 {preset.label}

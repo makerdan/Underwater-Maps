@@ -14,6 +14,7 @@ import {
   DEFAULT_BAND_BOUNDARIES,
   MIN_BOUNDARY_GAP_FT,
   PALETTE_PRESETS,
+  bandColorsFromPreset,
 } from "../lib/paletteStore";
 
 beforeEach(() => {
@@ -550,12 +551,39 @@ describe("customStopsFromPreset", () => {
   it("uses the preset's shallow and deep endpoints", () => {
     for (const preset of PALETTE_PRESETS) {
       const stops = customStopsFromPreset(preset);
-      expect(stops).toHaveLength(4);
+      expect(stops.length).toBe(preset.stops?.length ?? 4);
       expect(stops[0]!.hex).toBe(preset.shallow);
-      expect(stops[3]!.hex).toBe(preset.deep);
+      expect(stops[stops.length - 1]!.hex).toBe(preset.deep);
       expect(stops[0]!.position).toBe(0);
-      expect(stops[3]!.position).toBe(1);
+      expect(stops[stops.length - 1]!.position).toBe(1);
     }
+  });
+});
+
+describe("bandColorsFromPreset", () => {
+  it("samples Pastel across all of its light warm-to-cool stops", () => {
+    const pastel = PALETTE_PRESETS.find((preset) => preset.id === "pastel")!;
+    const colors = bandColorsFromPreset(pastel, 6);
+
+    expect(colors).toEqual([
+      "#ffb3b3",
+      "#ffd5a8",
+      "#fff3b0",
+      "#b8f0d0",
+      "#b3d4f5",
+      "#c8b8e8",
+    ]);
+    expect(colors.every((color) => color !== "#1a237e")).toBe(true);
+  });
+
+  it("resamples Pastel to a non-default band count without collapsing its progression", () => {
+    const pastel = PALETTE_PRESETS.find((preset) => preset.id === "pastel")!;
+    const colors = bandColorsFromPreset(pastel, 3);
+
+    expect(colors).toHaveLength(3);
+    expect(colors[0]).toBe("#ffb3b3");
+    expect(colors[2]).toBe("#c8b8e8");
+    expect(colors[1]).toBe("#dcf2c0");
   });
 });
 
