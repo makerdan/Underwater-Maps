@@ -594,9 +594,10 @@ export const HUD: React.FC<HUDProps> = ({ panelRightEdge = 0 }) => {
       {/* ── Centre: crosshair + GPS ── */}
       {showCrosshairGps && (
         <div
-          className="absolute"
+          className="fixed"
+          data-panel-right-edge={panelRightEdge}
           style={{
-            top: "50%",
+            top: "50vh",
             left: panelRightEdge > 0
               ? `calc(50vw + ${panelRightEdge / 2}px)`
               : "50%",
@@ -605,11 +606,16 @@ export const HUD: React.FC<HUDProps> = ({ panelRightEdge = 0 }) => {
             flexDirection: "column",
             alignItems: "center",
             gap: 8,
+            zIndex: 1,
           }}
         >
 
           {/* Reticle */}
-          <div style={{ position: "relative", width: 40, height: 40 }}>
+          <div
+            data-testid="hud-crosshair-reticle"
+            aria-hidden="true"
+            style={{ position: "relative", width: 40, height: 40 }}
+          >
             <div
               style={{
                 position: "absolute",

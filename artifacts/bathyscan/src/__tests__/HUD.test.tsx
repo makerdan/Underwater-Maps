@@ -33,6 +33,7 @@ vi.mock("@workspace/api-client-react", () =>
 
 import { HUD } from "@/components/HUD";
 import { useCameraStore } from "@/lib/cameraStore";
+import { useSettingsStore } from "@/lib/settingsStore";
 
 vi.mock("@/lib/context", () => ({
   useAppState: () => ({
@@ -83,6 +84,7 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     (sel: (s: typeof storeState) => unknown) => sel(storeState),
     {
       getState: () => storeState,
+      setState: (patch: Partial<typeof storeState>) => Object.assign(storeState, patch),
       persist: { hasHydrated: () => false, onFinishHydration: () => () => {} },
       subscribe: () => () => {},
     },
@@ -92,6 +94,7 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
 
 describe("HUD", () => {
   beforeEach(() => {
+    useSettingsStore.setState({ showCrosshairGps: true });
     useCameraStore.setState({
       crosshairGps: null,
       lastClickedGps: null,
@@ -150,6 +153,26 @@ describe("HUD", () => {
     render(<HUD />);
     expect(screen.queryByTestId("hud-crosshair-depth-surface")).not.toBeInTheDocument();
     expect(screen.getByText("— NO TERRAIN —")).toBeInTheDocument();
+  });
+
+  it("renders the centre reticle when Crosshair GPS is enabled", () => {
+    render(<HUD />);
+    expect(screen.getByTestId("hud-crosshair-reticle")).toBeInTheDocument();
+  });
+
+  it("does not render the reticle when Crosshair GPS is disabled", () => {
+    useSettingsStore.setState({ showCrosshairGps: false });
+    render(<HUD />);
+    expect(screen.queryByTestId("hud-crosshair-reticle")).not.toBeInTheDocument();
+  });
+
+  it("keeps the reticle viewport-anchored through the expanded sidebar path", () => {
+    render(<HUD panelRightEdge={300} />);
+    const reticle = screen.getByTestId("hud-crosshair-reticle");
+    const column = reticle.parentElement;
+    expect(column).toHaveClass("fixed");
+    expect(column).toHaveAttribute("data-panel-right-edge", "300");
+    expect(column?.getAttribute("style")).toContain("z-index: 1");
   });
 
   it("never renders a stale numeric crosshair state after the ray leaves terrain", () => {
