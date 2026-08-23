@@ -79,6 +79,7 @@ import meRouter from "../routes/me.js";
 import substrateRouter from "../routes/substrate.js";
 import efhRouter from "../routes/efh.js";
 import intertidalSpotsRouter from "../routes/intertidal-spots.js";
+import catalogDiscoveryRouter from "../routes/catalog-discovery.js";
 import catalogSavesRouter from "../routes/catalog-saves.js";
 import surfaceConditionsRouter from "../routes/surface-conditions.js";
 import trollingPresetsRouter from "../routes/trolling-presets.js";
@@ -119,6 +120,7 @@ const ROUTERS: Array<[name: string, router: unknown]> = [
   ["substrate", substrateRouter],
   ["efh", efhRouter],
   ["intertidal-spots", intertidalSpotsRouter],
+  ["catalog-discovery", catalogDiscoveryRouter],
   ["catalog-saves", catalogSavesRouter],
   ["collections", collectionsRouter],
   ["surface-conditions", surfaceConditionsRouter],
