@@ -77,6 +77,8 @@ import {
   hitTestSubstrate,
   hitTestSubstrateLegend,
   renderSavedTrails,
+  renderSavedDrifts,
+  hitTestSavedDrifts,
   drawSelectionRect,
   buildIntertidalHotspotDescriptors,
   shouldDrawOverlayAtScale,
@@ -272,6 +274,7 @@ export const OverviewMap: React.FC = () => {
   /** Type of the marker that was most recently right-clicked on the overview canvas, or null. */
   const rightClickedMarkerTypeRef = useRef<string | null>(null);
   const savedTrailsRef = useRef<CanvasSavedTrail[]>([]);
+  const selectedSavedDriftIdRef = useRef<string | null>(null);
   const rafRef = useRef<number>(0);
   /** Tracks the view key (scale+offset) at the last geo-transform publish so
    *  the rAF loop can re-publish when zoom or pan changes the pixel→geo ratio. */
@@ -497,6 +500,16 @@ export const OverviewMap: React.FC = () => {
   // Marker visibility settings (reactive for SVG render and context-menu close guard).
   const overviewShowMarkers = useSettingsStore((s) => s.overviewShowMarkers);
   const visibleMarkerTypes = useSettingsStore((s) => s.visibleMarkerTypes);
+  const overviewShowMarkersRef = useRef(overviewShowMarkers);
+  const visibleMarkerTypesRef = useRef(visibleMarkerTypes);
+  useEffect(() => {
+    overviewShowMarkersRef.current = overviewShowMarkers;
+    dirtyRef.current = true;
+  }, [overviewShowMarkers]);
+  useEffect(() => {
+    visibleMarkerTypesRef.current = visibleMarkerTypes;
+    dirtyRef.current = true;
+  }, [visibleMarkerTypes]);
 
   // Weather station selected-pin React state (drives popover)
   const [selectedWeatherStation, setSelectedWeatherStation] = useState<WeatherStation | null>(null);
@@ -2957,6 +2970,15 @@ export const OverviewMap: React.FC = () => {
       if (savedTrailsRef.current.length > 0) {
         renderSavedTrails(ctx, savedTrailsRef.current, worldGrid, t);
       }
+      if (overviewShowMarkersRef.current && visibleMarkerTypesRef.current.length > 0 && markersRef.current.length > 0) {
+        renderSavedDrifts(
+          ctx,
+          markersRef.current.filter((marker) => visibleMarkerTypesRef.current.includes(marker.type)),
+          worldGrid,
+          t,
+          selectedSavedDriftIdRef.current,
+        );
+      }
 
       // Habitat overlay (drawn above depth heatmap, below markers)
       const habitatScores = useHabitatStore.getState().scores;
@@ -3855,6 +3877,40 @@ export const OverviewMap: React.FC = () => {
       const coordGrid = worldGridRef.current ?? overviewGrid;
       const { lon, lat } = canvasToLonLat(mx, my, coordGrid, t);
 
+      // Saved drift ribbons have their own interaction model. A ribbon click
+      // selects it and exposes the endpoint affordances; clicking either
+      // endpoint flies to the exact persisted waypoint. This runs before
+      // footprint and polygon handling, while ordinary point markers retain
+      // their existing context-menu and drop-in behavior.
+      if (useSettingsStore.getState().overviewShowMarkers) {
+        const driftHit = hitTestSavedDrifts(
+          markersRef.current.filter((marker) =>
+            useSettingsStore.getState().visibleMarkerTypes.includes(marker.type)),
+          mx,
+          my,
+          coordGrid,
+          t,
+        );
+        if (driftHit) {
+          selectedSavedDriftIdRef.current = driftHit.marker.id;
+          if (driftHit.endpoint) {
+            const geometry = driftHit.marker.geometry;
+            const endpoint = driftHit.endpoint === "start"
+              ? geometry.waypoints[0]
+              : geometry.waypoints[geometry.waypoints.length - 1];
+            if (endpoint) {
+              const { x: worldX, z: worldZ } = lonLatToWorldXZ(endpoint.lon, endpoint.lat, overviewGrid);
+              setPendingDropIn({ worldX, worldZ });
+              setOverviewOpen(false);
+            }
+          } else {
+            dirtyRef.current = true;
+          }
+          return;
+        }
+        selectedSavedDriftIdRef.current = null;
+      }
+
       // Non-primary footprint click → promote that dataset to primary instead
       // of dropping in. Hit-test newest-first so the most recently-added
       // footprint wins when overlapping.
@@ -4372,7 +4428,17 @@ export const OverviewMap: React.FC = () => {
       canvas.removeEventListener("click", handleClick);
       canvas.removeEventListener("contextmenu", handleContextMenu);
     };
-  }, [overviewGrid, substrateCreditUrl, substrateSourceName, substrateFetchedAt, setDatasetId, setTerrain, setPuzzleSelectedIds]);
+  }, [
+    overviewGrid,
+    substrateCreditUrl,
+    substrateSourceName,
+    substrateFetchedAt,
+    setDatasetId,
+    setTerrain,
+    setPuzzleSelectedIds,
+    setOverviewOpen,
+    setPendingDropIn,
+  ]);
 
   // ---------------------------------------------------------------------------
   // Render

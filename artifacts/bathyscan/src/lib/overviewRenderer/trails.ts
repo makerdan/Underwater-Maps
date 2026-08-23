@@ -11,6 +11,82 @@ import { isDriftMarker, sampleDriftWaypoints } from "@/lib/driftMarker";
 
 export interface CanvasTrailPoint { lon: number; lat: number; }
 export interface CanvasSavedTrail { points: CanvasTrailPoint[]; colour: string; id: string; }
+export type SavedDriftEndpoint = "start" | "end";
+export interface SavedDriftHit {
+  marker: Marker & { geometry: Extract<Marker["geometry"], { kind: "drift" }> };
+  endpoint: SavedDriftEndpoint | null;
+}
+
+function distanceToSegment(
+  px: number,
+  py: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared === 0) return Math.hypot(px - ax, py - ay);
+  const progress = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSquared));
+  return Math.hypot(px - (ax + progress * dx), py - (ay + progress * dy));
+}
+
+/**
+ * Find a saved drift ribbon or one of its endpoint affordances at a canvas
+ * position. Endpoint hits win over the ribbon body, and the closest ribbon
+ * wins when multiple saved drifts overlap.
+ */
+export function hitTestSavedDrifts(
+  markers: Marker[],
+  x: number,
+  y: number,
+  grid: TerrainData,
+  t: OverviewTransform,
+  hitRadius = 11,
+): SavedDriftHit | null {
+  let closest: { hit: SavedDriftHit; distance: number } | null = null;
+  let closestEndpoint: { hit: SavedDriftHit; distance: number } | null = null;
+
+  for (const candidate of markers) {
+    if (!isDriftMarker(candidate)) continue;
+    const points = sampleDriftWaypoints(candidate.geometry, 48);
+    if (points.length < 2) continue;
+    const canvasPoints = points.map((point) => lonLatToCanvas(point.lon, point.lat, grid, t));
+    const first = canvasPoints[0]!;
+    const last = canvasPoints[canvasPoints.length - 1]!;
+    const startDistance = Math.hypot(x - first[0], y - first[1]);
+    const endDistance = Math.hypot(x - last[0], y - last[1]);
+    const endpointDistance = Math.min(startDistance, endDistance);
+    if (endpointDistance <= hitRadius) {
+      const endpoint: SavedDriftEndpoint = startDistance <= endDistance ? "start" : "end";
+      const hit: SavedDriftHit = { marker: candidate, endpoint };
+      if (!closestEndpoint || endpointDistance < closestEndpoint.distance) {
+        closestEndpoint = { hit, distance: endpointDistance };
+      }
+      continue;
+    }
+
+    let ribbonDistance = Number.POSITIVE_INFINITY;
+    for (let i = 1; i < canvasPoints.length; i++) {
+      const previous = canvasPoints[i - 1]!;
+      const current = canvasPoints[i]!;
+      ribbonDistance = Math.min(
+        ribbonDistance,
+        distanceToSegment(x, y, previous[0], previous[1], current[0], current[1]),
+      );
+    }
+    if (ribbonDistance <= hitRadius && (!closest || ribbonDistance < closest.distance)) {
+      closest = {
+        hit: { marker: candidate, endpoint: null },
+        distance: ribbonDistance,
+      };
+    }
+  }
+
+  return closestEndpoint?.hit ?? closest?.hit ?? null;
+}
 
 /**
  * Draw completed saved trails as thin coloured polylines.
@@ -62,6 +138,7 @@ export function renderSavedDrifts(
   markers: Marker[],
   grid: TerrainData,
   t: OverviewTransform,
+  selectedMarkerId: string | null = null,
 ): void {
   for (const marker of markers) {
     if (!isDriftMarker(marker)) continue;
@@ -74,7 +151,8 @@ export function renderSavedDrifts(
     ctx.lineCap = "round";
     ctx.globalAlpha = 0.9;
     ctx.strokeStyle = colour;
-    ctx.lineWidth = 3;
+    const selected = marker.id === selectedMarkerId;
+    ctx.lineWidth = selected ? 4.5 : 3;
     ctx.setLineDash([8, 5]);
     ctx.beginPath();
     points.forEach((p, i) => {
@@ -96,6 +174,14 @@ export function renderSavedDrifts(
     ctx.beginPath(); ctx.arc(first[0], first[1], 5, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = "#f43f5e";
     ctx.beginPath(); ctx.arc(last[0], last[1], 5, 0, Math.PI * 2); ctx.fill();
+    if (selected) {
+      ctx.globalAlpha = 0.85;
+      ctx.strokeStyle = "#22d3ee";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(first[0], first[1], 9, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = "#f43f5e";
+      ctx.beginPath(); ctx.arc(last[0], last[1], 9, 0, Math.PI * 2); ctx.stroke();
+    }
     ctx.restore();
   }
 }

@@ -17,8 +17,13 @@ export type { WeatherStationPin, RawsStationPin, IntertidalHotspotPin, Intertida
 export { renderEfhLegend, hitTestEfhLegend, renderSubstrateLegend, hitTestSubstrateLegend, renderColormapLegend } from "./legends";
 export type { EfhLegendRow, EfhLegendLayout, SubstrateLegendRow, SubstrateLegendLayout } from "./legends";
 export { renderViewCone, renderCameraArrow } from "./camera";
-export { renderSavedTrails, renderSavedDrifts } from "./trails";
-export type { CanvasTrailPoint, CanvasSavedTrail } from "./trails";
+export { renderSavedTrails, renderSavedDrifts, hitTestSavedDrifts } from "./trails";
+export type {
+  CanvasTrailPoint,
+  CanvasSavedTrail,
+  SavedDriftEndpoint,
+  SavedDriftHit,
+} from "./trails";
 export { MAX_NODATA_BOUNDARY_SEGMENTS, buildNodataBoundarySegments, renderNodataBoundary } from "./nodata";
 export type { NodataBoundarySegment } from "./nodata";
 export { MAX_CONTOUR_SEGMENTS, buildContourLines, renderContourLines } from "./contours";
