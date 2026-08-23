@@ -503,8 +503,10 @@ export const MarkerForm: React.FC = () => {
     : gps;
 
   const selectedType = visibleMarkerTypes.find((t) => t.value === markerType);
-  const guide = salmonGuideRange(units === "metric" ? "metric" : "imperial");
-  const isSalmon = markerType === "salmon" || markerType.endsWith("_salmon") || markerType === "school_salmon";
+  const isSalmon = typeof markerType === "string" && (
+    markerType === "salmon" || markerType.endsWith("_salmon") || markerType === "school_salmon"
+  );
+  const guide = isSalmon ? salmonGuideRange(units === "metric" ? "metric" : "imperial") : null;
   const addPolygonVertex = () => {
     if (!displayGps || areaVertices.length >= 100) return;
     const i = areaVertices.length;
@@ -684,7 +686,7 @@ export const MarkerForm: React.FC = () => {
         </div>
         {isSalmon && (
           <div data-testid="salmon-depth-guide" style={{ margin: "7px 14px 2px", padding: "6px 8px", border: "1px solid rgba(251,146,60,0.3)", borderRadius: 3, color: "#fdba74", fontSize: "calc(12.5px * var(--bs-font-scale, 1))" }}>
-            Salmon depth guide: typical {guide.label}. Heuristic only — not a hard biological rule.
+            Salmon depth guide: typical {guide?.label}. Heuristic only — not a hard biological rule.
             {displayGps?.depth != null && <span style={{ display: "block", color: "#cbd5e1", marginTop: 2 }}>Current context: {formatDepth(displayGps.depth, { units })}</span>}
           </div>
         )}
