@@ -119,6 +119,13 @@ describe("MarkerForm — Escape key (create mode)", () => {
     useMarkerEditStore.getState().close();
   });
 
+  it("renders safely without a selected marker type and hides salmon guidance", () => {
+    expect(() => renderWithProviders(<MarkerForm />)).not.toThrow();
+
+    expect(screen.getByText(/DROP MARKER/)).toBeInTheDocument();
+    expect(screen.queryByTestId("salmon-depth-guide")).not.toBeInTheDocument();
+  });
+
   it("calls setMarkerFormOpen(false) when Escape is pressed in create mode", () => {
     renderWithProviders(<MarkerForm />);
 
