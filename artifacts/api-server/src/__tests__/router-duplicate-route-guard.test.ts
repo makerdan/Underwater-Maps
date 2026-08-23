@@ -101,6 +101,7 @@ import terrainBundlesRouter from "../routes/terrain-bundles.js";
 import envPackRouter from "../routes/env-pack.js";
 import terrainQueryRouter from "../domains/terrain/query/index.js";
 import platformCoreRouter from "../domains/platform/core-router.js";
+import terrainEnrichmentRouter from "../domains/terrain/enrichment/index.js";
 
 /** name = the routes/<name>.ts module the router comes from. */
 const ROUTERS: Array<[name: string, router: unknown]> = [
@@ -116,8 +117,8 @@ const ROUTERS: Array<[name: string, router: unknown]> = [
   ["tidal", tidalRouter],
   ["tides", tidesRouter],
   ["query", queryRouter],
-  ["trails", trailsRouter],
   ["me", meRouter],
+  ["trails", trailsRouter],
   ["substrate", substrateRouter],
   ["efh", efhRouter],
   ["intertidal-spots", intertidalSpotsRouter],
@@ -160,6 +161,23 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
       countRoutes(healthRouter) + countRoutes(settingsRouter) + countRoutes(meRouter),
     );
     expect(findDuplicateRoutes(platformCoreRouter)).toEqual([]);
+  });
+
+  it("terrain enrichment composition retains all derived-data routes without duplicates", () => {
+    expect(countRoutesDeep(terrainEnrichmentRouter)).toBe(
+      countRoutes(trailsRouter) +
+        countRoutes(substrateRouter) +
+        countRoutes(efhRouter) +
+        countRoutes(intertidalSpotsRouter),
+    );
+    expect(
+      findDuplicateRoutesAcross([
+        [trailsRouter, ""],
+        [substrateRouter, ""],
+        [efhRouter, ""],
+        [intertidalSpotsRouter, ""],
+      ]),
+    ).toEqual([]);
   });
 
   it.each(ROUTERS)("routes/%s.ts registers every (method, path) pair at most once", (name, router) => {
