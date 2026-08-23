@@ -1,5 +1,5 @@
 /**
- * Error-path tests for handleNceiSave in FindDataPanel, plus terrain-gate
+ * Error-path tests for handleNceiSave in FindDataPanel, plus direct-save
  * regression tests for the NceiResultCard "Save to Library" button.
  *
  * Coverage:
@@ -7,13 +7,14 @@
  *      user-facing message.
  *   2. The saving spinner is cleared after the error (button returns to
  *      "Save to Library" state).
- *   3. The Save button is disabled when terrainStore.activeGrid is null.
- *   4. The Save button is enabled when terrainStore.activeGrid is non-null.
+ *   3. An importable result can be saved without a loaded terrain grid.
+ *   4. A result outside NCEI WCS coverage remains unavailable.
  *
  * Guard:
  *   These behavioral tests serve as the regression guard for the catch block
  *   in handleNceiSave — if the block is removed the toast assertion fails.
- *   The terrain-gate tests guard the saveBlockedReason wiring in NceiResultCard.
+ *   The direct-save tests guard the NCEI Portal card wiring so a blank viewer
+ *   does not prevent portal results from entering the existing save flow.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, fireEvent, waitFor } from "@testing-library/react";
@@ -193,6 +194,7 @@ describe("FindDataPanel — handleNceiSave error path", () => {
     onClose.mockClear();
     nceiSaveMutateAsync.mockClear();
     toastSpy.mockClear();
+    NCEI_RESULT.wcsAvailable = true;
     // Restore a loaded terrain so error-path tests can actually click Save.
     mockTerrainState.activeGrid = {
       datasetId: "test-grid",
@@ -246,51 +248,19 @@ describe("FindDataPanel — handleNceiSave error path", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Terrain gate tests
+// Direct NCEI portal save tests
 // ---------------------------------------------------------------------------
 
-describe("FindDataPanel — NceiResultCard terrain gate", () => {
+describe("FindDataPanel — direct NCEI Portal saves", () => {
   beforeEach(() => {
     onClose.mockClear();
     nceiSaveMutateAsync.mockClear();
     toastSpy.mockClear();
+    NCEI_RESULT.wcsAvailable = true;
   });
 
-  it("disables Save to Library when no terrain is loaded (activeGrid is null)", async () => {
+  it("saves an importable result from a blank viewer exactly once", async () => {
     mockTerrainState.activeGrid = null;
-
-    renderPanel();
-    switchToNceiTab();
-
-    await waitFor(() =>
-      expect(screen.getByText("Sitka Sound Survey 2023")).toBeInTheDocument(),
-    );
-
-    const saveBtn = screen.getByRole("button", { name: /save to library/i });
-    expect(saveBtn).toBeDisabled();
-  });
-
-  it("does not call the save mutation when clicked while terrain gate is active", async () => {
-    mockTerrainState.activeGrid = null;
-
-    renderPanel();
-    switchToNceiTab();
-
-    await waitFor(() =>
-      expect(screen.getByText("Sitka Sound Survey 2023")).toBeInTheDocument(),
-    );
-
-    const saveBtn = screen.getByRole("button", { name: /save to library/i });
-    fireEvent.click(saveBtn);
-
-    expect(nceiSaveMutateAsync).not.toHaveBeenCalled();
-  });
-
-  it("enables Save to Library when a terrain is loaded (activeGrid is non-null)", async () => {
-    mockTerrainState.activeGrid = {
-      datasetId: "test-grid",
-      bbox: { minLon: -136, minLat: 56, maxLon: -135, maxLat: 57 },
-    } as unknown;
 
     renderPanel();
     switchToNceiTab();
@@ -301,5 +271,28 @@ describe("FindDataPanel — NceiResultCard terrain gate", () => {
 
     const saveBtn = screen.getByRole("button", { name: /save to library/i });
     expect(saveBtn).not.toBeDisabled();
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => expect(nceiSaveMutateAsync).toHaveBeenCalledTimes(1));
+    expect(nceiSaveMutateAsync).toHaveBeenCalledWith({
+      data: { result: NCEI_RESULT },
+    });
+  });
+
+  it("does not save a result outside NCEI WCS coverage", async () => {
+    mockTerrainState.activeGrid = null;
+    NCEI_RESULT.wcsAvailable = false;
+
+    renderPanel();
+    switchToNceiTab();
+
+    await waitFor(() =>
+      expect(screen.getByText("Sitka Sound Survey 2023")).toBeInTheDocument(),
+    );
+
+    const saveBtn = screen.getByRole("button", { name: /save to library/i });
+    expect(saveBtn).toBeDisabled();
+    fireEvent.click(saveBtn);
+    expect(nceiSaveMutateAsync).not.toHaveBeenCalled();
   });
 });
