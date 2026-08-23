@@ -13,6 +13,8 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import {
   MARKER_CATEGORY_LABELS,
+  SALMON_MARKER_TYPES,
+  BOTTOMFISH_MARKER_TYPES,
   LEGACY_MARKER_TYPES,
 } from "@/lib/markerConstants";
 
@@ -49,10 +51,13 @@ vi.mock("@/pages/settings/components/SectionTitle", () => ({
 import { MarkerSymbolsSection } from "../MarkerSymbolsSection";
 
 describe("MarkerSymbolsSection — saltwater mode (default)", () => {
-  it("shows the SALTWATER group prominently and not FRESHWATER", () => {
+  it("shows the saltwater marker guide prominently and not FRESHWATER", () => {
     h.waterType = "saltwater";
     render(<MarkerSymbolsSection />);
-    expect(screen.getByTestId("marker-symbols-saltwater")).toBeInTheDocument();
+    expect(screen.getByTestId("marker-symbols-salmon-targets")).toBeInTheDocument();
+    expect(screen.getByTestId("marker-symbols-bottomfish")).toBeInTheDocument();
+    expect(screen.getByText(SALMON_MARKER_TYPES[0].label)).toBeInTheDocument();
+    expect(screen.getByText(BOTTOMFISH_MARKER_TYPES[0].label)).toBeInTheDocument();
     expect(screen.queryByTestId("marker-symbols-freshwater")).not.toBeInTheDocument();
   });
 
