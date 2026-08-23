@@ -138,3 +138,4 @@
 - [Mobile coordinate-search e2e](mobile-coordinate-search-e2e.md) — mobile uses a dataset picker without coordinate search; narrow-flow tests must choose their shell explicitly.
 - [Nested router prefix guards](nested-router-prefix-guards.md) — prefix-aware checks avoid false duplicate reports when Express nested mounts hide their mount path.
 - [Catalog save service boundary](catalog-save-service-boundary.md) — background save lifecycle belongs in the domain service; provider builders can be lazily resolved to avoid route cycles.
+- [Overview reference overlay e2e](overview-reference-overlay-e2e.md) — after viewport changes, wait for the next live snapshot before asserting anchored or dataset-bounds image placement.

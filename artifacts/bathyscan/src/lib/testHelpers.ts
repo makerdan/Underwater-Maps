@@ -885,9 +885,11 @@ export interface BathyTestApi {
    */
   getActiveSpecialCollectionOverlay: () => {
     collectionId: string;
-    anchors: Array<{ lon: number; lat: number; imgX: number; imgY: number }>;
+    anchors: Array<{ lon: number; lat: number; imgX: number; imgY: number }> | null;
     imageReady: boolean;
     puzzleMode: boolean;
+    placement: "anchors" | "dataset-bounds";
+    opacity: number;
     transform: { scale: number; offsetX: number; offsetY: number; pxPerDeg: number };
     grid: { minLon: number; maxLon: number; minLat: number; maxLat: number };
   } | null;
@@ -1758,12 +1760,16 @@ export function installTestHelpers(): void {
       // views; its live draw loop falls back to terrainStore.overviewGrid for
       // a single loaded dataset. Mirror that production fallback here.
       const grid = worldGrid ?? useTerrainStore.getState().overviewGrid;
-      if (!active || !active.bgGeoAnchors || !overviewTransform || !grid) return null;
+      if (!active || !overviewTransform || !grid) return null;
       return {
         collectionId: active.collectionId,
-        anchors: active.bgGeoAnchors.map(({ lon, lat, imgX, imgY }) => ({ lon, lat, imgX, imgY })),
+        anchors: active.bgGeoAnchors
+          ? active.bgGeoAnchors.map(({ lon, lat, imgX, imgY }) => ({ lon, lat, imgX, imgY }))
+          : null,
         imageReady: active.bgImage !== null && active.bgImageW > 0 && active.bgImageH > 0,
         puzzleMode,
+        placement: active.bgGeoAnchors?.length === 2 ? "anchors" : "dataset-bounds",
+        opacity: active.bgOpacity,
         transform: { ...overviewTransform },
         grid: {
           minLon: grid.minLon,
