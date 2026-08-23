@@ -808,6 +808,10 @@ export const OverviewMap: React.FC = () => {
       return;
     }
     const aliveIds = new Set(visibleDatasets.map((v) => v.datasetId));
+    setPuzzleTransforms((prev) => {
+      const next = new Map([...prev].filter(([id]) => aliveIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
     setPuzzleGroups((prev) => {
       const next = new Map<string, Set<string>>();
       let changed = false;

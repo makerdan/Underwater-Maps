@@ -555,7 +555,53 @@ describe("OverviewMap — puzzle multi-select", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 8. Reset clears all transforms AND groups
+  // 8. Removing a dataset also removes its stale transform
+  // -------------------------------------------------------------------------
+  it("removes a dataset transform so it cannot affect a later restore", async () => {
+    const { canvas, setPuzzleMode, setSelection, getTransform } =
+      await renderAndCapture();
+    const gridA = makeGrid(DATASET_A, -122, -119);
+    const gridB = makeGrid(DATASET_B, -119, -116);
+    const worldGrid = makeWorldGrid(gridA, [gridB]);
+
+    await act(async () => { setPuzzleMode(true); });
+    await act(async () => { setSelection([DATASET_A, DATASET_B]); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+
+    // Move both tiles so the removed tile has a meaningful stale transform.
+    await drag(canvas, tileCenterPx(gridA, worldGrid).x, tileCenterPx(gridA, worldGrid).y, 26, -13);
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    const transformA = getTransform(DATASET_A);
+    const transformB = getTransform(DATASET_B);
+    expect(transformA?.tx).toBeCloseTo(26, 0);
+    expect(transformB?.ty).toBeCloseTo(-13, 0);
+
+    // Unload B. Its transform must be removed, while A's layout survives.
+    await act(async () => {
+      useTerrainStore.setState((prev) => ({
+        visibleDatasets: prev.visibleDatasets.filter((v) => v.datasetId !== DATASET_B),
+      }));
+    });
+    await waitFor(() => expect(getTransform(DATASET_B)).toBeNull());
+    expect(getTransform(DATASET_A)).toMatchObject(transformA!);
+
+    // Restoring B must not resurrect its old transform from component state or
+    // persisted layout state.
+    await act(async () => {
+      useTerrainStore.setState((prev) => ({
+        visibleDatasets: [
+          ...prev.visibleDatasets,
+          ({ datasetId: DATASET_B, source: "preset", overviewGrid: gridB, activeGrid: null }) as unknown as VisibleDataset,
+        ],
+      }));
+    });
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    expect(getTransform(DATASET_B)).toBeNull();
+    expect(getTransform(DATASET_A)).toMatchObject(transformA!);
+  });
+
+  // -------------------------------------------------------------------------
+  // 9. Reset clears all transforms AND groups
   // -------------------------------------------------------------------------
   it("Reset button clears all puzzle transforms and groups", async () => {
     const { canvas, setPuzzleMode, setSelection, getTransform, createGroup, getGroups } =
