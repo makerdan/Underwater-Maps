@@ -483,6 +483,9 @@ describe("DatasetPanel — collapsible streaming queue", () => {
       expect(name).toHaveStyle({ overflowWrap: "anywhere", whiteSpace: "normal" });
       expect(name).not.toHaveStyle({ textOverflow: "ellipsis" });
     }
+    expect(screen.getByTestId(`selected-dataset-name-${queuedId}`)).toHaveStyle({
+      color: "rgb(255, 255, 255)",
+    });
 
     expect(screen.getByTestId(`loading-badge-${activeId}`)).toHaveStyle({ flexShrink: "0" });
     expect(screen.getByTestId(`btn-remove-visible-${activeId}`)).toHaveStyle({ flexShrink: "0" });

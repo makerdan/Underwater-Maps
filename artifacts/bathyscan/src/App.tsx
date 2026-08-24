@@ -25,6 +25,7 @@ import { DepthScaleBar } from "@/components/DepthScaleBar";
 import { OverlaysToolsPanel } from "@/components/OverlaysToolsPanel";
 import { DatasetPanel } from "@/components/DatasetPanel";
 import { SidebarSection, SidebarSectionGroup } from "@/components/SidebarSection";
+import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { SidebarModeTabs } from "@/components/SidebarModeTabs";
 import { ToolbarRelocationHint } from "@/components/ToolbarRelocationHint";
 import { LivePanel } from "@/components/LivePanel";
@@ -315,6 +316,7 @@ function useLastSessionServerSync() {
 
 function Main() {
   const [, setLocation] = useLocation();
+  const setPanelCollapsed = usePanelCollapseStore((s) => s.setCollapsed);
   // MOBILE-ONLY gate flag: true on phones (≤767px). Computed SYNCHRONOUSLY on
   // the first render (useIsMobileImmediate, not useIsMobile) so the 3D
   // TourScene — and therefore any WebGL context — is never mounted on mobile,
@@ -1526,7 +1528,38 @@ function Main() {
             ══════════════════════════════════════════════════ */}
             <div style={{ display: sidebarMode === 'explore' ? 'flex' : 'none', flexDirection: 'column', gap: 8 }}>
               <SidebarSectionGroup wide>
-                <SidebarSection id="mapData" title="Your Data">
+                <SidebarSection
+                  id="mapData"
+                  title="Your Data"
+                  headerAction={
+                    <button
+                      type="button"
+                      data-testid="btn-header-upload-dataset"
+                      aria-label="Upload Dataset(s)"
+                      title="Upload your own dataset file"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setPanelCollapsed("uploadTerrainAccordion", false);
+                      }}
+                      style={{
+                        alignSelf: "center",
+                        margin: "0 8px 0 4px",
+                        padding: "4px 6px",
+                        color: "#00e5ff",
+                        background: "transparent",
+                        border: "1px solid rgba(0,229,255,0.35)",
+                        borderRadius: 3,
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                        letterSpacing: "0.06em",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Upload Dataset(s)
+                    </button>
+                  }
+                >
                   {(!terrain || showDatasetPanel) ? <DatasetPanel embedded /> : null}
                 </SidebarSection>
               </SidebarSectionGroup>

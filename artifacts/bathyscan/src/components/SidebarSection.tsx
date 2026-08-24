@@ -60,6 +60,8 @@ interface SidebarSectionProps {
   title: string;
   children: React.ReactNode;
   testId?: string;
+  /** Optional action rendered at the right edge without toggling the section. */
+  headerAction?: React.ReactNode;
 }
 
 export const SidebarSection: React.FC<SidebarSectionProps> = ({
@@ -67,6 +69,7 @@ export const SidebarSection: React.FC<SidebarSectionProps> = ({
   title,
   children,
   testId,
+  headerAction,
 }) => {
   const collapsed = usePanelCollapseStore((s) => s.collapsed[id]);
   const toggle = usePanelCollapseStore((s) => s.toggle);
@@ -96,36 +99,40 @@ export const SidebarSection: React.FC<SidebarSectionProps> = ({
       className="sidebar-section"
       style={shellStyle}
     >
-      <ViewscreenTooltip
-        label={collapsed ? `Expand ${title}` : `Collapse ${title}`}
-        side="right"
-      >
-        <button
-          type="button"
-          onClick={() => toggle(id)}
-          aria-expanded={!collapsed}
-          aria-controls={`sidebar-section-body-${id}`}
-          className="sidebar-section-header w-full flex items-center justify-between"
-          style={{
-            background: "none",
-            border: "none",
-            borderBottom: collapsed ? "none" : "1px solid rgba(0,229,255,0.12)",
-            borderRadius: 0,
-            cursor: "pointer",
-            textAlign: "left",
-          }}
+      <div style={{ display: "flex", alignItems: "stretch", borderBottom: collapsed ? "none" : "1px solid rgba(0,229,255,0.12)" }}>
+        <ViewscreenTooltip
+          label={collapsed ? `Expand ${title}` : `Collapse ${title}`}
+          side="right"
         >
-          <span className="sidebar-section-title" style={HEADER_TITLE}>
-            {title}
-          </span>
-          <span
-            className="sidebar-section-chevron"
-            style={{ color: "#cbd5e1", fontSize: "calc(33px * var(--bs-font-scale, 1))", lineHeight: 1 }}
+          <button
+            type="button"
+            onClick={() => toggle(id)}
+            aria-expanded={!collapsed}
+            aria-controls={`sidebar-section-body-${id}`}
+            className="sidebar-section-header flex items-center justify-between"
+            style={{
+              background: "none",
+              border: "none",
+              borderRadius: 0,
+              cursor: "pointer",
+              textAlign: "left",
+              flex: 1,
+              minWidth: 0,
+            }}
           >
-            {collapsed ? "▸" : "▾"}
-          </span>
-        </button>
-      </ViewscreenTooltip>
+            <span className="sidebar-section-title" style={HEADER_TITLE}>
+              {title}
+            </span>
+            <span
+              className="sidebar-section-chevron"
+              style={{ color: "#cbd5e1", fontSize: "calc(33px * var(--bs-font-scale, 1))", lineHeight: 1 }}
+            >
+              {collapsed ? "▸" : "▾"}
+            </span>
+          </button>
+        </ViewscreenTooltip>
+        {headerAction}
+      </div>
 
       {!collapsed && (
         <div

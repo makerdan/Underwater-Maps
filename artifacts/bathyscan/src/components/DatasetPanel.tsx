@@ -403,7 +403,9 @@ const RemoveDatasetConfirmDialog: React.FC<{
 // ─── Compact list of visible (active) + selected-but-not-active datasets ─────
 const VisibleDatasetRows: React.FC<{
   allDatasets: Array<{ id: string; name: string }>;
-}> = ({ allDatasets }) => {
+  renderActive?: boolean;
+  renderQueue?: boolean;
+}> = ({ allDatasets, renderActive = true, renderQueue = true }) => {
   const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
   const primaryDatasetId = useTerrainStore((s) => s.primaryDatasetId);
   const primaryActiveGrid = useTerrainStore((s) => s.activeGrid);
@@ -492,7 +494,7 @@ const VisibleDatasetRows: React.FC<{
   return (
     <>
       {/* ── Active datasets (in GPU memory, rendered in scene) ── */}
-      {[...activeMain, ...(activeEfh.length > 0 ? [null as null, ...activeEfh] : [])].map(
+      {renderActive && [...activeMain, ...(activeEfh.length > 0 ? [null as null, ...activeEfh] : [])].map(
         (vdOrNull) => {
           if (vdOrNull === null) {
             // EFH divider sentinel
@@ -641,7 +643,7 @@ const VisibleDatasetRows: React.FC<{
       })}
 
       {/* ── Selected-but-not-active datasets (queued for proximity streaming) ── */}
-      {selectedButNotActive.length > 0 && (
+      {renderQueue && selectedButNotActive.length > 0 && (
         <>
           {/* Toggle row — always visible when queued datasets exist */}
           <ViewscreenTooltip
@@ -700,7 +702,7 @@ const VisibleDatasetRows: React.FC<{
                   padding: "2px 8px 2px 8px",
                   gap: 4,
                   fontSize: "calc(15px * var(--bs-font-scale, 1))",
-                  color: "#64748b",
+                   color: "#ffffff",
                   borderBottom: "1px solid rgba(0,229,255,0.04)",
                   background: "rgba(0,229,255,0.03)",
                 }}
@@ -980,6 +982,23 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     () => mySaves.filter((s) => s.status === "ready" && !!s.datasetId),
     [mySaves],
   );
+  // Keep queue labels in lockstep with My Library: custom labels win, then
+  // embedded catalog names, then the stable catalog id. Uploads retain their
+  // filename-derived user-dataset name.
+  const allDatasetLabels = useMemo(() => {
+    const labels = new Map<string, string>(
+      [
+        ...(datasets ?? []).map((d) => [d.id, d.name] as const),
+        ...(userDatasets ?? []).map((d) => [d.id, d.name] as const),
+      ],
+    );
+    for (const save of mySaves) {
+      if (save.datasetId) {
+        labels.set(save.datasetId, save.displayLabel ?? save.catalog?.name ?? save.catalogId);
+      }
+    }
+    return Array.from(labels, ([id, name]) => ({ id, name }));
+  }, [datasets, userDatasets, mySaves]);
   // Collections — needed to resolve collection-scope offline downloads
   // (shares the React Query cache with CollectionsSection).
   const { data: userCollections = [] } = useGetUserCollections({
@@ -3217,14 +3236,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                   </div>
                 )}
 
-                <VisibleDatasetsHeader />
-                <VisibleDatasetRows
-                  allDatasets={[
-                    ...(datasets ?? []).map((d) => ({ id: d.id, name: d.name })),
-                    ...(userDatasets ?? []).map((d) => ({ id: d.id, name: d.name })),
-                  ]}
-
-                />
+                <VisibleDatasetRows allDatasets={allDatasetLabels} renderQueue={false} />
 
                 {isSignedIn && (
                   <>
@@ -3301,6 +3313,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       onOfflineDownload={setOfflinePackDataset}
                     />
                     <CollectionsSection />
+                    <VisibleDatasetsHeader />
+                    <VisibleDatasetRows allDatasets={allDatasetLabels} renderActive={false} />
                   </>
                 )}
 
@@ -3738,21 +3752,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             <ReassignMarkersDialog onClose={() => setReassignMarkersOpen(false)} />
           )}
 
-          {/* ── Upload accordion ── */}
+          {/* ── Upload area (opened by the Your Data header action) ── */}
           <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)" }}>
-            <ViewscreenTooltip label={uploadOpen ? "Hide upload area" : "Upload your own dataset file"} side="right">
-            <button
-              onClick={() => setUploadOpen(!uploadOpen)}
-              className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
-              style={{ cursor: "pointer" }}
-            >
-              <span style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", letterSpacing: "0.15em", color: "#cbd5e1" }}>
-                ▲ UPLOAD DATASET(S)
-              </span>
-              <span style={{ color: "#cbd5e1", fontSize: "calc(16.5px * var(--bs-font-scale, 1))" }}>{uploadOpen ? "−" : "+"}</span>
-            </button>
-            </ViewscreenTooltip>
-
             {uploadOpen && (
               <div className="px-2 pb-2">
                 {!isOnline ? (

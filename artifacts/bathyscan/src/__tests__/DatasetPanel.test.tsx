@@ -267,9 +267,10 @@ describe("DatasetPanel", () => {
   });
 
   it("renders the upload dropzone area after expanding the upload section", () => {
+    usePanelCollapseStore.setState({
+      collapsed: { ...DEFAULTS, uploadTerrainAccordion: false },
+    });
     render(<DatasetPanel />);
-    expect(screen.queryByTestId("dropzone-terrain")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText(/UPLOAD DATASET\(S\)/));
     expect(screen.getByTestId("dropzone-terrain")).toBeInTheDocument();
   });
 });
@@ -288,10 +289,11 @@ describe("DatasetPanel — upload-complete ID mismatch", () => {
 
   it("surfaces an error when terrain.datasetId does not match savedDatasetId", async () => {
     const { act } = await import("@testing-library/react");
+    // Open the persisted upload area so the dropzone is visible.
+    usePanelCollapseStore.setState({
+      collapsed: { ...DEFAULTS, uploadTerrainAccordion: false },
+    });
     render(<DatasetPanel />);
-
-    // Open the upload accordion so the dropzone is visible.
-    fireEvent.click(screen.getByText(/UPLOAD DATASET\(S\)/));
 
     // Trigger a drop to wire up the mutate callbacks.
     const file = new File(["x"], "survey.bag", { type: "application/octet-stream" });
@@ -318,9 +320,10 @@ describe("DatasetPanel — upload-complete ID mismatch", () => {
 
   it("does not surface an error when terrain.datasetId matches savedDatasetId", async () => {
     const { act } = await import("@testing-library/react");
+    usePanelCollapseStore.setState({
+      collapsed: { ...DEFAULTS, uploadTerrainAccordion: false },
+    });
     render(<DatasetPanel />);
-
-    fireEvent.click(screen.getByText(/UPLOAD DATASET\(S\)/));
 
     const file = new File(["x"], "survey.bag", { type: "application/octet-stream" });
     act(() => {
