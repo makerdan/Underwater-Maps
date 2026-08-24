@@ -140,3 +140,4 @@
 - [Catalog save service boundary](catalog-save-service-boundary.md) — background save lifecycle belongs in the domain service; provider builders can be lazily resolved to avoid route cycles.
 - [Overview reference overlay e2e](overview-reference-overlay-e2e.md) — after viewport changes, wait for the next live snapshot before asserting anchored or dataset-bounds image placement.
 - [Puzzle layout density metadata](puzzle-layout-density.md) — pair legacy pixel offsets with optional save-time density so restores stay geographically aligned across viewports.
+- [Geographic continuous longitude frame](geographic-continuous-frame.md) — compare wrapped GPS/map longitudes on the eastward interval beginning at the dataset minLon.

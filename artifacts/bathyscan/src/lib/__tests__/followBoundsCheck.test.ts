@@ -22,6 +22,7 @@ import { handleFollowOutOfBounds } from "../datasetHandoff";
 import { useGpsStore } from "../gpsStore";
 import { useCameraStore } from "../cameraStore";
 import { useTerrainStore } from "../terrainStore";
+import { isPointInGeographicBounds } from "../geographicBounds";
 
 const GRID = {
   minLon: -97.15,
@@ -45,6 +46,33 @@ beforeEach(() => {
 });
 
 describe("runFollowBoundsCheck", () => {
+  it("treats a GPS fix across the antimeridian as inside the continuous grid", () => {
+    const datelineGrid = { ...GRID, minLon: 170, maxLon: -170 };
+    useTerrainStore.setState({ activeGrid: datelineGrid, visibleDatasets: [] } as never);
+    useGpsStore.setState({ position: { ...INSIDE, longitude: -175, latitude: 33.41 } });
+
+    expect(isPointInGeographicBounds(-175, 33.41, datelineGrid)).toBe(true);
+    expect(runFollowBoundsCheck(freshState())).toBe(true);
+    expect(useCameraStore.getState().gpsFollowState).toBe("following");
+    expect(handleFollowOutOfBounds).not.toHaveBeenCalled();
+  });
+
+  it("keeps follow active for a fix inside a secondary visible dataset", () => {
+    const secondaryGrid = { ...GRID, minLon: -90, maxLon: -80 };
+    useTerrainStore.setState({
+      activeGrid: GRID,
+      visibleDatasets: [
+        { datasetId: "primary", source: "preset", activeGrid: GRID, overviewGrid: null },
+        { datasetId: "secondary", source: "preset", activeGrid: secondaryGrid, overviewGrid: null },
+      ],
+    } as never);
+    useGpsStore.setState({ position: { ...INSIDE, longitude: -85, latitude: 33.41 } });
+
+    expect(runFollowBoundsCheck(freshState())).toBe(true);
+    expect(useCameraStore.getState().gpsFollowState).toBe("following");
+    expect(handleFollowOutOfBounds).not.toHaveBeenCalled();
+  });
+
   it("returns false and resets toastFired when follow is off", () => {
     useCameraStore.setState({ gpsFollowState: "off" });
     const state = { toastFired: true };

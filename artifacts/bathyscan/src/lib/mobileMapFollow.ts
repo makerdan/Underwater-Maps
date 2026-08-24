@@ -43,6 +43,11 @@ import {
   worldYToMetres,
 } from "@/lib/terrain";
 import type { TerrainData } from "@workspace/api-client-react";
+import {
+  geographicLonRange,
+  isPointInGeographicBounds,
+  longitudeOnBboxFrame,
+} from "@/lib/geographicBounds";
 
 /**
  * MOBILE-ONLY: per-frame lerp factor for chart recentering. Slightly snappier
@@ -64,12 +69,7 @@ export interface MobileFollowTransformPort {
 
 /** True when (lon, lat) falls inside the grid's geographic bounding box. */
 function insideGrid(grid: TerrainData, lon: number, lat: number): boolean {
-  return (
-    lat >= grid.minLat &&
-    lat <= grid.maxLat &&
-    lon >= grid.minLon &&
-    lon <= grid.maxLon
-  );
+  return isPointInGeographicBounds(lon, lat, grid);
 }
 
 /**
@@ -225,9 +225,10 @@ export function depthAtGpsMetres(
 
   // Survey-gap check on the four cells surrounding the fix. Row 0 = SOUTH
   // (served-grid contract), matching lonLatToWorldXZ's linear lat → row map.
-  const lonRange = grid.maxLon - grid.minLon || 1;
+  const lonRange = geographicLonRange(grid);
   const latRange = grid.maxLat - grid.minLat || 1;
-  const fracCol = ((lon - grid.minLon) / lonRange) * (N - 1);
+  const frameLon = longitudeOnBboxFrame(lon, grid);
+  const fracCol = ((frameLon - grid.minLon) / lonRange) * (N - 1);
   const fracRow = ((lat - grid.minLat) / latRange) * (N - 1);
   const col0 = Math.max(0, Math.min(N - 2, Math.floor(fracCol)));
   const row0 = Math.max(0, Math.min(N - 2, Math.floor(fracRow)));

@@ -14,6 +14,7 @@ import { MARKER_COLOR } from "@/lib/markerConstants";
 import { loadMarkerIconImage, peekMarkerIconImage } from "@/lib/markerIcons";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useSatelliteTileStore } from "@/lib/satelliteTileStore";
+import { geographicLonRange, longitudeOnBboxFrame } from "@/lib/geographicBounds";
 
 const W = 180;
 const H = 180;
@@ -83,10 +84,10 @@ function datasetCanvasRect(
   dataBbox: { minLon: number; maxLon: number; minLat: number; maxLat: number },
   unionBbox: { minLon: number; maxLon: number; minLat: number; maxLat: number },
 ): { x: number; y: number; w: number; h: number } {
-  const lonRange = unionBbox.maxLon - unionBbox.minLon || 1;
+  const lonRange = geographicLonRange(unionBbox);
   const latRange = unionBbox.maxLat - unionBbox.minLat || 1;
-  const x0 = ((dataBbox.minLon - unionBbox.minLon) / lonRange) * W;
-  const x1 = ((dataBbox.maxLon - unionBbox.minLon) / lonRange) * W;
+  const x0 = ((longitudeOnBboxFrame(dataBbox.minLon, unionBbox) - unionBbox.minLon) / lonRange) * W;
+  const x1 = ((longitudeOnBboxFrame(dataBbox.maxLon, unionBbox) - unionBbox.minLon) / lonRange) * W;
   // North-up: maxLat maps to small y (top), minLat maps to large y (bottom)
   const y0 = H - ((dataBbox.maxLat - unionBbox.minLat) / latRange) * H;
   const y1 = H - ((dataBbox.minLat - unionBbox.minLat) / latRange) * H;
@@ -697,9 +698,9 @@ export const Minimap: React.FC = () => {
     //    the primary terrain is offset within the canvas.
     if (camLon !== null && camLat !== null) {
       const bbox = unionBboxRef.current ?? currentTerrain;
-      const lonRange = bbox.maxLon - bbox.minLon || 1;
+      const lonRange = geographicLonRange(bbox);
       const latRange = bbox.maxLat - bbox.minLat || 1;
-      const px = ((camLon - bbox.minLon) / lonRange) * W;
+      const px = ((longitudeOnBboxFrame(camLon, bbox) - bbox.minLon) / lonRange) * W;
       // North-up: invert y so high-lat (North) is at top.
       const py = H - ((camLat - bbox.minLat) / latRange) * H;
       if (px >= 0 && px <= W && py >= 0 && py <= H) {
@@ -826,19 +827,21 @@ export const Minimap: React.FC = () => {
     // lon/lat → world coords via the primary terrain bbox so teleport targets
     // always land within the loaded 3D mesh.
     const bbox = unionBboxRef.current ?? terrain;
-    const bboxLonRange = bbox.maxLon - bbox.minLon || 1;
+    const bboxLonRange = geographicLonRange(bbox);
     const bboxLatRange = bbox.maxLat - bbox.minLat || 1;
-    const lon = bbox.minLon + (px / W) * bboxLonRange;
+    const lon = longitudeOnBboxFrame(bbox.minLon + (px / W) * bboxLonRange, bbox);
     // North-up: py=0 → maxLat (North), py=H → minLat (South)
     const lat = bbox.minLat + (1 - py / H) * bboxLatRange;
 
     // Clamp lon/lat to the primary terrain's geographic extent so clicks on
     // secondary-only regions of the union bbox still teleport within the loaded
     // 3D mesh rather than producing out-of-range world coordinates.
-    const clampedLon = Math.max(terrain.minLon, Math.min(terrain.maxLon, lon));
+    const terrainLon = longitudeOnBboxFrame(lon, terrain);
+    const terrainFrameMax = terrain.minLon + geographicLonRange(terrain);
+    const clampedLon = Math.max(terrain.minLon, Math.min(terrainFrameMax, terrainLon));
     const clampedLat = Math.max(terrain.minLat, Math.min(terrain.maxLat, lat));
 
-    const terrLonRange = terrain.maxLon - terrain.minLon || 1;
+    const terrLonRange = geographicLonRange(terrain);
     const terrLatRange = terrain.maxLat - terrain.minLat || 1;
     const worldX = ((clampedLon - terrain.minLon) / terrLonRange) * WORLD_SIZE - WORLD_SIZE / 2;
     const worldZ = ((clampedLat - terrain.minLat) / terrLatRange) * WORLD_SIZE - WORLD_SIZE / 2;
@@ -869,23 +872,24 @@ export const Minimap: React.FC = () => {
       // terrain grid coordinates so the survey-gap check is accurate even
       // when the primary terrain is offset within the union-bbox canvas.
       const bbox = unionBboxRef.current ?? terrain;
-      const bboxLonRange = bbox.maxLon - bbox.minLon || 1;
+      const bboxLonRange = geographicLonRange(bbox);
       const bboxLatRange = bbox.maxLat - bbox.minLat || 1;
-      const lon = bbox.minLon + (px / W) * bboxLonRange;
+      const lon = longitudeOnBboxFrame(bbox.minLon + (px / W) * bboxLonRange, bbox);
       const lat = bbox.minLat + (1 - py / H) * bboxLatRange;
 
       // Only show "Survey gap" when the cursor is inside the primary terrain.
       if (
-        lon < terrain.minLon || lon > terrain.maxLon ||
+        longitudeOnBboxFrame(lon, terrain) < terrain.minLon ||
+        longitudeOnBboxFrame(lon, terrain) > terrain.minLon + geographicLonRange(terrain) ||
         lat < terrain.minLat || lat > terrain.maxLat
       ) {
         setCanvasTooltip("Click to teleport here");
         return;
       }
 
-      const terrLonRange = terrain.maxLon - terrain.minLon || 1;
+      const terrLonRange = geographicLonRange(terrain);
       const terrLatRange = terrain.maxLat - terrain.minLat || 1;
-      const gx = Math.min(terrain.width - 1, Math.floor(((lon - terrain.minLon) / terrLonRange) * terrain.width));
+      const gx = Math.min(terrain.width - 1, Math.floor(((longitudeOnBboxFrame(lon, terrain) - terrain.minLon) / terrLonRange) * terrain.width));
       const gy = Math.min(terrain.height - 1, Math.floor(((lat - terrain.minLat) / terrLatRange) * terrain.height));
       const depth = terrain.depths[gy * terrain.width + gx];
       const isNull = depth === null || depth === undefined || isNaN(depth as number);

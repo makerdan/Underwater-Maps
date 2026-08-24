@@ -139,6 +139,7 @@ import { computeSnapAdjustment, type SnapEdgeSeg, type SnapRect } from "@/lib/pu
 import { buildRestoredPuzzleState, applyDragTranslation } from "@/lib/puzzleRestore";
 import { CatalogResultFilters } from "@/components/CatalogResultFilters";
 import { filterCatalogResults, EMPTY_CATALOG_RESULT_FILTERS, type CatalogResultFilters as CatalogFilters } from "@/lib/catalogResultFilters";
+import { isPointInGeographicBounds } from "@/lib/geographicBounds";
 
 interface TooltipState {
   visible: boolean;
@@ -4104,12 +4105,7 @@ export const OverviewMap: React.FC = () => {
         if (!v || v.datasetId === primIdNow) continue;
         const og = v.overviewGrid;
         if (!og) continue;
-        if (
-          lon >= og.minLon &&
-          lon <= og.maxLon &&
-          lat >= og.minLat &&
-          lat <= og.maxLat
-        ) {
+        if (isPointInGeographicBounds(lon, lat, og)) {
           useTerrainStore.getState().setPrimary(v.datasetId, v.source);
           if (v.source === "preset") {
             setDatasetId(v.datasetId);
@@ -5461,12 +5457,30 @@ export const OverviewMap: React.FC = () => {
           )}
 
           {gpsActive && gpsPosition && overviewGrid && (() => {
-            const inBounds =
-              gpsPosition.latitude >= overviewGrid.minLat &&
-              gpsPosition.latitude <= overviewGrid.maxLat &&
-              gpsPosition.longitude >= overviewGrid.minLon &&
-              gpsPosition.longitude <= overviewGrid.maxLon;
-            if (!inBounds) return null;
+            const gpsGrids = visibleDatasets
+              .map((dataset) => dataset.overviewGrid)
+              .filter((grid): grid is NonNullable<typeof grid> => !!grid);
+            const inBounds = gpsGrids.length > 0
+              ? gpsGrids.some((grid) =>
+                  isPointInGeographicBounds(
+                    gpsPosition.longitude,
+                    gpsPosition.latitude,
+                    grid,
+                  ),
+                )
+              : isPointInGeographicBounds(
+                  gpsPosition.longitude,
+                  gpsPosition.latitude,
+                  overviewGrid,
+                );
+            // A secondary-only fix is visible on the overview, but cannot be
+            // projected safely into the primary 3D mesh for DIVE HERE.
+            const inPrimaryBounds = isPointInGeographicBounds(
+              gpsPosition.longitude,
+              gpsPosition.latitude,
+              overviewGrid,
+            );
+            if (!inBounds || !inPrimaryBounds) return null;
             return (
               <ViewscreenTooltip label="Dive in at your GPS position" side="bottom">
               <button

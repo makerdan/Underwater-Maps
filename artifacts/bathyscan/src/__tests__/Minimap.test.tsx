@@ -37,6 +37,7 @@ import { useTerrainStore, type VisibleDataset } from "@/lib/terrainStore";
 import { WORLD_SIZE, NO_DATA_COLOR } from "@/lib/terrain";
 import { usePaletteStore } from "@/lib/paletteStore";
 import type { ColormapTheme } from "@/lib/settingsStore";
+import { geographicLonRange, longitudeOnBboxFrame } from "@/lib/geographicBounds";
 
 const mockTerrain = {
   datasetId: "test-ds",
@@ -568,6 +569,19 @@ describe("computeMinimapUnionBbox", () => {
     expect(result!.minLat).toBeCloseTo(grid1.minLat);
     expect(result!.maxLat).toBeCloseTo(grid1.maxLat);
     void grid2; // not used in this case
+  });
+
+  it("preserves a dateline bbox as a continuous 20-degree frame", () => {
+    const dateline = makeGrid(170, -170, 10, 20);
+    const result = computeMinimapUnionBbox([makeVisible(dateline)], dateline);
+    expect(result).toMatchObject({
+      minLon: dateline.minLon,
+      maxLon: dateline.maxLon,
+      minLat: dateline.minLat,
+      maxLat: dateline.maxLat,
+    });
+    expect(geographicLonRange(result!)).toBe(20);
+    expect(longitudeOnBboxFrame(-175, result!)).toBe(185);
   });
 });
 

@@ -11,6 +11,7 @@ import { useGpsStore } from "./gpsStore";
 import { useCameraStore } from "./cameraStore";
 import { useTerrainStore } from "./terrainStore";
 import { handleFollowOutOfBounds } from "./datasetHandoff";
+import { isPointInGeographicBounds } from "./geographicBounds";
 
 export interface FollowCheckState {
   toastFired: boolean;
@@ -61,8 +62,7 @@ export function runFollowBoundsCheck(state: FollowCheckState): boolean {
       ? visibleDatasets.filter((v) => v.activeGrid).map((v) => v.activeGrid!)
       : [activeGrid];
   const insideAny = gridsToCheck.some(
-    (g) =>
-      lat >= g.minLat && lat <= g.maxLat && lon >= g.minLon && lon <= g.maxLon,
+    (g) => isPointInGeographicBounds(lon, lat, g),
   );
 
   if (!insideAny) {
