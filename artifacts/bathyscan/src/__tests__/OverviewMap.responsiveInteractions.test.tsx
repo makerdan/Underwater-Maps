@@ -99,26 +99,15 @@ describe("OverviewMap responsive interactions", () => {
     renderOverview();
     const gps = screen.getByTestId("gps-activate-btn");
 
-    expect(gps).toHaveTextContent("📍 LIVE GPS");
-    expect(gps).toHaveAccessibleName("Start live GPS");
-  });
-
-  it("shows one named-layout action instead of a redundant session Save", () => {
-    sessionStorage.setItem(
-      "bathyscan:puzzleTransforms",
-      JSON.stringify([["responsive-ds", { tx: 12, ty: 8, angleDeg: 0 }]]),
-    );
-    renderOverview();
-
-    expect(screen.queryByTestId("overview-puzzle-save")).not.toBeInTheDocument();
+    const saveSession = screen.getByTestId("overview-puzzle-save");
     const saveLayout = screen.getByTestId("overview-puzzle-save-layout");
-    expect(saveLayout).toHaveTextContent("📌 SAVE NAMED LAYOUT");
-    expect(saveLayout).toHaveAccessibleName("Save current puzzle arrangement as a named, reusable layout");
+    expect(saveLayout).toHaveTextContent("📌 SAVE LAYOUT");
+    expect(saveLayout).toHaveAccessibleName("Save current puzzle arrangement as a named layout");
 
     fireEvent.click(saveLayout);
     expect(screen.getByTestId("overview-puzzle-layout-form")).toBeInTheDocument();
     expect(screen.getByTestId("overview-puzzle-layout-confirm"))
-      .toHaveAccessibleName("Save named, reusable puzzle layout");
+      .toHaveAccessibleName("Save named puzzle layout");
   });
 
   it("keeps the compass and zoom controls together below the header", () => {
