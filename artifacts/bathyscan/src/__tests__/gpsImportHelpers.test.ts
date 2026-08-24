@@ -4,7 +4,17 @@
  *   - bboxIntersects
  */
 import { describe, it, expect } from "vitest";
-import { computeResultBbox, bboxIntersects, type ParseResult, type Bounds } from "@/lib/gpsImport";
+import {
+  computeResultBbox,
+  bboxIntersects,
+  normalizeRoutes,
+  analyzeRouteLoop,
+  closeRouteAtReturnPoint,
+  distanceBetweenCoordinates,
+  type ParseResult,
+  type Bounds,
+  type ParsedRoute,
+} from "@/lib/gpsImport";
 
 // ---------------------------------------------------------------------------
 // computeResultBbox
@@ -150,5 +160,64 @@ describe("bboxIntersects", () => {
     expect(bboxIntersects(western, crossing)).toBe(true);
     expect(bboxIntersects(crossing, outside)).toBe(false);
     expect(bboxIntersects(outside, crossing)).toBe(false);
+  });
+});
+
+describe("daily route normalization", () => {
+  const track = (points: ParsedRoute["points"]): ParsedRoute => ({
+    name: "Survey",
+    source: "track",
+    points,
+  });
+
+  it("splits fully timestamped tracks at UTC calendar midnight", () => {
+    const routes = normalizeRoutes([
+      track([
+        { lat: 1, lon: 2, time: "2026-01-01T23:59:59Z" },
+        { lat: 1, lon: 3, time: "2026-01-02T00:00:00Z" },
+        { lat: 1, lon: 4, time: "2026-01-02T00:01:00Z" },
+      ]),
+    ]);
+    expect(routes.map((r) => r.name)).toEqual(["Survey — 2026-01-01", "Survey — 2026-01-02"]);
+    expect(routes.map((r) => r.points.length)).toEqual([1, 2]);
+    expect(routes[0]!.points[0]!.time).toBe("2026-01-01T23:59:59Z");
+  });
+
+  it("does not split partially timestamped, invalid, or non-track routes", () => {
+    const routes = [
+      track([
+        { lat: 1, lon: 2, time: "2026-01-01T23:00:00Z" },
+        { lat: 1, lon: 3 },
+      ]),
+      { ...track([{ lat: 1, lon: 2, time: "not-a-time" }]), source: "route" as const },
+    ];
+    const normalized = normalizeRoutes(routes);
+    expect(normalized).toHaveLength(2);
+    expect(normalized[0]!.name).toBe("Survey");
+    expect(normalized[0]!.points).not.toBe(routes[0]!.points);
+  });
+
+  it("detects exact, near, far, short, and dateline-safe loops", () => {
+    const exact = track([{ lat: 1, lon: 2 }, { lat: 2, lon: 3 }, { lat: 1, lon: 2 }]);
+    expect(analyzeRouteLoop(exact).closingIndex).toBe(2);
+    expect(analyzeRouteLoop(track([{ lat: 1, lon: 2 }])).isLoop).toBe(false);
+    expect(analyzeRouteLoop(track([{ lat: 1, lon: 2 }, { lat: 1, lon: 3 }])).isLoop).toBe(false);
+    expect(analyzeRouteLoop(track([{ lat: 0, lon: 179.9999 }, { lat: 0, lon: -179.9999 }])).isLoop).toBe(true);
+    expect(analyzeRouteLoop(track([{ lat: 0, lon: 0 }, { lat: 1, lon: 1 }])).isLoop).toBe(false);
+    expect(distanceBetweenCoordinates({ lat: 0, lon: 179 }, { lat: 0, lon: -179 })).toBeLessThan(225_000);
+  });
+
+  it("closes at a return point without mutating or duplicating a closed endpoint", () => {
+    const route = track([
+      { lat: 0, lon: 0 },
+      { lat: 1, lon: 1 },
+      { lat: 0, lon: 0 },
+      { lat: 2, lon: 2 },
+    ]);
+    const closed = closeRouteAtReturnPoint(route);
+    expect(closed.points).toHaveLength(3);
+    expect(route.points).toHaveLength(4);
+    expect(closed.points[2]).toEqual(closed.points[0]);
+    expect(closeRouteAtReturnPoint(track([{ lat: 0, lon: 0 }, { lat: 0, lon: 0 }])).points).toHaveLength(2);
   });
 });

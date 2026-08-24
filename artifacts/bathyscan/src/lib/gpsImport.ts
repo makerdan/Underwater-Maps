@@ -28,6 +28,10 @@ export interface ParsedPoint {
   notes?: string;
   depth?: number;
   type?: string;
+  /** Original GPX <time> value when valid. */
+  time?: string;
+  /** Alias retained for callers that use the more explicit terminology. */
+  timestamp?: string;
   source: PointSource;
 }
 
@@ -35,10 +39,20 @@ export interface ParsedRoute {
   /** Stable identity used by the import editor; absent for parser-only callers. */
   id?: string;
   name: string;
-  points: { lat: number; lon: number; name?: string }[];
+  points: ParsedRoutePoint[];
   source: "route" | "track";
+  /** Present when this route was produced by daily track normalization. */
+  splitDay?: string;
 }
 
+export interface ParsedRoutePoint {
+  lat: number;
+  lon: number;
+  name?: string;
+  /** Original GPX <time> value. Only valid ISO timestamps are retained. */
+  time?: string;
+  timestamp?: string;
+}
 export interface ParseResult {
   /** Standalone waypoints (GPX <wpt>, KML Point Placemark, CSV / Excel row). */
   waypoints: ParsedPoint[];
@@ -245,9 +259,9 @@ export function parseGpx(xml: string): ParseResult {
     const name = textOf(rte, "name") ?? `Route ${i + 1}`;
     const pts: ParsedRoute["points"] = [];
     const rtepts = rte.getElementsByTagName("rtept");
-    for (let j = 0; j < rtepts.length; j++) {
+     for (let j = 0; j < rtepts.length; j++) {
       const p = wptToPoint(rtepts[j]!, "route");
-      if (p) pts.push({ lat: p.lat, lon: p.lon, name: p.name });
+       if (p) pts.push({ lat: p.lat, lon: p.lon, name: p.name, time: p.time });
     }
     if (pts.length) routes.push({ name, points: pts, source: "route" });
   }
@@ -259,9 +273,9 @@ export function parseGpx(xml: string): ParseResult {
     const name = textOf(trk, "name") ?? `Track ${i + 1}`;
     const pts: ParsedRoute["points"] = [];
     const trkpts = trk.getElementsByTagName("trkpt");
-    for (let j = 0; j < trkpts.length; j++) {
+     for (let j = 0; j < trkpts.length; j++) {
       const p = wptToPoint(trkpts[j]!, "track");
-      if (p) pts.push({ lat: p.lat, lon: p.lon });
+       if (p) pts.push({ lat: p.lat, lon: p.lon, time: p.time });
     }
     if (pts.length) routes.push({ name, points: pts, source: "track" });
   }
@@ -269,6 +283,56 @@ export function parseGpx(xml: string): ParseResult {
   return { waypoints, routes };
 }
 
+/**
+ * Normalize imported routes without changing the parser's source result.
+ *
+ * Policy: day boundaries are UTC calendar-midnight boundaries. A track is
+ * split only when every point has a valid timestamp; routes, non-track data,
+ * and partially timestamped tracks remain one candidate. This deliberately
+ * avoids inventing times for formats that do not provide them.
+ */
+export function normalizeRoutes(routes: ParsedRoute[]): ParsedRoute[] {
+  const normalized: ParsedRoute[] = [];
+  for (const route of routes) {
+    if (route.source !== "track" || route.points.length === 0 ||
+        route.points.some((point) => {
+          const time = point.time ?? point.timestamp;
+          return !time || !Number.isFinite(Date.parse(time));
+        })) {
+      normalized.push(cloneRoute(route));
+      continue;
+    }
+    let segment: ParsedRoutePoint[] = [];
+    let day = "";
+    let segmentNumber = 0;
+    for (const point of route.points) {
+      const pointTime = point.time ?? point.timestamp!;
+      const pointDay = new Date(pointTime).toISOString().slice(0, 10);
+      if (segment.length > 0 && pointDay !== day) {
+        segmentNumber++;
+        normalized.push({
+          ...route,
+          name: `${route.name} — ${day}`,
+          points: segment,
+          splitDay: day,
+        });
+        segment = [];
+      }
+      day = pointDay;
+      segment.push({ ...point });
+    }
+    if (segment.length > 0) {
+      segmentNumber++;
+      normalized.push({
+        ...route,
+        name: segmentNumber === 1 ? route.name : `${route.name} — ${day}`,
+        points: segment,
+        splitDay: segmentNumber === 1 ? undefined : day,
+      });
+    }
+  }
+  return normalized;
+}
 function wptToPoint(el: Element, source: PointSource): ParsedPoint | null {
   const lat = parseFloat(el.getAttribute("lat") ?? "");
   const lon = parseFloat(el.getAttribute("lon") ?? "");
@@ -276,6 +340,8 @@ function wptToPoint(el: Element, source: PointSource): ParsedPoint | null {
   const name = textOf(el, "name") ?? undefined;
   const notes = textOf(el, "desc") ?? textOf(el, "cmt") ?? undefined;
   const sym = textOf(el, "sym") ?? textOf(el, "type") ?? undefined;
+  const rawTime = textOf(el, "time");
+  const time = rawTime && Number.isFinite(Date.parse(rawTime)) ? rawTime : undefined;
   const eleText = textOf(el, "ele");
   let depth: number | undefined;
   if (eleText !== null) {
@@ -284,7 +350,7 @@ function wptToPoint(el: Element, source: PointSource): ParsedPoint | null {
     // to depth (positive below the surface) so it matches Marker.depth.
     if (Number.isFinite(ele)) depth = -ele;
   }
-  return { lat, lon, name, notes, depth, type: sym, source };
+  return { lat, lon, name, notes, depth, type: sym, time, timestamp: time, source };
 }
 
 // ---------------------------------------------------------------------------
@@ -987,4 +1053,86 @@ function parseXml(xml: string, label: string): Document {
     );
   }
   return doc;
+}
+
+const EARTH_RADIUS_METERS = 6_371_008.8;
+
+/** Apply route normalization to a result, returning a wholly new result. */
+export function normalizeParseResult(result: ParseResult): ParseResult {
+  return {
+    waypoints: result.waypoints.map((point) => ({ ...point })),
+    routes: normalizeRoutes(result.routes),
+  };
+}
+
+export const DAILY_ROUTE_TIMEZONE_POLICY = "UTC calendar days";
+
+export function analyzeRouteLoop(
+  route: ParsedRoute,
+  toleranceMeters = 50,
+): RouteLoopAnalysis {
+  const points = route.points;
+  if (points.length < 2 || !Number.isFinite(toleranceMeters) || toleranceMeters < 0) {
+    return { isLoop: false, closingIndex: null, distanceMeters: Infinity, toleranceMeters };
+  }
+  const start = points[0]!;
+  for (let i = 1; i < points.length; i++) {
+    const distanceMeters = distanceBetweenCoordinates(start, points[i]!);
+    if (distanceMeters <= toleranceMeters) {
+      return { isLoop: true, closingIndex: i, distanceMeters, toleranceMeters };
+    }
+  }
+  return {
+    isLoop: false,
+    closingIndex: null,
+    distanceMeters: distanceBetweenCoordinates(start, points[points.length - 1]!),
+    toleranceMeters,
+  };
+}
+
+/** Backward-compatible descriptive alias for UI and test callers. */
+export const detectRouteLoop = analyzeRouteLoop;
+
+/** Return a copy ending at the chosen return point; never adds a duplicate. */
+export function closeRouteAtReturnPoint(
+  route: ParsedRoute,
+  closingIndex?: number,
+): ParsedRoute {
+  const analysis = analyzeRouteLoop(route);
+  const index = closingIndex ?? analysis.closingIndex;
+  if (index === null || index === undefined || index < 1 || index >= route.points.length) {
+    return cloneRoute(route);
+  }
+  return { ...route, points: route.points.slice(0, index + 1).map((point) => ({ ...point })) };
+}
+
+/** Descriptive alias for callers that refer to the detected loop explicitly. */
+export const closeRouteAtLoop = closeRouteAtReturnPoint;
+
+function cloneRoute(route: ParsedRoute): ParsedRoute {
+  return { ...route, points: route.points.map((point) => ({ ...point })) };
+}
+
+export interface RouteLoopAnalysis {
+  isLoop: boolean;
+  /** Index of the first point returning to the start, or null when absent. */
+  closingIndex: number | null;
+  distanceMeters: number;
+  toleranceMeters: number;
+}
+
+/** Great-circle distance, with longitude wrapping naturally handled. */
+export function distanceBetweenCoordinates(
+  a: { lat: number; lon: number },
+  b: { lat: number; lon: number },
+): number {
+  const toRad = (degrees: number) => (degrees * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLon = toRad(b.lon - a.lon);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return EARTH_RADIUS_METERS * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(Math.max(0, 1 - h)));
 }

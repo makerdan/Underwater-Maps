@@ -43,6 +43,9 @@ import {
   isInBounds,
   computeResultBbox,
   bboxIntersects,
+  normalizeParseResult,
+  analyzeRouteLoop,
+  closeRouteAtReturnPoint,
   type Bounds,
   type ParseResult,
   type ParsedRoute,
@@ -319,15 +322,16 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
         return;
       }
 
+      const normalized = normalizeParseResult(result);
       const part = bounds
-        ? partitionByBounds(result, bounds)
-        : { inside: result, outsideWaypoints: 0, outsideRoutes: 0, outsideRoutePoints: 0 };
+        ? partitionByBounds(normalized, bounds)
+        : { inside: normalized, outsideWaypoints: 0, outsideRoutes: 0, outsideRoutePoints: 0 };
       setMatchedSave(null);
       setPhase({
         kind: "preview",
         fileName,
         parsed: addCandidateIds(part.inside),
-        original: result,
+        original: normalized,
         outsideWp: part.outsideWaypoints,
         outsideRoutes: part.outsideRoutes,
         outsideRoutePoints: part.outsideRoutePoints,
@@ -372,15 +376,16 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       if (phase.kind !== "mapping") return;
       const { fileName, meta } = phase;
       const result = applyColumnAssignment(meta, assignment);
+      const normalized = normalizeParseResult(result);
       const part = bounds
-        ? partitionByBounds(result, bounds)
-        : { inside: result, outsideWaypoints: 0, outsideRoutes: 0, outsideRoutePoints: 0 };
+        ? partitionByBounds(normalized, bounds)
+        : { inside: normalized, outsideWaypoints: 0, outsideRoutes: 0, outsideRoutePoints: 0 };
       setMatchedSave(null);
       setPhase({
         kind: "preview",
         fileName,
         parsed: addCandidateIds(part.inside),
-        original: result,
+        original: normalized,
         outsideWp: part.outsideWaypoints,
         outsideRoutes: part.outsideRoutes,
         outsideRoutePoints: part.outsideRoutePoints,
@@ -872,8 +877,8 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
               closeRouteLoop={(index) => updateParsed((p) => ({
                 ...p,
                 routes: p.routes.map((r, i) =>
-                  i === index && r.points.length >= 2 && (r.points[0]!.lat !== r.points[r.points.length - 1]!.lat || r.points[0]!.lon !== r.points[r.points.length - 1]!.lon)
-                    ? { ...r, points: [...r.points, { ...r.points[0]! }] }
+                  i === index
+                    ? closeRouteAtReturnPoint(r)
                     : r,
                 ),
               }))}
@@ -1504,9 +1509,8 @@ const RouteEditor: React.FC<{
   const [error, setError] = useState<string | null>(null);
   const [closed, setClosed] = useState(false);
   const tooShort = route.points.length < 2;
-  const first = route.points[0];
-  const last = route.points[route.points.length - 1];
-  const isClosed = !!first && !!last && first.lat === last.lat && first.lon === last.lon;
+  const loop = analyzeRouteLoop(route);
+  const isClosed = loop.isLoop && loop.closingIndex === route.points.length - 1;
 
   const save = async () => {
     if (!selected || status === "saving" || status === "saved") return;
@@ -1557,7 +1561,7 @@ const RouteEditor: React.FC<{
   };
 
   const closeLoop = () => {
-    if (tooShort || isClosed || closed) return;
+    if (tooShort || !loop.isLoop || isClosed || closed) return;
     closeRouteLoop(index);
     setClosed(true);
   };
@@ -1640,11 +1644,21 @@ const RouteEditor: React.FC<{
           Fewer than 2 waypoints — this route will be skipped.
         </div>
       )}
+      {loop.isLoop && (
+        <div
+          data-testid={`gps-import-route-loop-${index}`}
+          style={{ padding: "4px 8px 0", color: "#fbbf24", fontSize: "calc(13.5px * var(--bs-font-scale, 1))" }}
+        >
+          {isClosed
+            ? "Route already returns to its start."
+            : `Possible loop detected (${Math.round(loop.distanceMeters)} m from start).`}
+        </div>
+      )}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", padding: "4px 8px 2px" }}>
         <button
           type="button"
           onClick={closeLoop}
-          disabled={tooShort || isClosed || closed || status === "saving"}
+          disabled={tooShort || !loop.isLoop || isClosed || closed || status === "saving"}
           data-testid={`gps-import-close-loop-${index}`}
           aria-label={`Close loop for route ${route.name || index + 1}`}
           style={btnStyle("ghost")}
