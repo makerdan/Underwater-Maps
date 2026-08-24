@@ -66,7 +66,7 @@ describe("OverviewMap responsive interactions", () => {
 
   it("keeps the backing canvas dimensions aligned after viewport resize", async () => {
     renderOverview();
-    const canvas = screen.getByTestId("overview-map-canvas");
+    const canvas = screen.getByTestId("overview-map-canvas") as HTMLCanvasElement;
     expect(canvas.width).toBe(800);
     expect(canvas.height).toBe(600);
 
@@ -94,7 +94,6 @@ describe("OverviewMap responsive interactions", () => {
     renderOverview();
     const close = screen.getByTestId("overview-close");
 
-    const compass = screen.getByTestId("overview-compass");
     expect(close).toBeVisible();
     await act(async () => { fireEvent.click(close); });
     expect(useUiStore.getState().overviewOpen).toBe(false);
