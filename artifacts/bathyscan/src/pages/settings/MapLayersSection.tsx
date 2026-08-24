@@ -7,6 +7,11 @@ import {
   type TidalDepthLayer,
   type CurrentArrowDensity,
 } from "@/lib/settingsStore";
+import {
+  DAILY_ROUTE_TIMEZONE_POLICY,
+  getDailyRouteTimezoneOptions,
+  isValidDailyRouteTimezone,
+} from "@/lib/gpsImport";
 import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import { S } from "./styles";
 import { SectionTitle } from "./components/SectionTitle";
@@ -31,6 +36,10 @@ function nearestGpsInterval(ms: number): number {
 
 export function MapLayersSection() {
   const s = useSettingsStore(useShallow((s) => s));
+  const storedDailyRouteTimezone = s.dailyRouteTimezone || DEFAULT_SETTINGS.dailyRouteTimezone;
+  const [dailyRouteTimezoneInput, setDailyRouteTimezoneInput] = React.useState(
+    storedDailyRouteTimezone,
+  );
   const MARKER_TYPE_OPTIONS =
     s.waterType === "freshwater"
       ? FRESHWATER_MARKER_TYPE_OPTIONS
@@ -68,6 +77,9 @@ export function MapLayersSection() {
   );
 
   const { setGpsRecordingInterval, setCurrentsManualDirectionDeg } = s;
+  React.useEffect(() => {
+    setDailyRouteTimezoneInput(storedDailyRouteTimezone);
+  }, [storedDailyRouteTimezone]);
   React.useEffect(() => {
     // Write the normalised value back so the store never keeps an
     // out-of-range interval (e.g. a persisted 3000 ms from an older schema).
@@ -133,6 +145,54 @@ export function MapLayersSection() {
           ]}
           sublabel="How often GPS track points are recorded"
         />
+        <div style={{ ...S.row, alignItems: "flex-start" }} className="bs-settings-row">
+          <div style={{ minWidth: 0 }}>
+            <label htmlFor="settings-daily-route-timezone" style={S.label}>
+              Daily Track Timezone
+            </label>
+            <div id="settings-daily-route-timezone-description" style={S.sublabel}>
+              {DAILY_ROUTE_TIMEZONE_POLICY}
+            </div>
+            {!isValidDailyRouteTimezone(dailyRouteTimezoneInput) && (
+              <div
+                role="alert"
+                data-testid="settings-daily-route-timezone-error"
+                style={{
+                  color: "#fbbf24",
+                  fontSize: "calc(9px * var(--bs-font-scale, 1))",
+                  lineHeight: 1.4,
+                  marginTop: 4,
+                }}
+              >
+                Enter a valid IANA timezone, such as UTC or America/Anchorage.
+              </div>
+            )}
+          </div>
+          <div style={{ flexShrink: 0 }}>
+            <input
+              id="settings-daily-route-timezone"
+              type="text"
+              list="settings-daily-route-timezone-options"
+              value={dailyRouteTimezoneInput}
+              onChange={(event) => {
+                const value = event.target.value;
+                setDailyRouteTimezoneInput(value);
+                if (isValidDailyRouteTimezone(value)) {
+                  s.setDailyRouteTimezone(value);
+                }
+              }}
+              aria-describedby="settings-daily-route-timezone-description"
+              aria-invalid={!isValidDailyRouteTimezone(dailyRouteTimezoneInput)}
+              data-testid="settings-daily-route-timezone-input"
+              style={{ ...S.select, width: 190, boxSizing: "border-box" }}
+            />
+            <datalist id="settings-daily-route-timezone-options">
+              {getDailyRouteTimezoneOptions().map((timeZone) => (
+                <option key={timeZone} value={timeZone} />
+              ))}
+            </datalist>
+          </div>
+        </div>
         <SliderRow
           label="Follow Resume Delay"
           value={clampSlider(s.followResumeDelaySec, 5, 120, DEFAULT_SETTINGS.followResumeDelaySec)}

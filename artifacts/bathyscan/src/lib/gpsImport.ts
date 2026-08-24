@@ -362,6 +362,16 @@ export function isValidDailyRouteTimezone(timeZone: string): boolean {
     return false;
   }
 }
+
+/** Common IANA timezone suggestions for editable timezone controls. */
+export function getDailyRouteTimezoneOptions(): string[] {
+  const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const intlWithSupportedValues = Intl as typeof Intl & {
+    supportedValuesOf?: (key: "timeZone") => string[];
+  };
+  const timeZones = intlWithSupportedValues.supportedValuesOf?.("timeZone") ?? [];
+  return [...new Set(["UTC", browserTimezone, ...timeZones])].sort();
+}
 function wptToPoint(el: Element, source: PointSource): ParsedPoint | null {
   const lat = parseFloat(el.getAttribute("lat") ?? "");
   const lon = parseFloat(el.getAttribute("lon") ?? "");

@@ -45,6 +45,7 @@ import {
   bboxIntersects,
   normalizeParseResult,
   isValidDailyRouteTimezone,
+  getDailyRouteTimezoneOptions,
   DAILY_ROUTE_TIMEZONE_POLICY,
   analyzeRouteLoop,
   closeRouteAtReturnPoint,
@@ -1451,20 +1452,6 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
     </>
   );
 };
-
-function getDailyRouteTimezoneOptions(): string[] {
-  const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const intlWithSupportedValues = Intl as typeof Intl & {
-    supportedValuesOf?: (key: "timeZone") => string[];
-  };
-  const timeZones = intlWithSupportedValues.supportedValuesOf?.("timeZone") ?? [];
-  return [...new Set(["UTC", browserTimezone, ...timeZones])].sort();
-}
-
-// ---------------------------------------------------------------------------
-// Dataset matcher section (dataset-free import only)
-// ---------------------------------------------------------------------------
-
 const DatasetMatcherSection: React.FC<{
   matchingSaves: UserCatalogSave[];
   loading: boolean;

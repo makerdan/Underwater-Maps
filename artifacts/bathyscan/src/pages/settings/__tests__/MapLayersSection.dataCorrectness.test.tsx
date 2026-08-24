@@ -27,6 +27,7 @@ const h = vi.hoisted(() => {
     currentsManualDirectionDeg: 90,
     currentsManualSpeedKt: 1.0,
     followResumeDelaySec: 20,
+    dailyRouteTimezone: "UTC",
     markerClusterThreshold: 25,
     layerArrowDensity: undefined as Record<string, string> | undefined,
     currentArrowDensity: "dense",
@@ -36,6 +37,7 @@ const h = vi.hoisted(() => {
   const setCurrentsManualDirectionDeg = vi.fn((v: number) => { data.currentsManualDirectionDeg = v; });
   const setCurrentsManualSpeedKt = vi.fn((v: number) => { data.currentsManualSpeedKt = v; });
   const setFollowResumeDelaySec = vi.fn((v: number) => { data.followResumeDelaySec = v; });
+  const setDailyRouteTimezone = vi.fn((v: string) => { data.dailyRouteTimezone = v; });
   const setMarkerClusterThreshold = vi.fn((v: number) => { data.markerClusterThreshold = v; });
   return {
     data,
@@ -44,6 +46,7 @@ const h = vi.hoisted(() => {
     setCurrentsManualDirectionDeg,
     setCurrentsManualSpeedKt,
     setFollowResumeDelaySec,
+    setDailyRouteTimezone,
     setMarkerClusterThreshold,
   };
 });
@@ -69,6 +72,8 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     setGpsRecordingInterval: h.setGpsRecordingInterval,
     followResumeDelaySec: h.data.followResumeDelaySec,
     setFollowResumeDelaySec: h.setFollowResumeDelaySec,
+    dailyRouteTimezone: h.data.dailyRouteTimezone,
+    setDailyRouteTimezone: h.setDailyRouteTimezone,
     defaultDepthPoleColor: "#ff6600",
     setDefaultDepthPoleColor: vi.fn(),
     markerClusterThreshold: h.data.markerClusterThreshold,
@@ -148,12 +153,14 @@ beforeEach(() => {
   h.setCurrentsManualDirectionDeg.mockClear();
   h.setCurrentsManualSpeedKt.mockClear();
   h.setFollowResumeDelaySec.mockClear();
+  h.setDailyRouteTimezone.mockClear();
   h.setMarkerClusterThreshold.mockClear();
   h.data.visibleMarkerTypes = ["fish", "shipwreck", "coral"];
   h.data.gpsRecordingInterval = 2000;
   h.data.currentsManualDirectionDeg = 90;
   h.data.currentsManualSpeedKt = 1.0;
   h.data.followResumeDelaySec = 20;
+  h.data.dailyRouteTimezone = "UTC";
   h.data.markerClusterThreshold = 25;
   h.data.layerArrowDensity = { surface: "normal", mid: "normal", "near-bottom": "sparse" };
 });
@@ -268,5 +275,31 @@ describe("MapLayersSection — direction 360° normalisation & slider clamping",
     render(<MapLayersSection />);
     const slider = screen.getByLabelText("Cluster Threshold") as HTMLInputElement;
     expect(slider.value).toBe("0");
+  });
+});
+
+describe("MapLayersSection — daily track timezone", () => {
+  it("displays the saved timezone and persists a valid replacement", () => {
+    h.data.dailyRouteTimezone = "America/Anchorage";
+    render(<MapLayersSection />);
+    const input = screen.getByTestId("settings-daily-route-timezone-input") as HTMLInputElement;
+
+    expect(input.value).toBe("America/Anchorage");
+    fireEvent.change(input, { target: { value: "Europe/London" } });
+
+    expect(h.setDailyRouteTimezone).toHaveBeenCalledWith("Europe/London");
+    expect(screen.queryByTestId("settings-daily-route-timezone-error")).not.toBeInTheDocument();
+  });
+
+  it("keeps invalid input visible and shows an inline validation message without persisting it", () => {
+    render(<MapLayersSection />);
+    const input = screen.getByTestId("settings-daily-route-timezone-input") as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: "Not/A_Timezone" } });
+
+    expect(input.value).toBe("Not/A_Timezone");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByTestId("settings-daily-route-timezone-error")).toBeInTheDocument();
+    expect(h.setDailyRouteTimezone).not.toHaveBeenCalled();
   });
 });
