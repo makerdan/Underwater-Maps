@@ -43,6 +43,15 @@ never be hand-edited.
 
 ## Guardrail
 
+Every codegen entrypoint runs the shared semantic preflight in
+`scripts/validate-openapi.mjs` before Orval. It reports the exact path or
+component for invalid metadata, operations, responses, references, and schema
+shapes. Remediate a failure by fixing `openapi.yaml`, then run:
+
+```sh
+pnpm --filter @workspace/api-spec run codegen:generate
+```
+
 The root `typecheck` (and therefore `test-all`) script runs `check:codegen`
 first. That check fails with a clear, actionable error message if any of the
 generated files are missing — pointing you straight at
@@ -50,3 +59,7 @@ generated files are missing — pointing you straight at
 surface later as a cryptic Vite "Failed to resolve import" error.
 
 If you ever see the guardrail fail, run codegen and try again.
+
+The route-documentation test and response-conformance tests are complementary:
+they compare live routes and payloads against the contract, but are not full
+OpenAPI document validation and do not replace this preflight.

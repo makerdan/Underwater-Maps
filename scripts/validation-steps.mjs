@@ -17,6 +17,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { isCodegenFresh } from "./codegen-freshness.mjs";
+import { validateOpenApiFile } from "../lib/api-spec/scripts/validate-openapi.mjs";
 
 /**
  * Runs the typecheck step with a freshness-aware codegen pre-pass.
@@ -32,6 +33,9 @@ import { isCodegenFresh } from "./codegen-freshness.mjs";
  * @returns {number} exit code
  */
 export function runTypecheckStep(logPrefix) {
+  // Validate even when freshness would skip generation: a changed spec must
+  // never be accepted merely because generated output has a newer mtime.
+  validateOpenApiFile(new URL("../lib/api-spec/openapi.yaml", import.meta.url));
   if (isCodegenFresh()) {
     console.log(`[${logPrefix}] codegen is fresh — skipping`);
   } else {
