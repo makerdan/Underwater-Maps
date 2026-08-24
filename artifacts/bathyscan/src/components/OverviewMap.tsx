@@ -46,7 +46,13 @@ import { useUiStore, useTimelineVisible, type SelectedHotspot } from "@/lib/uiSt
 import { useTimelineStore } from "@/lib/timelineStore";
 import { useContextMenuStore, type ContextMenuItem } from "@/lib/contextMenuStore";
 import { lonLatToWorldXZ, isSyntheticGrid } from "@/lib/terrain";
-import { unionGeoBounds } from "@workspace/shared-types";
+import {
+  geoBoundsContains,
+  longitudeSpan,
+  normalizeLongitude,
+  unionGeoBounds,
+  unwrapLongitude,
+} from "@workspace/shared-types";
 import {
   puzzleLayoutToGeoCorrections,
   rebasePuzzleTransformsForView,
@@ -140,7 +146,6 @@ import { computeSnapAdjustment, type SnapEdgeSeg, type SnapRect } from "@/lib/pu
 import { buildRestoredPuzzleState, applyDragTranslation } from "@/lib/puzzleRestore";
 import { CatalogResultFilters } from "@/components/CatalogResultFilters";
 import { filterCatalogResults, EMPTY_CATALOG_RESULT_FILTERS, type CatalogResultFilters as CatalogFilters } from "@/lib/catalogResultFilters";
-import { isPointInGeographicBounds } from "@/lib/geographicBounds";
 
 interface TooltipState {
   visible: boolean;
@@ -1614,23 +1619,17 @@ export const OverviewMap: React.FC = () => {
   // Compute the union bbox of all visible datasets that have a loaded overview
   // grid and animate the minimap transform to frame it.
   const handleFitToData = useCallback(() => {
-    const withGrid = visibleDatasets.filter((v) => !!v.overviewGrid);
-    if (withGrid.length === 0) return;
+    const geographicFrame = unionGeoBounds([
+      overviewGrid ?? appTerrain,
+      ...visibleDatasets.map((v) => v.overviewGrid),
+    ]);
+    if (!geographicFrame) return;
     const canvas = canvasRef.current;
     const currentTransform = transformRef.current;
     if (!canvas || !currentTransform) return;
 
-    let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
-    for (const v of withGrid) {
-      const og = v.overviewGrid!;
-      minLon = Math.min(minLon, og.minLon);
-      maxLon = Math.max(maxLon, og.maxLon);
-      minLat = Math.min(minLat, og.minLat);
-      maxLat = Math.max(maxLat, og.maxLat);
-    }
-
     const targetTransform = computeFitTransform(
-      { minLon, maxLon, minLat, maxLat },
+      geographicFrame,
       canvas.width,
       canvas.height,
     );
@@ -1641,7 +1640,7 @@ export const OverviewMap: React.FC = () => {
       duration: 400,
     };
     dirtyRef.current = true;
-  }, [visibleDatasets]);
+  }, [appTerrain, overviewGrid, visibleDatasets]);
 
   // Step-zoom handler — zooms in or out by the given factor, pivoting on the
   // canvas centre, and animates via fitAnimRef (same tween mechanism as FIT).
@@ -2291,7 +2290,10 @@ export const OverviewMap: React.FC = () => {
 
     // All 2D surfaces use the same circular-longitude union. A null result
     // preserves single-dataset behavior; the primary grid remains the fallback.
-    const geographicFrame = unionGeoBounds(withGrid.map((v) => v.overviewGrid));
+    const geographicFrame = unionGeoBounds([
+      overviewGrid ?? appTerrain,
+      ...visibleDatasets.map((v) => v.overviewGrid),
+    ]);
     // Cast: only bbox fields are used by projection helpers; depth array is unused.
     worldGridRef.current = geographicFrame
       ? geographicFrame as unknown as import("@workspace/api-client-react").TerrainData
@@ -2326,7 +2328,7 @@ export const OverviewMap: React.FC = () => {
     }
 
     dirtyRef.current = true;
-  }, [visibleDatasets, colormapTheme, paletteShallow, paletteDeep, paletteBandColors, paletteCustomStops, paletteBandBoundaries]);
+  }, [appTerrain, overviewGrid, visibleDatasets, colormapTheme, paletteShallow, paletteDeep, paletteBandColors, paletteCustomStops, paletteBandBoundaries]);
 
   // Compute initial transform whenever the grid (or combined world grid) or canvas is ready
   const initTransform = useCallback(() => {
@@ -3208,7 +3210,10 @@ export const OverviewMap: React.FC = () => {
         const isDownload = downloadModeRef.current;
         const isGeoref = georefPickModeRef.current;
         drawSelectionRect(ctx, drag.x0, drag.y0, drag.x1, drag.y1, {
-          width: Math.abs(dr.lon - dl.lon),
+          width: longitudeSpan({
+            minLon: dl.lon,
+            maxLon: dr.lon,
+          }),
           height: Math.abs(dr.lat - dl.lat),
           ...(isDownload ? { strokeColor: "rgba(251,191,36,0.85)", fillColor: "rgba(251,191,36,0.06)" } : {}),
           ...(isGeoref ? { strokeColor: "rgba(167,139,250,0.9)", fillColor: "rgba(167,139,250,0.08)" } : {}),
@@ -3250,14 +3255,14 @@ export const OverviewMap: React.FC = () => {
         const { north, south, east, west } = selectedBboxRef.current;
         const { x0, y0, x1, y1 } = bboxToCanvasCorners(north, south, east, west);
         drawSelectionRect(ctx, x0, y0, x1, y1, {
-          width: east - west,
+          width: longitudeSpan({ minLon: west, maxLon: east }),
           height: north - south,
         });
       } else if (downloadBboxRef.current) {
         const { north, south, east, west } = downloadBboxRef.current;
         const { x0, y0, x1, y1 } = bboxToCanvasCorners(north, south, east, west);
         drawSelectionRect(ctx, x0, y0, x1, y1, {
-          width: east - west,
+          width: longitudeSpan({ minLon: west, maxLon: east }),
           height: north - south,
           strokeColor: "rgba(251,191,36,0.85)",
           fillColor: "rgba(251,191,36,0.06)",
@@ -3909,8 +3914,10 @@ export const OverviewMap: React.FC = () => {
           const b = canvasToLonLat(r.x1, r.y1, coordGrid, t);
           const north = Math.max(a.lat, b.lat);
           const south = Math.min(a.lat, b.lat);
-          const east = Math.max(a.lon, b.lon);
-          const west = Math.min(a.lon, b.lon);
+           const aFrameLon = unwrapLongitude(a.lon, coordGrid);
+           const bFrameLon = unwrapLongitude(b.lon, coordGrid);
+           const west = normalizeLongitude(Math.min(aFrameLon, bFrameLon));
+           const east = normalizeLongitude(Math.max(aFrameLon, bFrameLon));
           if (georefPickModeRef.current) {
             useUiStore.getState().setGeorefPickBbox({
               minLon: west,
@@ -4097,7 +4104,7 @@ export const OverviewMap: React.FC = () => {
         if (!v || v.datasetId === primIdNow) continue;
         const og = v.overviewGrid;
         if (!og) continue;
-        if (isPointInGeographicBounds(lon, lat, og)) {
+        if (geoBoundsContains(og, { lon, lat })) {
           useTerrainStore.getState().setPrimary(v.datasetId, v.source);
           if (v.source === "preset") {
             setDatasetId(v.datasetId);
@@ -5454,24 +5461,21 @@ export const OverviewMap: React.FC = () => {
               .filter((grid): grid is NonNullable<typeof grid> => !!grid);
             const inBounds = gpsGrids.length > 0
               ? gpsGrids.some((grid) =>
-                  isPointInGeographicBounds(
-                    gpsPosition.longitude,
-                    gpsPosition.latitude,
-                    grid,
-                  ),
+                  geoBoundsContains(grid, {
+                    lon: gpsPosition.longitude,
+                    lat: gpsPosition.latitude,
+                  }),
                 )
-              : isPointInGeographicBounds(
-                  gpsPosition.longitude,
-                  gpsPosition.latitude,
-                  overviewGrid,
-                );
+              : geoBoundsContains(overviewGrid, {
+                  lon: gpsPosition.longitude,
+                  lat: gpsPosition.latitude,
+                });
             // A secondary-only fix is visible on the overview, but cannot be
             // projected safely into the primary 3D mesh for DIVE HERE.
-            const inPrimaryBounds = isPointInGeographicBounds(
-              gpsPosition.longitude,
-              gpsPosition.latitude,
-              overviewGrid,
-            );
+            const inPrimaryBounds = geoBoundsContains(overviewGrid, {
+              lon: gpsPosition.longitude,
+              lat: gpsPosition.latitude,
+            });
             if (!inBounds || !inPrimaryBounds) return null;
             return (
               <ViewscreenTooltip label="Dive in at your GPS position" side="bottom">

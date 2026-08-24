@@ -701,11 +701,7 @@ export const Minimap: React.FC = () => {
     //    the primary terrain is offset within the canvas.
     if (camLon !== null && camLat !== null) {
       const bbox = unionBboxRef.current ?? currentTerrain;
-      const lonRange = bbox.maxLon - bbox.minLon || 1;
-      const latRange = bbox.maxLat - bbox.minLat || 1;
-      const px = ((camLon - bbox.minLon) / lonRange) * W;
-      // North-up: invert y so high-lat (North) is at top.
-      const py = H - ((camLat - bbox.minLat) / latRange) * H;
+      const { x: px, y: py } = projectGeoPoint({ lon: camLon, lat: camLat }, bbox, W, H);
       if (px >= 0 && px <= W && py >= 0 && py <= H) {
         drawArrow(ctx, px, py, heading);
       }
