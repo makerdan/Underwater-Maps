@@ -69,8 +69,9 @@ import {
 // MOBILE-ONLY import: contour-density stepper value type + guard for the
 // mobile Chart View (contourDensity settings key).
 import { toValidContourDensity, type ContourDensity } from "./contourDensity";
+import { isValidDailyRouteTimezone } from "./gpsImport";
 
-export const SETTINGS_SCHEMA_VERSION = 38;
+export const SETTINGS_SCHEMA_VERSION = 39;
 
 /** Supported vertical-exaggeration range (matches the Settings slider). */
 export const TERRAIN_EXAGGERATION_MIN = 1;
@@ -436,6 +437,8 @@ export interface SettingsState {
    * Follow Me mode automatically resumes tracking. Range 5–120, default 20.
    */
   followResumeDelaySec: number;
+  /** IANA timezone used to split timestamped GPS tracks into calendar days. */
+  dailyRouteTimezone: string;
 
   // ── Data & Storage ───────────────────────────────────────────────────
   defaultRegion: string;
@@ -791,6 +794,7 @@ interface SettingsActions {
   setGpsRecordingInterval: (ms: number) => void;
   setTrailRetention: (v: TrailRetention) => void;
   setFollowResumeDelaySec: (v: number) => void;
+  setDailyRouteTimezone: (v: string) => void;
 
   // Data
   setDefaultRegion: (v: string) => void;
@@ -1104,6 +1108,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   gpsRecordingInterval: 1000,
   trailRetention: "30",
   followResumeDelaySec: 20,
+  dailyRouteTimezone: "UTC",
 
   // Data
   defaultRegion: "",
@@ -1235,7 +1240,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   ],
   gps: [
     "autoStartTrailRecording", "defaultTrailColor", "gpsRecordingInterval", "trailRetention",
-    "followResumeDelaySec",
+    "followResumeDelaySec", "dailyRouteTimezone",
   ],
   data: ["defaultRegion", "autoLoadLastDataset", "defaultMapLoad", "coordSearchRadius", "coordSearchRadiusUnit", "proximityMode"],
   accessibility: [
@@ -1454,6 +1459,9 @@ export const useSettingsStore = create<SettingsStore>()(
           set({ gpsRecordingInterval: Math.max(1000, ms) }),
         setTrailRetention: setter("trailRetention"),
         setFollowResumeDelaySec: setter("followResumeDelaySec"),
+        setDailyRouteTimezone: (v) => {
+          if (isValidDailyRouteTimezone(v)) set({ dailyRouteTimezone: v });
+        },
 
         // Data
         setDefaultRegion: setter("defaultRegion"),
@@ -1687,6 +1695,12 @@ export const useSettingsStore = create<SettingsStore>()(
               else if (k === "waterType") safeVal = toValidWaterType(serverVal);
               else if (k === "defaultSpeedTier") safeVal = toValidDefaultSpeedTier(serverVal);
               else if (k === "terrainExaggeration") safeVal = clampTerrainExaggeration(serverVal);
+              else if (k === "dailyRouteTimezone") {
+                safeVal =
+                  typeof serverVal === "string" && isValidDailyRouteTimezone(serverVal)
+                    ? serverVal
+                    : DEFAULT_SETTINGS.dailyRouteTimezone;
+              }
               else if (k === "defaultHabitatSpecies") {
                 // Trim legacy values that were saved with surrounding spaces or
                 // consist entirely of whitespace (which would silently fail to
@@ -2015,6 +2029,14 @@ export const useSettingsStore = create<SettingsStore>()(
           if ((rest as Record<string, unknown>).mobileMapTiltEnabled === undefined) {
             migratedMobileMapTilt.mobileMapTiltEnabled = DEFAULT_SETTINGS.mobileMapTiltEnabled;
           }
+          // v38 → v39: inject the UTC default for daily GPS track splitting.
+          const migratedDailyRouteTimezone: Partial<SettingsState> = {};
+          if (
+            typeof (rest as Record<string, unknown>).dailyRouteTimezone !== "string" ||
+            !isValidDailyRouteTimezone((rest as Record<string, unknown>).dailyRouteTimezone as string)
+          ) {
+            migratedDailyRouteTimezone.dailyRouteTimezone = DEFAULT_SETTINGS.dailyRouteTimezone;
+          }
           const mergedState: SettingsState = {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -2042,6 +2064,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedProximityMode,
             ...migratedContourDensity,
             ...migratedMobileMapTilt,
+            ...migratedDailyRouteTimezone,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,
@@ -2076,6 +2099,9 @@ export const useSettingsStore = create<SettingsStore>()(
           waterType: toValidWaterType(cur.waterType),
           defaultSpeedTier: toValidDefaultSpeedTier(cur.defaultSpeedTier),
           terrainExaggeration: clampTerrainExaggeration(cur.terrainExaggeration),
+          dailyRouteTimezone: isValidDailyRouteTimezone(cur.dailyRouteTimezone)
+            ? cur.dailyRouteTimezone
+            : DEFAULT_SETTINGS.dailyRouteTimezone,
         };
       },
       // After localStorage rehydrates, treat the persisted values as the

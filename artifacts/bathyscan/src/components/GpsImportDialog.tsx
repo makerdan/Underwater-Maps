@@ -158,6 +158,8 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
 
   const settingsWaterType = useSettingsStore((s) => s.waterType);
   const defaultMarkerType = useSettingsStore((s) => s.defaultMarkerType);
+  const savedDailyRouteTimezone = useSettingsStore((s) => s.dailyRouteTimezone);
+  const setSavedDailyRouteTimezone = useSettingsStore((s) => s.setDailyRouteTimezone);
   const waterType =
     (terrain?.waterType as "saltwater" | "freshwater" | undefined) ?? settingsWaterType;
   // Nullish fallbacks keep partial test mocks of markerConstants working.
@@ -177,6 +179,14 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const [temporary, setTemporary] = useState(false);
   const [dailyRouteTimezone, setDailyRouteTimezone] = useState("UTC");
   const [dailyRouteTimezoneInput, setDailyRouteTimezoneInput] = useState("UTC");
+
+  useEffect(() => {
+    const timeZone = isValidDailyRouteTimezone(savedDailyRouteTimezone)
+      ? savedDailyRouteTimezone
+      : "UTC";
+    setDailyRouteTimezone(timeZone);
+    setDailyRouteTimezoneInput(timeZone);
+  }, [savedDailyRouteTimezone]);
 
   // Dataset matcher state (dataset-free import only)
   const [matchedSave, setMatchedSave] = useState<UserCatalogSave | null>(null);
@@ -346,6 +356,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       result: ParseResult,
       meta: RawColumnMeta,
       columnAssignment: ColumnAssignment | null,
+      timeZone = dailyRouteTimezone,
     ) => {
       const hasLatCol = meta.columns.some((c) => c.mappedAlias === "lat");
       const hasLonCol = meta.columns.some((c) => c.mappedAlias === "lon");
@@ -357,12 +368,12 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       }
 
       setMatchedSave(null);
-      const preview = createPreview(fileName, result, meta, columnAssignment, "UTC");
+      const preview = createPreview(fileName, result, meta, columnAssignment, timeZone);
       setPhase(preview);
       setImportWaypoints(preview.parsed.waypoints.length > 0);
       setImportRoutes(preview.parsed.routes.length > 0);
     },
-     [bounds, createPreview],
+    [bounds, createPreview, dailyRouteTimezone],
   );
 
   const onFileChosen = useCallback(
@@ -379,10 +390,13 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
             currentKind: "marker",
           });
         });
-        // Reset heading/speed to dialog defaults on each new file.
-        setDailyRouteTimezone("UTC");
-        setDailyRouteTimezoneInput("UTC");
-        advanceFromParsed(file.name, result, meta, null);
+        // Start each file with the user's validated daily-track preference.
+        const preferredTimezone = isValidDailyRouteTimezone(savedDailyRouteTimezone)
+          ? savedDailyRouteTimezone
+          : "UTC";
+        setDailyRouteTimezone(preferredTimezone);
+        setDailyRouteTimezoneInput(preferredTimezone);
+        advanceFromParsed(file.name, result, meta, null, preferredTimezone);
       } catch (err) {
         setPhase({
           kind: "error",
@@ -390,7 +404,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
         });
       }
     },
-    [advanceFromParsed],
+    [advanceFromParsed, savedDailyRouteTimezone],
   );
 
   /** Called when the user confirms the column mapping step. */
@@ -425,6 +439,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       if (!isValidDailyRouteTimezone(timeZone)) return;
 
       setDailyRouteTimezone(timeZone);
+      setSavedDailyRouteTimezone(timeZone);
       setMatchedSave(null);
       if (phase.kind !== "preview") return;
       const preview = createPreview(
@@ -438,7 +453,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       setImportWaypoints((enabled) => enabled && preview.parsed.waypoints.length > 0);
       setImportRoutes((enabled) => enabled && preview.parsed.routes.length > 0);
     },
-    [createPreview, phase],
+    [createPreview, phase, setSavedDailyRouteTimezone],
   );
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
