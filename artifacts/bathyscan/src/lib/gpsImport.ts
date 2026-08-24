@@ -286,13 +286,21 @@ export function parseGpx(xml: string): ParseResult {
 /**
  * Normalize imported routes without changing the parser's source result.
  *
- * Policy: day boundaries are UTC calendar-midnight boundaries. A track is
- * split only when every point has a valid timestamp; routes, non-track data,
- * and partially timestamped tracks remain one candidate. This deliberately
- * avoids inventing times for formats that do not provide them.
+ * Policy: UTC calendar-day boundaries are the safe default, but callers can
+ * provide an IANA timezone for a local operating day. A track is split only
+ * when every point has a valid timestamp; routes, non-track data, and
+ * partially timestamped tracks remain one candidate. This deliberately avoids
+ * inventing times for formats that do not provide them.
  */
-export function normalizeRoutes(routes: ParsedRoute[]): ParsedRoute[] {
+export function normalizeRoutes(routes: ParsedRoute[], timeZone = "UTC"): ParsedRoute[] {
   const normalized: ParsedRoute[] = [];
+  const dayFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
   for (const route of routes) {
     if (route.source !== "track" || route.points.length === 0 ||
         route.points.some((point) => {
@@ -307,7 +315,7 @@ export function normalizeRoutes(routes: ParsedRoute[]): ParsedRoute[] {
     let segmentNumber = 0;
     for (const point of route.points) {
       const pointTime = point.time ?? point.timestamp!;
-      const pointDay = new Date(pointTime).toISOString().slice(0, 10);
+      const pointDay = formatCalendarDay(new Date(pointTime), dayFormatter);
       if (segment.length > 0 && pointDay !== day) {
         segmentNumber++;
         normalized.push({
@@ -332,6 +340,27 @@ export function normalizeRoutes(routes: ParsedRoute[]): ParsedRoute[] {
     }
   }
   return normalized;
+}
+
+function formatCalendarDay(date: Date, formatter: Intl.DateTimeFormat): string {
+  const parts = formatter.formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  if (!year || !month || !day) {
+    throw new Error("Could not determine a calendar day for the selected timezone");
+  }
+  return `${year}-${month}-${day}`;
+}
+
+/** Whether a user-entered IANA timezone can safely be used for day grouping. */
+export function isValidDailyRouteTimezone(timeZone: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone }).format();
+    return true;
+  } catch {
+    return false;
+  }
 }
 function wptToPoint(el: Element, source: PointSource): ParsedPoint | null {
   const lat = parseFloat(el.getAttribute("lat") ?? "");
@@ -1058,14 +1087,15 @@ function parseXml(xml: string, label: string): Document {
 const EARTH_RADIUS_METERS = 6_371_008.8;
 
 /** Apply route normalization to a result, returning a wholly new result. */
-export function normalizeParseResult(result: ParseResult): ParseResult {
+export function normalizeParseResult(result: ParseResult, timeZone = "UTC"): ParseResult {
   return {
     waypoints: result.waypoints.map((point) => ({ ...point })),
-    routes: normalizeRoutes(result.routes),
+    routes: normalizeRoutes(result.routes, timeZone),
   };
 }
 
-export const DAILY_ROUTE_TIMEZONE_POLICY = "UTC calendar days";
+export const DAILY_ROUTE_TIMEZONE_POLICY =
+  "UTC calendar days are the default. Timestamped GPX tracks can instead use a selected IANA timezone.";
 
 export function analyzeRouteLoop(
   route: ParsedRoute,

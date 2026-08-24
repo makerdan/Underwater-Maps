@@ -183,6 +183,19 @@ describe("daily route normalization", () => {
     expect(routes[0]!.points[0]!.time).toBe("2026-01-01T23:59:59Z");
   });
 
+  it("uses the selected timezone for both daily boundaries and route names", () => {
+    const routes = normalizeRoutes([
+      track([
+        { lat: 1, lon: 2, time: "2026-01-02T07:59:59Z" },
+        { lat: 1, lon: 3, time: "2026-01-02T08:00:00Z" },
+      ]),
+    ], "America/Los_Angeles");
+
+    expect(routes.map((route) => route.name)).toEqual(["Survey — 2026-01-01", "Survey — 2026-01-02"]);
+    expect(routes.map((route) => route.splitDay)).toEqual(["2026-01-01", "2026-01-02"]);
+    expect(routes.map((route) => route.points.length)).toEqual([1, 1]);
+  });
+
   it("does not split partially timestamped, invalid, or non-track routes", () => {
     const routes = [
       track([

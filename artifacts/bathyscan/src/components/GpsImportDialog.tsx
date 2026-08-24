@@ -44,6 +44,8 @@ import {
   computeResultBbox,
   bboxIntersects,
   normalizeParseResult,
+  isValidDailyRouteTimezone,
+  DAILY_ROUTE_TIMEZONE_POLICY,
   analyzeRouteLoop,
   closeRouteAtReturnPoint,
   type Bounds,
@@ -95,6 +97,8 @@ type Phase =
       fileName: string;
       /** Editable, bounds-filtered import payload. */
       parsed: ParseResult;
+      /** Parsed file before route normalization; changing timezones rebuilds the preview from this value. */
+      raw: ParseResult;
       /** Original parsed file, used by the preview map to show outside-bounds points. */
       original: ParseResult;
       outsideWp: number;
@@ -171,6 +175,8 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const [importWaypoints, setImportWaypoints] = useState(true);
   const [importRoutes, setImportRoutes] = useState(true);
   const [temporary, setTemporary] = useState(false);
+  const [dailyRouteTimezone, setDailyRouteTimezone] = useState("UTC");
+  const [dailyRouteTimezoneInput, setDailyRouteTimezoneInput] = useState("UTC");
 
   // Dataset matcher state (dataset-free import only)
   const [matchedSave, setMatchedSave] = useState<UserCatalogSave | null>(null);
@@ -305,6 +311,34 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     [terrain],
   );
 
+  const createPreview = useCallback(
+    (
+      fileName: string,
+      raw: ParseResult,
+      meta: RawColumnMeta,
+      columnAssignment: ColumnAssignment | null,
+      timeZone: string,
+    ): Extract<Phase, { kind: "preview" }> => {
+      const normalized = normalizeParseResult(raw, timeZone);
+      const part = bounds
+        ? partitionByBounds(normalized, bounds)
+        : { inside: normalized, outsideWaypoints: 0, outsideRoutes: 0, outsideRoutePoints: 0 };
+      return {
+        kind: "preview",
+        fileName,
+        parsed: addCandidateIds(part.inside),
+        raw,
+        original: normalized,
+        outsideWp: part.outsideWaypoints,
+        outsideRoutes: part.outsideRoutes,
+        outsideRoutePoints: part.outsideRoutePoints,
+        meta,
+        columnAssignment,
+      };
+    },
+    [bounds, addCandidateIds],
+  );
+
   /** Advance from parsed data to either the mapping step or the preview step. */
   const advanceFromParsed = useCallback(
     (
@@ -322,26 +356,13 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
         return;
       }
 
-      const normalized = normalizeParseResult(result);
-      const part = bounds
-        ? partitionByBounds(normalized, bounds)
-        : { inside: normalized, outsideWaypoints: 0, outsideRoutes: 0, outsideRoutePoints: 0 };
       setMatchedSave(null);
-      setPhase({
-        kind: "preview",
-        fileName,
-        parsed: addCandidateIds(part.inside),
-        original: normalized,
-        outsideWp: part.outsideWaypoints,
-        outsideRoutes: part.outsideRoutes,
-        outsideRoutePoints: part.outsideRoutePoints,
-        meta,
-        columnAssignment,
-      });
-      setImportWaypoints(part.inside.waypoints.length > 0);
-      setImportRoutes(part.inside.routes.length > 0);
+      const preview = createPreview(fileName, result, meta, columnAssignment, "UTC");
+      setPhase(preview);
+      setImportWaypoints(preview.parsed.waypoints.length > 0);
+      setImportRoutes(preview.parsed.routes.length > 0);
     },
-     [bounds, addCandidateIds],
+     [bounds, createPreview],
   );
 
   const onFileChosen = useCallback(
@@ -359,6 +380,8 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
           });
         });
         // Reset heading/speed to dialog defaults on each new file.
+        setDailyRouteTimezone("UTC");
+        setDailyRouteTimezoneInput("UTC");
         advanceFromParsed(file.name, result, meta, null);
       } catch (err) {
         setPhase({
@@ -376,26 +399,13 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       if (phase.kind !== "mapping") return;
       const { fileName, meta } = phase;
       const result = applyColumnAssignment(meta, assignment);
-      const normalized = normalizeParseResult(result);
-      const part = bounds
-        ? partitionByBounds(normalized, bounds)
-        : { inside: normalized, outsideWaypoints: 0, outsideRoutes: 0, outsideRoutePoints: 0 };
       setMatchedSave(null);
-      setPhase({
-        kind: "preview",
-        fileName,
-        parsed: addCandidateIds(part.inside),
-        original: normalized,
-        outsideWp: part.outsideWaypoints,
-        outsideRoutes: part.outsideRoutes,
-        outsideRoutePoints: part.outsideRoutePoints,
-        meta,
-        columnAssignment: assignment,
-      });
-      setImportWaypoints(part.inside.waypoints.length > 0);
-      setImportRoutes(part.inside.routes.length > 0);
+      const preview = createPreview(fileName, result, meta, assignment, dailyRouteTimezone);
+      setPhase(preview);
+      setImportWaypoints(preview.parsed.waypoints.length > 0);
+      setImportRoutes(preview.parsed.routes.length > 0);
     },
-     [phase, bounds, addCandidateIds],
+     [phase, bounds, createPreview, dailyRouteTimezone],
   );
 
   /** Called from the "Edit column mapping" link on the preview step. */
@@ -408,6 +418,28 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       initialAssignment: phase.columnAssignment,
     });
   }, [phase]);
+
+  const onDailyRouteTimezoneChange = useCallback(
+    (timeZone: string) => {
+      setDailyRouteTimezoneInput(timeZone);
+      if (!isValidDailyRouteTimezone(timeZone)) return;
+
+      setDailyRouteTimezone(timeZone);
+      setMatchedSave(null);
+      if (phase.kind !== "preview") return;
+      const preview = createPreview(
+        phase.fileName,
+        phase.raw,
+        phase.meta,
+        phase.columnAssignment,
+        timeZone,
+      );
+      setPhase(preview);
+      setImportWaypoints((enabled) => enabled && preview.parsed.waypoints.length > 0);
+      setImportRoutes((enabled) => enabled && preview.parsed.routes.length > 0);
+    },
+    [createPreview, phase],
+  );
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -898,6 +930,9 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
               setReassignExisting={setReassignExisting}
               temporary={temporary}
               setTemporary={setTemporary}
+              dailyRouteTimezone={dailyRouteTimezone}
+              dailyRouteTimezoneInput={dailyRouteTimezoneInput}
+              onDailyRouteTimezoneChange={onDailyRouteTimezoneChange}
             />
           )}
 
@@ -1045,6 +1080,9 @@ interface PreviewPanelProps {
   setReassignExisting?: (v: boolean) => void;
   temporary: boolean;
   setTemporary: (value: boolean) => void;
+  dailyRouteTimezone: string;
+  dailyRouteTimezoneInput: string;
+  onDailyRouteTimezoneChange: (timeZone: string) => void;
 }
 
 const PreviewPanel: React.FC<PreviewPanelProps> = ({
@@ -1078,6 +1116,9 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
   setReassignExisting,
   temporary,
   setTemporary,
+  dailyRouteTimezone,
+  dailyRouteTimezoneInput,
+  onDailyRouteTimezoneChange,
 }) => {
   const { parsed, original } = phase;
   const insideWpCount = parsed.waypoints.length;
@@ -1116,6 +1157,51 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
       </div>
 
       {bounds && <PreviewMap original={original} bounds={bounds} />}
+
+      <div
+        data-testid="gps-import-daily-route-timezone"
+        style={{
+          padding: "10px 12px",
+          background: "rgba(0,229,255,0.04)",
+          border: "1px solid rgba(0,229,255,0.15)",
+          borderRadius: 4,
+          margin: "10px 0 12px",
+        }}
+      >
+        <label
+          htmlFor="gps-import-daily-route-timezone-input"
+          style={{ display: "block", color: "#cbd5e1", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.12em", marginBottom: 5 }}
+        >
+          DAILY TRACK TIMEZONE
+        </label>
+        <input
+          id="gps-import-daily-route-timezone-input"
+          type="text"
+          list="gps-import-timezone-options"
+          value={dailyRouteTimezoneInput}
+          onChange={(event) => onDailyRouteTimezoneChange(event.target.value)}
+          aria-describedby="gps-import-daily-route-timezone-policy"
+          aria-invalid={!isValidDailyRouteTimezone(dailyRouteTimezoneInput)}
+          data-testid="gps-import-daily-route-timezone-input"
+          style={selectStyle}
+        />
+        <datalist id="gps-import-timezone-options">
+          {getDailyRouteTimezoneOptions().map((timeZone) => (
+            <option key={timeZone} value={timeZone} />
+          ))}
+        </datalist>
+        <div
+          id="gps-import-daily-route-timezone-policy"
+          style={{ color: "#94a3b8", fontSize: "calc(13px * var(--bs-font-scale, 1))", lineHeight: 1.45, marginTop: 6 }}
+        >
+          {DAILY_ROUTE_TIMEZONE_POLICY} Using <strong>{dailyRouteTimezone}</strong> for this preview. Untimestamped tracks and non-GPX routes stay unchanged.
+        </div>
+        {!isValidDailyRouteTimezone(dailyRouteTimezoneInput) && (
+          <div role="alert" style={{ color: "#fbbf24", fontSize: "calc(13px * var(--bs-font-scale, 1))", marginTop: 5 }}>
+            Enter an IANA timezone such as UTC or America/Anchorage.
+          </div>
+        )}
+      </div>
 
       <div
         data-testid="gps-import-summary"
@@ -1349,6 +1435,15 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
     </>
   );
 };
+
+function getDailyRouteTimezoneOptions(): string[] {
+  const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const intlWithSupportedValues = Intl as typeof Intl & {
+    supportedValuesOf?: (key: "timeZone") => string[];
+  };
+  const timeZones = intlWithSupportedValues.supportedValuesOf?.("timeZone") ?? [];
+  return [...new Set(["UTC", browserTimezone, ...timeZones])].sort();
+}
 
 // ---------------------------------------------------------------------------
 // Dataset matcher section (dataset-free import only)

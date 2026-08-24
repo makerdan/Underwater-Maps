@@ -44,7 +44,8 @@ vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
 
-vi.mock("@/lib/gpsImport", () => ({
+vi.mock("@/lib/gpsImport", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/gpsImport")>()),
   parseGpsFile: vi.fn(),
   partitionByBounds: vi.fn(),
   countPoints: vi.fn(() => 1),
