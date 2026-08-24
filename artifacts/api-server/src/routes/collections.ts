@@ -649,6 +649,7 @@ router.post("/user/collections/:id/layout", requireAuth, dataMutationRateLimit, 
     name: string;
     tiles: LayoutRevision["tiles"];
     groups: LayoutRevision["groups"];
+    pixelDensity?: number;
   };
   const name = trimName(body.name);
   if (!name) {
@@ -677,10 +678,23 @@ router.post("/user/collections/:id/layout", requireAuth, dataMutationRateLimit, 
   if (existingIdx >= 0) {
     // Replace in place — the revision id stays stable so external references
     // (e.g. activeRevisionId on another device) keep working.
-    revision = { ...meta.layoutRevisions[existingIdx]!, savedAt, tiles: body.tiles, groups: body.groups };
+    revision = {
+      ...meta.layoutRevisions[existingIdx]!,
+      savedAt,
+      tiles: body.tiles,
+      groups: body.groups,
+      ...(body.pixelDensity !== undefined ? { pixelDensity: body.pixelDensity } : {}),
+    };
     revisions = meta.layoutRevisions.map((r, i) => (i === existingIdx ? revision : r));
   } else {
-    revision = { id: randomUUID(), name, savedAt, tiles: body.tiles, groups: body.groups };
+    revision = {
+      id: randomUUID(),
+      name,
+      savedAt,
+      tiles: body.tiles,
+      groups: body.groups,
+      ...(body.pixelDensity !== undefined ? { pixelDensity: body.pixelDensity } : {}),
+    };
     revisions = [...meta.layoutRevisions, revision];
     // Cap: drop oldest first (revisions are stored in append order).
     while (revisions.length > MAX_LAYOUT_REVISIONS) revisions.shift();

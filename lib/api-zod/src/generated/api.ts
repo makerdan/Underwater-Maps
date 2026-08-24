@@ -986,6 +986,8 @@ export const getUserCollectionsResponseSpecialMetaBgGeoAnchorsItemImgYMin = 0;
 export const getUserCollectionsResponseSpecialMetaBgGeoAnchorsMin = 2;
 export const getUserCollectionsResponseSpecialMetaBgGeoAnchorsMax = 2;
 
+export const getUserCollectionsResponseSpecialMetaLayoutRevisionsItemPixelDensityExclusiveMin = 0;
+
 
 
 export const GetUserCollectionsResponseItem = zod.object({
@@ -1017,7 +1019,8 @@ export const GetUserCollectionsResponseItem = zod.object({
   "id": zod.string(),
   "name": zod.string(),
   "datasetIds": zod.array(zod.string())
-}).describe('A named group of tiles inside a layout revision'))
+}).describe('A named group of tiles inside a layout revision')),
+  "pixelDensity": zod.number().gt(getUserCollectionsResponseSpecialMetaLayoutRevisionsItemPixelDensityExclusiveMin).optional().describe('Effective canvas pixels per geographic degree when the layout was saved')
 }).describe('A named, timestamped snapshot of the puzzle layout')).describe('Named layout revision history (max 20, oldest dropped)'),
   "activeRevisionId": zod.string().nullable().describe('Which revision is currently active (null = none)')
 }).optional().describe('Puzzle-layout metadata stored on special collections'),
@@ -1070,6 +1073,8 @@ export const patchUserCollectionsIdRenameResponseSpecialMetaBgGeoAnchorsItemImgY
 export const patchUserCollectionsIdRenameResponseSpecialMetaBgGeoAnchorsMin = 2;
 export const patchUserCollectionsIdRenameResponseSpecialMetaBgGeoAnchorsMax = 2;
 
+export const patchUserCollectionsIdRenameResponseSpecialMetaLayoutRevisionsItemPixelDensityExclusiveMin = 0;
+
 
 
 export const PatchUserCollectionsIdRenameResponse = zod.object({
@@ -1101,7 +1106,8 @@ export const PatchUserCollectionsIdRenameResponse = zod.object({
   "id": zod.string(),
   "name": zod.string(),
   "datasetIds": zod.array(zod.string())
-}).describe('A named group of tiles inside a layout revision'))
+}).describe('A named group of tiles inside a layout revision')),
+  "pixelDensity": zod.number().gt(patchUserCollectionsIdRenameResponseSpecialMetaLayoutRevisionsItemPixelDensityExclusiveMin).optional().describe('Effective canvas pixels per geographic degree when the layout was saved')
 }).describe('A named, timestamped snapshot of the puzzle layout')).describe('Named layout revision history (max 20, oldest dropped)'),
   "activeRevisionId": zod.string().nullable().describe('Which revision is currently active (null = none)')
 }).optional().describe('Puzzle-layout metadata stored on special collections'),
@@ -1199,6 +1205,8 @@ export const patchUserCollectionsIdMetaResponseSpecialMetaBgGeoAnchorsItemImgYMi
 export const patchUserCollectionsIdMetaResponseSpecialMetaBgGeoAnchorsMin = 2;
 export const patchUserCollectionsIdMetaResponseSpecialMetaBgGeoAnchorsMax = 2;
 
+export const patchUserCollectionsIdMetaResponseSpecialMetaLayoutRevisionsItemPixelDensityExclusiveMin = 0;
+
 
 
 export const PatchUserCollectionsIdMetaResponse = zod.object({
@@ -1230,7 +1238,8 @@ export const PatchUserCollectionsIdMetaResponse = zod.object({
   "id": zod.string(),
   "name": zod.string(),
   "datasetIds": zod.array(zod.string())
-}).describe('A named group of tiles inside a layout revision'))
+}).describe('A named group of tiles inside a layout revision')),
+  "pixelDensity": zod.number().gt(patchUserCollectionsIdMetaResponseSpecialMetaLayoutRevisionsItemPixelDensityExclusiveMin).optional().describe('Effective canvas pixels per geographic degree when the layout was saved')
 }).describe('A named, timestamped snapshot of the puzzle layout')).describe('Named layout revision history (max 20, oldest dropped)'),
   "activeRevisionId": zod.string().nullable().describe('Which revision is currently active (null = none)')
 }).optional().describe('Puzzle-layout metadata stored on special collections'),
@@ -1255,6 +1264,8 @@ export const PostUserCollectionsIdLayoutParams = zod.object({
 
 export const postUserCollectionsIdLayoutBodyNameMax = 120;
 
+export const postUserCollectionsIdLayoutBodyPixelDensityExclusiveMin = 0;
+
 
 
 export const PostUserCollectionsIdLayoutBody = zod.object({
@@ -1271,7 +1282,8 @@ export const PostUserCollectionsIdLayoutBody = zod.object({
   "id": zod.string(),
   "name": zod.string(),
   "datasetIds": zod.array(zod.string())
-}).describe('A named group of tiles inside a layout revision'))
+}).describe('A named group of tiles inside a layout revision')),
+  "pixelDensity": zod.number().gt(postUserCollectionsIdLayoutBodyPixelDensityExclusiveMin).optional().describe('Effective canvas pixels per geographic degree when the layout was saved')
 }).describe('Save (or replace, when the name matches an existing revision) a named puzzle layout')
 
 

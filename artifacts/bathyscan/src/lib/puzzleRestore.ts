@@ -27,6 +27,8 @@ export interface RestorePayload {
   tiles: RestoreTile[];
   /** Each inner array is a set of datasetIds that move together. */
   groups: string[][];
+  /** Effective canvas pixels per geographic degree when the layout was saved. */
+  pixelDensity?: number;
 }
 
 export interface RestoredPuzzleState {

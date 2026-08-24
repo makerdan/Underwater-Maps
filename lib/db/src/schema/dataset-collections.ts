@@ -42,6 +42,8 @@ export interface LayoutRevision {
   savedAt: string; // ISO timestamp
   tiles: LayoutTile[];
   groups: LayoutGroup[];
+  /** Effective canvas pixels per geographic degree when the layout was saved. */
+  pixelDensity?: number;
 }
 
 /**

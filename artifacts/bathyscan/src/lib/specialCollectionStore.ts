@@ -150,6 +150,7 @@ function revisionToPayload(rev: LayoutRevision): RestorePayload {
       annotation: t.annotation ?? undefined,
     })),
     groups: rev.groups.map((g) => [...g.datasetIds]),
+    ...(rev.pixelDensity !== undefined ? { pixelDensity: rev.pixelDensity } : {}),
   };
 }
 

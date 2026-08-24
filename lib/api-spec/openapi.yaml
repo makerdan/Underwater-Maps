@@ -8091,6 +8091,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/LayoutGroup"
+        pixelDensity:
+          type: number
+          exclusiveMinimum: 0
+          description: Effective canvas pixels per geographic degree when the layout was saved
       required:
         - id
         - name
@@ -8170,6 +8174,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/LayoutGroup"
+        pixelDensity:
+          type: number
+          exclusiveMinimum: 0
+          description: Effective canvas pixels per geographic degree when the layout was saved
       required:
         - name
         - tiles

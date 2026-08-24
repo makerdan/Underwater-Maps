@@ -290,6 +290,7 @@ type MetaShape = {
     savedAt: string;
     tiles: Array<{ datasetId: string; tx: number; ty: number; angleDeg: number; locked: boolean; annotation?: string | null }>;
     groups: Array<{ id: string; name: string; datasetIds: string[] }>;
+    pixelDensity?: number;
   }>;
   activeRevisionId: string | null;
 };
@@ -786,16 +787,26 @@ describe("POST /api/user/collections/:id/layout", () => {
       name: "First pass",
       tiles: [{ datasetId: "ds-1", tx: 1.5, ty: -2, angleDeg: 45, locked: true, annotation: "NW corner" }],
       groups: [{ id: "g1", name: "North", datasetIds: ["ds-1"] }],
+      pixelDensity: 240,
     };
     const res = await request(app).post(`/api/user/collections/${cid}/layout`).send(body);
     expect(res.status).toBe(201);
-    expect(res.body).toMatchObject({ name: "First pass", tiles: body.tiles, groups: body.groups });
+    expect(res.body).toMatchObject({ name: "First pass", tiles: body.tiles, groups: body.groups, pixelDensity: 240 });
     expect(typeof res.body.id).toBe("string");
 
     const list = await request(app).get("/api/user/collections");
     const meta = list.body[0].specialMeta;
     expect(meta.layoutRevisions).toHaveLength(1);
     expect(meta.activeRevisionId).toBe(res.body.id);
+  });
+
+  it("keeps legacy revisions without pixel-density metadata readable", async () => {
+    const rev = seedRevision(1);
+    const cid = seedSpecialCollection("user-a", "Legacy", { layoutRevisions: [rev] });
+    const res = await request(app).get("/api/user/collections");
+    expect(res.status).toBe(200);
+    expect(res.body.find((c: { id: string }) => c.id === cid).specialMeta.layoutRevisions[0])
+      .not.toHaveProperty("pixelDensity");
   });
 
   it("replaces a same-named revision in place, keeping its id", async () => {

@@ -2046,6 +2046,11 @@ export interface LayoutRevision {
   savedAt: string;
   tiles: LayoutTile[];
   groups: LayoutGroup[];
+  /**
+     * Effective canvas pixels per geographic degree when the layout was saved
+     * @exclusiveMinimum 0
+     */
+  pixelDensity?: number;
 }
 
 /**
@@ -2114,6 +2119,11 @@ export interface SaveLayoutBody {
   name: string;
   tiles: LayoutTile[];
   groups: LayoutGroup[];
+  /**
+     * Effective canvas pixels per geographic degree when the layout was saved
+     * @exclusiveMinimum 0
+     */
+  pixelDensity?: number;
 }
 
 /**

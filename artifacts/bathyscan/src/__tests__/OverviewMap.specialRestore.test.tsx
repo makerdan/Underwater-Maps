@@ -259,6 +259,29 @@ describe("OverviewMap — special-collection restore applies store + canvas atom
     expect(persistedEarly).toBe(false);
   });
 
+  it("rebases every restored tile by the same density ratio, preserving relative gaps", async () => {
+    renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    await act(async () => {});
+
+    await act(async () => {
+      useSpecialCollectionStore.getState().requestRestore({
+        ...PAYLOAD,
+        pixelDensity: 1,
+      });
+    });
+
+    const restored = usePuzzleStore.getState().puzzleTransforms;
+    const a = restored["ds-a"]!;
+    const b = restored["ds-b"]!;
+    // The mounted jsdom canvas uses a different effective density than the
+    // deliberately small save-time density above. Both centers and their
+    // relative gap must scale together, rather than only the first tile moving.
+    expect(a.tx).not.toBe(12);
+    expect(a.ty).not.toBe(-34);
+    expect(b.tx / a.tx).toBeCloseTo(-56 / 12, 8);
+    expect(b.ty / a.ty).toBeCloseTo(78 / -34, 8);
+  });
+
   it("sign-out clears the restored layout from the LIVE mounted component, puzzleStore, and the geo-transform mirror", async () => {
     renderWithProviders(withQuery(React.createElement(OverviewMap)));
     await act(async () => {});

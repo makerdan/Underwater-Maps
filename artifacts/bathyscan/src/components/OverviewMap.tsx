@@ -1128,6 +1128,9 @@ export const OverviewMap: React.FC = () => {
         name: trimmed,
         tiles,
         groups,
+        ...(transformRef.current
+          ? { pixelDensity: transformRef.current.pxPerDeg * transformRef.current.scale }
+          : {}),
       });
       useSpecialCollectionStore.getState().appendRevision(active.collectionId, revision);
       lastAppliedLayoutSigRef.current = layoutSignatureOf(
@@ -1326,6 +1329,30 @@ export const OverviewMap: React.FC = () => {
       aliveIds,
       puzzleGroupCounterRef.current,
     );
+    const savedDensity = spcPendingRestore.payload.pixelDensity;
+    const currentDensity = transformRef.current
+      ? transformRef.current.pxPerDeg * transformRef.current.scale
+      : null;
+    if (
+      savedDensity !== undefined &&
+      Number.isFinite(savedDensity) &&
+      savedDensity > 0
+    ) {
+      if (currentDensity !== null && Number.isFinite(currentDensity) && currentDensity > 0) {
+        const rebased = rebasePuzzleTransformsForView(
+          restored.transforms,
+          savedDensity,
+          currentDensity,
+        );
+        restored.transforms = rebased;
+        restored.storeRecord = Object.fromEntries(rebased);
+        puzzlePixelDensityRef.current = currentDensity;
+      } else {
+        hydratedPuzzlePixelDensityRef.current = savedDensity;
+      }
+    } else if (currentDensity !== null && Number.isFinite(currentDensity) && currentDensity > 0) {
+      puzzlePixelDensityRef.current = currentDensity;
+    }
     puzzleGroupCounterRef.current = restored.groupCounterEnd;
     usePuzzleStore.getState().setPuzzleTransforms(restored.storeRecord);
     setPuzzleMode(true);
