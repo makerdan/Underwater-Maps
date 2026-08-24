@@ -66,16 +66,22 @@ describe("OverviewMap responsive interactions", () => {
 
   it("keeps the backing canvas dimensions aligned after viewport resize", async () => {
     renderOverview();
+    const canvas = screen.getByTestId("overview-map-canvas") as HTMLCanvasElement;
+
+    expect(canvas.width).toBe(800);
+    expect(canvas.height).toBe(600);
+
+    Object.defineProperty(window, "innerWidth", { value: 390, configurable: true });
+    Object.defineProperty(window, "innerHeight", { value: 844, configurable: true });
+    await act(async () => { fireEvent(window, new Event("resize")); });
+    expect(canvas.width).toBe(390);
+    expect(canvas.height).toBe(844);
+  });
+
+  it("accepts pointer pan streams and clears them when cancelled", async () => {
+    renderOverview();
     const canvas = screen.getByTestId("overview-map-canvas");
 
-    const persisted = JSON.parse(
-      sessionStorage.getItem("bathyscan:puzzleTransforms") ?? "[]",
-    ) as Array<[string, { tx: number; ty: number }]>;
-    const canvas = screen.getByTestId("overview-map-canvas");
-
-    const persisted = JSON.parse(
-      sessionStorage.getItem("bathyscan:puzzleTransforms") ?? "[]",
-    ) as Array<[string, { tx: number; ty: number }]>;
     await act(async () => {
       fireEvent.pointerDown(canvas, { pointerId: 1, pointerType: "touch", clientX: 100, clientY: 100, button: 0 });
       fireEvent.pointerMove(window, { pointerId: 1, pointerType: "touch", clientX: 130, clientY: 120 });
@@ -99,8 +105,21 @@ describe("OverviewMap responsive interactions", () => {
     renderOverview();
     const gps = screen.getByTestId("gps-activate-btn");
 
+    expect(gps).toHaveTextContent("📍 MY LOCATION");
+    expect(gps).toHaveAccessibleName("Use my location");
+  });
+
+  it("offers session and named-layout saves for moved puzzle tiles", () => {
+    sessionStorage.setItem(
+      "bathyscan:puzzleTransforms",
+      JSON.stringify([["responsive-ds", { tx: 12, ty: 8, angleDeg: 0 }]]),
+    );
+    renderOverview();
+
     const saveSession = screen.getByTestId("overview-puzzle-save");
     const saveLayout = screen.getByTestId("overview-puzzle-save-layout");
+    expect(saveSession).toHaveTextContent("✦ SAVE");
+    expect(saveSession).toHaveAccessibleName("Save puzzle tile positions to this session");
     expect(saveLayout).toHaveTextContent("📌 SAVE LAYOUT");
     expect(saveLayout).toHaveAccessibleName("Save current puzzle arrangement as a named layout");
 
@@ -124,5 +143,3 @@ describe("OverviewMap responsive interactions", () => {
     expect(zoomFit).toBeInTheDocument();
   });
 });
-
-    const restored = persisted.find(([id]) => id === "responsive-ds")?.[1];
