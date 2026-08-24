@@ -193,6 +193,7 @@ function layoutSignatureOf(
 const OVERVIEW_CONTROLS_TOP_OFFSET = 36;
 
 const PUZZLE_LAYOUTS_SYNC_KEY = "bathyscan:puzzleLayouts:event";
+const PUZZLE_TRANSFORMS_DENSITY_KEY = "bathyscan:puzzleTransforms:density";
 
 type PuzzleLayoutSyncEvent =
   | { type: "save"; layout: PuzzleLayout }
@@ -656,6 +657,9 @@ export const OverviewMap: React.FC = () => {
   // Pixel offsets are persisted for backwards compatibility. This tracks the
   // view density at which those offsets are currently expressed.
   const puzzlePixelDensityRef = useRef<number | null>(null);
+  // A persisted transform set may have been created at a different viewport
+  // size. Apply its density once the initial canvas transform is available.
+  const hydratedPuzzlePixelDensityRef = useRef<number | null>(null);
   const rebasePuzzleTransformsForViewChange = useCallback((nextTransform: OverviewTransform) => {
     const nextDensity = nextTransform.pxPerDeg * nextTransform.scale;
     const previousDensity = puzzlePixelDensityRef.current;
@@ -674,6 +678,23 @@ export const OverviewMap: React.FC = () => {
   useEffect(() => {
     puzzleTransformsRef.current = puzzleTransforms;
     dirtyRef.current = true;
+    const savedDensity = hydratedPuzzlePixelDensityRef.current;
+    const currentDensity = puzzlePixelDensityRef.current;
+    if (
+      savedDensity !== null &&
+      currentDensity !== null &&
+      puzzleTransforms.size > 0
+    ) {
+      const rebased = rebasePuzzleTransformsForView(
+        puzzleTransforms,
+        savedDensity,
+        currentDensity,
+      );
+      puzzleTransformsRef.current = rebased;
+      hydratedPuzzlePixelDensityRef.current = null;
+      setPuzzleTransforms(rebased);
+      return;
+    }
     // Auto-persist to sessionStorage so positions survive navigation / component
     // unmount without requiring an explicit ✦ SAVE click. The ↺ RESET button
     // still calls sessionStorage.removeItem() directly when it wipes all
@@ -691,9 +712,16 @@ export const OverviewMap: React.FC = () => {
       } catch {
         // Ignore quota / security errors silently.
       }
+      const density = puzzlePixelDensityRef.current;
+      if (density !== null && Number.isFinite(density) && density > 0) {
+        try { sessionStorage.setItem(PUZZLE_TRANSFORMS_DENSITY_KEY, String(density)); } catch { /* unavailable */ }
+        try { localStorage.setItem(PUZZLE_TRANSFORMS_DENSITY_KEY, String(density)); } catch { /* unavailable */ }
+      }
     } else {
       try { sessionStorage.removeItem("bathyscan:puzzleTransforms"); } catch { /* unavailable */ }
       try { localStorage.removeItem("bathyscan:puzzleTransforms"); } catch { /* unavailable */ }
+      try { sessionStorage.removeItem(PUZZLE_TRANSFORMS_DENSITY_KEY); } catch { /* unavailable */ }
+      try { localStorage.removeItem(PUZZLE_TRANSFORMS_DENSITY_KEY); } catch { /* unavailable */ }
     }
 
     // Convert pixel-space puzzle transforms to geographic offsets so the
@@ -772,6 +800,13 @@ export const OverviewMap: React.FC = () => {
           ])));
         }
       }
+      const rawDensity =
+        sessionStorage.getItem(PUZZLE_TRANSFORMS_DENSITY_KEY) ??
+        localStorage.getItem(PUZZLE_TRANSFORMS_DENSITY_KEY);
+      const savedDensity = rawDensity === null ? NaN : Number(rawDensity);
+      if (Number.isFinite(savedDensity) && savedDensity > 0) {
+        hydratedPuzzlePixelDensityRef.current = savedDensity;
+      }
     } catch {
       // Silently ignore corrupt or missing data.
     }
@@ -827,6 +862,10 @@ export const OverviewMap: React.FC = () => {
         } catch {
           // Ignore corrupt cross-tab data and retain the current layout.
         }
+      } else if (event.key === PUZZLE_TRANSFORMS_DENSITY_KEY) {
+        const density = event.newValue === null ? NaN : Number(event.newValue);
+        hydratedPuzzlePixelDensityRef.current =
+          Number.isFinite(density) && density > 0 ? density : null;
       } else if (event.key === "bathyscan:puzzleGroups") {
         if (!event.newValue) {
           setPuzzleGroups(new Map());
@@ -981,7 +1020,22 @@ export const OverviewMap: React.FC = () => {
         });
       }
     }
-    setPuzzleTransforms(nextTransforms);
+    const currentDensity = transformRef.current
+      ? transformRef.current.pxPerDeg * transformRef.current.scale
+      : null;
+    const restoredTransforms =
+      currentDensity !== null &&
+      layout.pixelDensity !== undefined &&
+      Number.isFinite(layout.pixelDensity) &&
+      layout.pixelDensity > 0
+        ? rebasePuzzleTransformsForView(
+            nextTransforms,
+            layout.pixelDensity,
+            currentDensity,
+          )
+        : nextTransforms;
+    if (currentDensity !== null) puzzlePixelDensityRef.current = currentDensity;
+    setPuzzleTransforms(restoredTransforms);
     // Restore groups — keep only groups whose members are ≥ 2 alive datasets.
     const nextGroups = new Map<string, Set<string>>();
     let maxCounter = puzzleGroupCounterRef.current;
@@ -1013,7 +1067,18 @@ export const OverviewMap: React.FC = () => {
       groups.push([...members]);
     }
     const id = `pl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-    const layout = { id, name: trimmed, tiles, groups };
+    const pixelDensity = transformRef.current
+      ? transformRef.current.pxPerDeg * transformRef.current.scale
+      : undefined;
+    const layout = {
+      id,
+      name: trimmed,
+      tiles,
+      groups,
+      ...(pixelDensity !== undefined && Number.isFinite(pixelDensity) && pixelDensity > 0
+        ? { pixelDensity }
+        : {}),
+    };
     useSettingsStore.setState((state) => ({
       puzzleLayouts: [
         ...state.puzzleLayouts.filter((existing) => existing.id !== layout.id),
@@ -2224,8 +2289,19 @@ export const OverviewMap: React.FC = () => {
       const refGrid = worldGridRef.current ?? withGrid.find((d) => d.overviewGrid != null)?.overviewGrid;
       if (refGrid) {
         transformRef.current = computeInitialTransform(refGrid, canvas.width, canvas.height);
-        puzzlePixelDensityRef.current =
-          transformRef.current.pxPerDeg * transformRef.current.scale;
+        const nextDensity = transformRef.current.pxPerDeg * transformRef.current.scale;
+        const savedDensity = hydratedPuzzlePixelDensityRef.current;
+        puzzlePixelDensityRef.current = nextDensity;
+        if (savedDensity !== null && puzzleTransformsRef.current.size > 0) {
+          const rebased = rebasePuzzleTransformsForView(
+            puzzleTransformsRef.current,
+            savedDensity,
+            nextDensity,
+          );
+          puzzleTransformsRef.current = rebased;
+          setPuzzleTransforms(rebased);
+          hydratedPuzzlePixelDensityRef.current = null;
+        }
       }
     }
 
@@ -2240,8 +2316,19 @@ export const OverviewMap: React.FC = () => {
     // so the initial view fits all of them at once.
     const refGrid = worldGridRef.current ?? overviewGrid;
     transformRef.current = computeInitialTransform(refGrid, canvas.width, canvas.height);
-    puzzlePixelDensityRef.current =
-      transformRef.current.pxPerDeg * transformRef.current.scale;
+    const nextDensity = transformRef.current.pxPerDeg * transformRef.current.scale;
+    const savedDensity = hydratedPuzzlePixelDensityRef.current;
+    puzzlePixelDensityRef.current = nextDensity;
+    if (savedDensity !== null && puzzleTransformsRef.current.size > 0) {
+      const rebased = rebasePuzzleTransformsForView(
+        puzzleTransformsRef.current,
+        savedDensity,
+        nextDensity,
+      );
+      puzzleTransformsRef.current = rebased;
+      setPuzzleTransforms(rebased);
+      hydratedPuzzlePixelDensityRef.current = null;
+    }
   }, [overviewGrid]);
 
   useEffect(() => {

@@ -241,6 +241,11 @@ export interface PuzzleLayout {
   /** Per-dataset tile transforms captured at save time. */
   tiles: Array<{ datasetId: string; tx: number; ty: number; angleDeg: number; flipH?: boolean; flipV?: boolean }>;
   /**
+   * Effective canvas pixels per geographic degree when the layout was saved.
+   * Optional so layouts created before resize-safe persistence remain valid.
+   */
+  pixelDensity?: number;
+  /**
    * Saved group memberships. Each inner array is a set of datasetIds that
    * move together as a unit. Entries with fewer than 2 members are ignored
    * on restore (a single tile has no meaningful grouping).

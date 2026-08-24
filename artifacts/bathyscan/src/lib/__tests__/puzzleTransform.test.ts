@@ -204,6 +204,21 @@ describe("applyPuzzleTransformToLonLat — null-transform passthrough", () => {
 });
 
 describe("rebasePuzzleTransformsForView", () => {
+  it("keeps legacy pixel transforms geographically aligned at a new viewport density", () => {
+    // Legacy entries have only the historical transform fields. Rebase them
+    // without requiring flip/lock metadata so their centres and gaps scale
+    // together when a saved arrangement is restored on another viewport.
+    const legacy = new Map<string, PuzzleTransform>([
+      ["west", { tx: 24, ty: -12, angleDeg: 0 }],
+      ["east", { tx: -16, ty: 8, angleDeg: 15 }],
+    ]);
+    const restored = rebasePuzzleTransformsForView(legacy, 120, 300);
+
+    expect(restored.get("west")).toMatchObject({ tx: 60, ty: -30, angleDeg: 0 });
+    expect(restored.get("east")).toMatchObject({ tx: -40, ty: 20, angleDeg: 15 });
+    expect(legacy.get("west")).toMatchObject({ tx: 24, ty: -12 });
+  });
+
   it("preserves geographic displacement across zoom in and out", () => {
     const original = new Map<string, PuzzleTransform>([
       ["tile", { tx: 40, ty: -20, angleDeg: 37, flipH: true, flipV: false }],
