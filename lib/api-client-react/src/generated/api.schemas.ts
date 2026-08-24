@@ -2459,6 +2459,8 @@ export interface Marker {
   /** Versioned area or drift geometry; null for legacy point markers */
   geometry?: MarkerGeometry | null;
   createdAt: string;
+  /** Server-derived expiration deadline; null for permanent markers. Temporary markers expire exactly two days after server-side creation. */
+  expiresAt?: string | null;
   /** Clerk user ID of the user who created this marker */
   userId?: string;
 }
@@ -3903,6 +3905,8 @@ export interface MarkerInput {
   /** Optional frozen conditions snapshot captured at drop time */
   conditions?: MarkerConditions | null;
   geometry?: MarkerGeometry | null;
+  /** Create a short-lived marker. The server derives expiresAt as exactly two days after creation; any client timestamp is ignored. */
+  temporary?: boolean;
 }
 
 export type SavedRouteWaypointsItem = {

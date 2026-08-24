@@ -59,6 +59,7 @@ const MarkerRow: React.FC<MarkerRowProps> = ({ marker }) => {
     </div>
     <div style={{ color: "#64748b", fontSize: "calc(12.5px * var(--bs-font-scale, 1))", letterSpacing: "0.04em" }}>
        {drift ? `SAVED DRIFT · ${Math.round(drift.summary.durationS / 3600)} h · ${Math.round(drift.summary.distanceM)} m` : `${marker.type} · ${marker.lat.toFixed(4)}, ${marker.lon.toFixed(4)} · ${marker.depth.toFixed(1)} m`}
+       {marker.expiresAt && <span style={{ color: "#fbbf24" }}> · TEMPORARY · expires {new Date(marker.expiresAt).toLocaleDateString()}</span>}
     </div>
   </div>
   );

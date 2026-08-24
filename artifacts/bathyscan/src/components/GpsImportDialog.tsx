@@ -167,6 +167,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   );
   const [importWaypoints, setImportWaypoints] = useState(true);
   const [importRoutes, setImportRoutes] = useState(true);
+  const [temporary, setTemporary] = useState(false);
 
   // Dataset matcher state (dataset-free import only)
   const [matchedSave, setMatchedSave] = useState<UserCatalogSave | null>(null);
@@ -524,6 +525,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
             type: markerType as MarkerInputType,
             label,
             notes: notes && notes.length > 0 ? notes : undefined,
+            temporary,
           },
         });
         savedMarkerIdsRef.current.push(created.id);
@@ -889,6 +891,8 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
               existingUnassignedCount={existingUnassignedCount}
               reassignExisting={reassignExisting}
               setReassignExisting={setReassignExisting}
+              temporary={temporary}
+              setTemporary={setTemporary}
             />
           )}
 
@@ -1034,6 +1038,8 @@ interface PreviewPanelProps {
   existingUnassignedCount?: number;
   reassignExisting?: boolean;
   setReassignExisting?: (v: boolean) => void;
+  temporary: boolean;
+  setTemporary: (value: boolean) => void;
 }
 
 const PreviewPanel: React.FC<PreviewPanelProps> = ({
@@ -1065,6 +1071,8 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
   existingUnassignedCount,
   reassignExisting,
   setReassignExisting,
+  temporary,
+  setTemporary,
 }) => {
   const { parsed, original } = phase;
   const insideWpCount = parsed.waypoints.length;
@@ -1195,6 +1203,21 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
               ))}
             </select>
           </div>
+          <label style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 12, color: "#cbd5e1" }}>
+            <input
+              type="checkbox"
+              checked={temporary}
+              onChange={(e) => setTemporary(e.target.checked)}
+              data-testid="gps-import-temporary-toggle"
+            />
+            <span>
+              <strong>Temporary markers</strong>
+              <br />
+              <span style={{ color: "#94a3b8", fontSize: "calc(13px * var(--bs-font-scale, 1))" }}>
+                Automatically expire two days after import.
+              </span>
+            </span>
+          </label>
 
           <details
             data-testid="gps-import-waypoints-editor"

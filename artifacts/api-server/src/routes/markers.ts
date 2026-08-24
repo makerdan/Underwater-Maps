@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { and, eq, sql, isNull, gte, lte, or } from "drizzle-orm";
+import { and, eq, sql, isNull, gte, lte, or, gt } from "drizzle-orm";
 import { db, markersTable, catchCountersTable, catchEntriesTable, datasetCatalogTable, customDatasetsTable, type MarkerGeometry } from "@workspace/db";
 import { PostMarkersBody, DeleteMarkersIdParams, GetMarkersQueryParams, PatchMarkersIdParams, PatchMarkersIdBody, GetMarkersResponse, GetMarkersResponseItem, PatchMarkersIdResponse, DeleteMarkersMineResponse } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
@@ -16,6 +16,12 @@ const LABEL_MAX = 200;
 const NOTES_MAX = 2000;
 const MAX_POLYGON_VERTICES = 100;
 const MAX_DRIFT_WAYPOINTS = 10_000;
+const TEMPORARY_MARKER_TTL_MS = 2 * 24 * 60 * 60 * 1000;
+
+/** Uses the database clock so expiry is authoritative across clients and hosts. */
+function activeMarkerPredicate() {
+  return or(isNull(markersTable.expiresAt), gt(markersTable.expiresAt, sql`CURRENT_TIMESTAMP`));
+}
 
 type GeometryCoordinate = { lon: number; lat: number };
 
@@ -167,7 +173,7 @@ router.get("/markers", requireAuth, validateQuery(GetMarkersQueryParams, "GET /a
     const rows = await db
       .select()
       .from(markersTable)
-      .where(and(eq(markersTable.datasetId, datasetId), eq(markersTable.userId, userId)))
+      .where(and(eq(markersTable.datasetId, datasetId), eq(markersTable.userId, userId), activeMarkerPredicate()))
       .orderBy(markersTable.createdAt);
     res.json(validateResponse(GetMarkersResponse, rows, "GET /api/markers"));
     return;
@@ -192,6 +198,7 @@ router.get("/markers", requireAuth, validateQuery(GetMarkersQueryParams, "GET /a
       and(
         eq(markersTable.userId, userId),
         isNull(markersTable.datasetId),
+        activeMarkerPredicate(),
         gte(markersTable.lat, minLat),
         lte(markersTable.lat, maxLat),
         // A coverage bbox with minLon > maxLon crosses the antimeridian.
@@ -211,7 +218,7 @@ router.get("/markers", requireAuth, validateQuery(GetMarkersQueryParams, "GET /a
 }));
 
 router.post("/markers", requireAuth, dataMutationRateLimit, validateBody(PostMarkersBody, "POST /api/markers"), asyncHandler(async (req, res): Promise<void> => {
-  const { datasetId, lon, lat, depth, type = "custom", label, notes, quickCatch, conditions, geometry } = res.locals.parsedBody;
+  const { datasetId, lon, lat, depth, type = "custom", label, notes, quickCatch, conditions, geometry, temporary = false } = res.locals.parsedBody;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
   // Semantic validation — return 422 Unprocessable Entity for out-of-range values.
@@ -295,6 +302,7 @@ router.post("/markers", requireAuth, dataMutationRateLimit, validateBody(PostMar
       catchSeq,
       conditions: conditionsJson,
       geometry: geometryJson(geometry),
+      expiresAt: temporary ? new Date(Date.now() + TEMPORARY_MARKER_TTL_MS) : null,
     })
     .returning();
 
@@ -350,7 +358,7 @@ router.patch("/markers/:id", requireAuth, dataMutationRateLimit, validateParams(
       const [existing] = await db
         .select({ lon: markersTable.lon, lat: markersTable.lat })
         .from(markersTable)
-        .where(and(eq(markersTable.id, id), eq(markersTable.userId, userId)));
+        .where(and(eq(markersTable.id, id), eq(markersTable.userId, userId), activeMarkerPredicate()));
       if (!existing) {
         res.status(404).json({ error: "not_found", details: `Marker '${id}' not found` });
         return;
@@ -373,7 +381,7 @@ router.patch("/markers/:id", requireAuth, dataMutationRateLimit, validateParams(
   const [updated] = await db
     .update(markersTable)
     .set(persistedUpdateData)
-    .where(and(eq(markersTable.id, id), eq(markersTable.userId, userId)))
+    .where(and(eq(markersTable.id, id), eq(markersTable.userId, userId), activeMarkerPredicate()))
     .returning();
 
   if (!updated) {

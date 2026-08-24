@@ -15,7 +15,7 @@ import { createCompleteDbMock } from "./helpers/api-zod-mock.js";
 const state: { throwOnSelect: boolean } = { throwOnSelect: false };
 
 vi.mock("@workspace/db", () => {
-  const markersTable = { __tableName: "markers" as const };
+  const markersTable = { __tableName: "markers" as const, expiresAt: "expiresAt" };
 
   const select = () => ({
     from: () => ({

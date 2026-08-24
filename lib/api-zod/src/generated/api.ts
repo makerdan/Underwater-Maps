@@ -1465,6 +1465,7 @@ export const GetMarkersResponseItem = zod.object({
 })
 })]).nullish().describe('Versioned area or drift geometry; null for legacy point markers'),
   "createdAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date().nullish().describe('Server-derived expiration deadline; null for permanent markers. Temporary markers expire exactly two days after server-side creation.'),
   "userId": zod.string().optional().describe('Clerk user ID of the user who created this marker')
 })
 export const GetMarkersResponse = zod.array(GetMarkersResponseItem)
@@ -1532,7 +1533,7 @@ export const postMarkersBodyGeometryOneFourSummaryMinDepthMin = 0;
 
 export const postMarkersBodyGeometryOneFourSummaryMaxDepthMin = 0;
 
-
+export const postMarkersBodyTemporaryDefault = false;
 
 export const PostMarkersBody = zod.object({
   "datasetId": zod.string().nullish().describe('Dataset this marker belongs to. Pass null for dataset-free (unassigned) markers.'),
@@ -1606,7 +1607,8 @@ export const PostMarkersBody = zod.object({
   "minDepth": zod.number().min(postMarkersBodyGeometryOneFourSummaryMinDepthMin),
   "maxDepth": zod.number().min(postMarkersBodyGeometryOneFourSummaryMaxDepthMin)
 })
-})]).nullish()
+})]).nullish(),
+  "temporary": zod.boolean().default(postMarkersBodyTemporaryDefault).describe('Create a short-lived marker. The server derives expiresAt as exactly two days after creation; any client timestamp is ignored.')
 })
 
 
@@ -1860,6 +1862,7 @@ export const PatchMarkersIdResponse = zod.object({
 })
 })]).nullish().describe('Versioned area or drift geometry; null for legacy point markers'),
   "createdAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date().nullish().describe('Server-derived expiration deadline; null for permanent markers. Temporary markers expire exactly two days after server-side creation.'),
   "userId": zod.string().optional().describe('Clerk user ID of the user who created this marker')
 })
 

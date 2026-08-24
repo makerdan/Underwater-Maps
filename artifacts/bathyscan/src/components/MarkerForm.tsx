@@ -86,6 +86,7 @@ export const MarkerForm: React.FC = () => {
   const [markerType, setMarkerType] = useState<MarkerTypeValue>(MarkerInputType.custom);
   const [label, setLabel] = useState("");
   const [notes, setNotes] = useState("");
+  const [temporary, setTemporary] = useState(false);
   const [labelError, setLabelError] = useState("");
   const [notesError, setNotesError] = useState("");
   const [poleColour, setPoleColour] = useState(DEPTH_POLE_DEFAULT_COLOUR);
@@ -110,6 +111,7 @@ export const MarkerForm: React.FC = () => {
           ? ""
           : (editMarker.notes ?? "");
       setNotes(existingNotes);
+      setTemporary(false);
       setLabelError("");
       setNotesError("");
       // Pre-populate depth in edit mode so the user sees the current value.
@@ -151,6 +153,7 @@ export const MarkerForm: React.FC = () => {
     const prefill = useUiStore.getState().markerFormPrefill;
     setLabel(prefill?.label ?? "");
     setNotes("");
+    setTemporary(false);
     setLabelError("");
     setNotesError("");
     const candidateType = prefill?.type as MarkerTypeValue | undefined;
@@ -373,6 +376,7 @@ export const MarkerForm: React.FC = () => {
       type: markerType as MarkerInputType,
       label: labelResult.data,
       notes: notesForBody,
+      temporary,
       ...(geometry ? { geometry } : {}),
     };
 
@@ -692,6 +696,12 @@ export const MarkerForm: React.FC = () => {
         )}
         {/* Type selector — categorised scrollable picker */}
         <div style={{ padding: "9px 14px 4px" }}>
+          {!isEditMode && (
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, color: "#fbbf24", fontSize: "calc(12.5px * var(--bs-font-scale, 1))" }}>
+              <input type="checkbox" checked={temporary} onChange={(e) => setTemporary(e.target.checked)} data-testid="marker-temporary-toggle" />
+              <span><strong>TEMPORARY NOTE</strong><br /><span style={{ color: "#94a3b8" }}>Expires in 2 days. The server sets the exact expiry.</span></span>
+            </label>
+          )}
           <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.12em", color: "#64748b", marginBottom: 5 }}>
             TYPE
           </div>

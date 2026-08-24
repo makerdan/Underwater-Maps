@@ -25,7 +25,7 @@ const state = {
 };
 
 vi.mock("@workspace/db", () => {
-  const markersTable = { __tableName: "markers" as const, id: "id", datasetId: "datasetId", userId: "userId" };
+  const markersTable = { __tableName: "markers" as const, id: "id", datasetId: "datasetId", userId: "userId", expiresAt: "expiresAt" };
   const catchEntriesTable = {
     __tableName: "catch_entries" as const,
     id: "id", markerId: "markerId", userId: "userId", createdAt: "createdAt", photos: "photos",

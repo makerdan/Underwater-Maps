@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, gt, or, sql } from "drizzle-orm";
 import { db, markersTable, catchEntriesTable } from "@workspace/db";
 import {
   GetCatchesQueryParams,
@@ -27,6 +27,10 @@ import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 const router = Router();
 
 const MAX_PHOTOS = 6;
+
+function activeMarkerPredicate() {
+  return or(isNull(markersTable.expiresAt), gt(markersTable.expiresAt, sql`CURRENT_TIMESTAMP`));
+}
 
 /** Thrown when a caller references a photo object they are not allowed to claim. */
 class PhotoAclError extends Error {
@@ -97,7 +101,7 @@ router.get("/catches", requireAuth, validateQuery(GetCatchesQueryParams, "GET /a
   const markerRows = await db
     .select({ id: markersTable.id })
     .from(markersTable)
-    .where(and(eq(markersTable.datasetId, datasetId), eq(markersTable.userId, userId)));
+    .where(and(eq(markersTable.datasetId, datasetId), eq(markersTable.userId, userId), activeMarkerPredicate()));
 
   if (markerRows.length === 0) {
     res.json([]);
@@ -124,7 +128,7 @@ router.get("/markers/:markerId/catches", requireAuth, validateParams(GetMarkersM
   const [marker] = await db
     .select({ id: markersTable.id })
     .from(markersTable)
-    .where(and(eq(markersTable.id, markerId), eq(markersTable.userId, userId)));
+    .where(and(eq(markersTable.id, markerId), eq(markersTable.userId, userId), activeMarkerPredicate()));
   if (!marker) {
     res.status(404).json({ error: "not_found", details: `Marker '${markerId}' not found` });
     return;
@@ -158,7 +162,7 @@ router.post("/markers/:markerId/catches", requireAuth, dataMutationRateLimit, va
   const [marker] = await db
     .select({ id: markersTable.id })
     .from(markersTable)
-    .where(and(eq(markersTable.id, markerId), eq(markersTable.userId, userId)));
+    .where(and(eq(markersTable.id, markerId), eq(markersTable.userId, userId), activeMarkerPredicate()));
   if (!marker) {
     res.status(404).json({ error: "not_found", details: `Marker '${markerId}' not found` });
     return;

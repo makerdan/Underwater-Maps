@@ -8246,6 +8246,11 @@ components:
         createdAt:
           type: string
           format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Server-derived expiration deadline; null for permanent markers. Temporary markers expire exactly two days after server-side creation.
         userId:
           type: string
           description: Clerk user ID of the user who created this marker
@@ -10242,6 +10247,10 @@ components:
           nullable: true
           allOf:
             - $ref: "#/components/schemas/MarkerGeometry"
+        temporary:
+          type: boolean
+          default: false
+          description: Create a short-lived marker. The server derives expiresAt as exactly two days after creation; any client timestamp is ignored.
       required:
         - lon
         - lat

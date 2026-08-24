@@ -23,8 +23,11 @@ export const markersTable = pgTable("markers", {
   /** Versioned geometry; null preserves legacy point-marker semantics. */
   geometry: jsonb("geometry").$type<MarkerGeometry>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  /** Server-derived deadline for temporary markers; null means permanent. */
+  expiresAt: timestamp("expires_at"),
 }, (table) => [
   index("markers_user_id_idx").on(table.userId),
+  index("markers_expires_at_idx").on(table.expiresAt),
 ]);
 
 /**
