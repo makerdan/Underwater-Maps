@@ -18,6 +18,34 @@ import { lonLatToCanvas, canvasToLonLat, type OverviewTransform } from "./overvi
 import type { PuzzleTransform } from "./puzzleStore";
 
 /**
+ * Rebase pixel-space puzzle offsets when the overview's effective pixel
+ * density changes.  Persisted puzzle layouts intentionally remain in the
+ * historical `{tx, ty, angleDeg, flipH, flipV}` shape; this conversion keeps
+ * the same geographic displacement at the new view scale.
+ */
+export function rebasePuzzleTransformsForView(
+  transforms: ReadonlyMap<string, PuzzleTransform>,
+  previousDensity: number,
+  nextDensity: number,
+): Map<string, PuzzleTransform> {
+  if (!Number.isFinite(previousDensity) || previousDensity <= 0 ||
+      !Number.isFinite(nextDensity) || nextDensity <= 0 ||
+      previousDensity === nextDensity) {
+    return new Map(transforms);
+  }
+  const ratio = nextDensity / previousDensity;
+  const next = new Map<string, PuzzleTransform>();
+  for (const [id, transform] of transforms) {
+    next.set(id, {
+      ...transform,
+      tx: transform.tx * ratio,
+      ty: transform.ty * ratio,
+    });
+  }
+  return next;
+}
+
+/**
  * Apply a puzzle-tile spatial transform to a geographic coordinate.
  *
  * @param lon           Marker longitude (degrees)

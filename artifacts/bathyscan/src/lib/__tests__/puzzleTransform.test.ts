@@ -6,7 +6,12 @@
  */
 import { describe, it, expect } from "vitest";
 import type { TerrainData } from "@workspace/api-client-react";
-import { applyPuzzleTransformToLonLat, tileCenterLonLat } from "../puzzleTransform";
+import {
+  applyPuzzleTransformToLonLat,
+  rebasePuzzleTransformsForView,
+  tileCenterLonLat,
+} from "../puzzleTransform";
+import type { PuzzleTransform } from "../puzzleStore";
 import type { OverviewTransform } from "../overviewRenderer";
 
 // ---------------------------------------------------------------------------
@@ -195,5 +200,29 @@ describe("applyPuzzleTransformToLonLat — null-transform passthrough", () => {
     );
     expect(result.lon).toBeCloseTo(3.5, 6);
     expect(result.lat).toBeCloseTo(-2.1, 6);
+  });
+});
+
+describe("rebasePuzzleTransformsForView", () => {
+  it("preserves geographic displacement across zoom in and out", () => {
+    const original = new Map<string, PuzzleTransform>([
+      ["tile", { tx: 40, ty: -20, angleDeg: 37, flipH: true, flipV: false }],
+    ]);
+    const zoomed = rebasePuzzleTransformsForView(original, 100, 250);
+    expect(zoomed.get("tile")).toMatchObject({ tx: 100, ty: -50, angleDeg: 37, flipH: true });
+    const restored = rebasePuzzleTransformsForView(zoomed, 250, 100);
+    expect(restored.get("tile")?.tx).toBeCloseTo(40);
+    expect(restored.get("tile")?.ty).toBeCloseTo(-20);
+  });
+
+  it("does not mutate the input map or non-positional transform fields", () => {
+    const original = new Map<string, PuzzleTransform>([
+      ["tile", { tx: 10, ty: 15, angleDeg: 90, flipH: false, flipV: true, locked: true }],
+    ]);
+    const rebased = rebasePuzzleTransformsForView(original, 2, 3);
+    expect(original.get("tile")).toMatchObject({ tx: 10, ty: 15 });
+    expect(rebased.get("tile")).toMatchObject({
+      tx: 15, ty: 22.5, angleDeg: 90, flipH: false, flipV: true, locked: true,
+    });
   });
 });

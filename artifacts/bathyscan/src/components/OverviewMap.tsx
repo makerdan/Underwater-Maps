@@ -46,7 +46,11 @@ import { useUiStore, useTimelineVisible, type SelectedHotspot } from "@/lib/uiSt
 import { useTimelineStore } from "@/lib/timelineStore";
 import { useContextMenuStore, type ContextMenuItem } from "@/lib/contextMenuStore";
 import { lonLatToWorldXZ, isSyntheticGrid } from "@/lib/terrain";
-import { puzzleLayoutToGeoCorrections, type GeoBbox } from "@/lib/puzzleTransform";
+import {
+  puzzleLayoutToGeoCorrections,
+  rebasePuzzleTransformsForView,
+  type GeoBbox,
+} from "@/lib/puzzleTransform";
 import {
   buildHeatmapBitmap,
   buildContourLines,
@@ -649,6 +653,24 @@ export const OverviewMap: React.FC = () => {
     Map<string, PuzzleTransform>
   >(new Map());
   const puzzleTransformsRef = useRef<Map<string, PuzzleTransform>>(new Map());
+  // Pixel offsets are persisted for backwards compatibility. This tracks the
+  // view density at which those offsets are currently expressed.
+  const puzzlePixelDensityRef = useRef<number | null>(null);
+  const rebasePuzzleTransformsForViewChange = useCallback((nextTransform: OverviewTransform) => {
+    const nextDensity = nextTransform.pxPerDeg * nextTransform.scale;
+    const previousDensity = puzzlePixelDensityRef.current;
+    puzzlePixelDensityRef.current = nextDensity;
+    if (previousDensity === null || puzzleTransformsRef.current.size === 0 ||
+        Math.abs(previousDensity - nextDensity) < 1e-9) return;
+    const rebased = rebasePuzzleTransformsForView(
+      puzzleTransformsRef.current,
+      previousDensity,
+      nextDensity,
+    );
+    puzzleTransformsRef.current = rebased;
+    setPuzzleTransforms(rebased);
+    dirtyRef.current = true;
+  }, []);
   useEffect(() => {
     puzzleTransformsRef.current = puzzleTransforms;
     dirtyRef.current = true;
@@ -1168,7 +1190,7 @@ export const OverviewMap: React.FC = () => {
     dirtyRef.current = true;
   }, [annotationEditor]);
 
-  const puzzleDragSubModeRef = useRef<"translate" | "rotate" | null>(null);
+  const puzzleDragSubModeRef = useRef<"translate" | "rotate" | "pan" | null>(null);
   // Which corner handle was hit at mousedown (for click-nudge detection).
   const puzzleHandleEdgeRef = useRef<"topLeft" | "topRight" | "bottomRight" | "bottomLeft" | null>(null);
   // Whether the pointer actually moved during a rotate drag (distinguishes click from drag).
@@ -1518,7 +1540,6 @@ export const OverviewMap: React.FC = () => {
       canvas.width,
       canvas.height,
     );
-
     fitAnimRef.current = {
       from: { ...currentTransform },
       to: targetTransform,
@@ -1551,7 +1572,6 @@ export const OverviewMap: React.FC = () => {
       canvas.width,
       canvas.height,
     );
-
     fitAnimRef.current = {
       from: { ...t },
       to: targetTransform,
@@ -2204,6 +2224,8 @@ export const OverviewMap: React.FC = () => {
       const refGrid = worldGridRef.current ?? withGrid.find((d) => d.overviewGrid != null)?.overviewGrid;
       if (refGrid) {
         transformRef.current = computeInitialTransform(refGrid, canvas.width, canvas.height);
+        puzzlePixelDensityRef.current =
+          transformRef.current.pxPerDeg * transformRef.current.scale;
       }
     }
 
@@ -2218,6 +2240,8 @@ export const OverviewMap: React.FC = () => {
     // so the initial view fits all of them at once.
     const refGrid = worldGridRef.current ?? overviewGrid;
     transformRef.current = computeInitialTransform(refGrid, canvas.width, canvas.height);
+    puzzlePixelDensityRef.current =
+      transformRef.current.pxPerDeg * transformRef.current.scale;
   }, [overviewGrid]);
 
   useEffect(() => {
@@ -2429,6 +2453,11 @@ export const OverviewMap: React.FC = () => {
         // the latest transform rather than the snapshot captured above.
         t = transformRef.current;
       }
+
+      // Keep persisted pixel offsets proportional to the current geographic
+      // scale. This runs after every animation frame, including interrupted
+      // and repeated fit/zoom transitions.
+      rebasePuzzleTransformsForViewChange(t);
 
       // When multiple datasets are visible, `worldGrid` is a synthetic TerrainData
       // whose bbox spans the combined extent of all loaded overview grids.
@@ -3193,7 +3222,7 @@ export const OverviewMap: React.FC = () => {
       // re-run because their own deps did not change. The unmount cleanup
       // below is the sole place that clears the store.
     };
-  }, [overviewGrid]);
+  }, [overviewGrid, rebasePuzzleTransformsForViewChange]);
 
   // Clear puzzleStore only on component unmount so 3D markers revert to their
   // original positions when the panel is closed, but NOT on intermediate
@@ -3214,7 +3243,10 @@ export const OverviewMap: React.FC = () => {
         const rect = canvas.getBoundingClientRect();
         const mx = e.clientX - rect.left;
         const my = e.clientY - rect.top;
-        hasDraggedRef.current = true; // suppress trailing click
+        // Selection is committed on mousedown. Only a meaningful movement
+        // suppresses the trailing click, so an empty-space click still clears
+        // selection without being treated as a pan.
+        hasDraggedRef.current = false;
         dirtyRef.current = true;
 
         const t = transformRef.current;
@@ -3398,7 +3430,17 @@ export const OverviewMap: React.FC = () => {
             };
           }
         } else {
-          puzzleDragSubModeRef.current = null;
+          // Empty puzzle background keeps the established selection-clearing
+          // behavior, but becomes a normal clamped viewport pan once moved.
+          puzzleDragSubModeRef.current = "pan";
+          isDraggingRef.current = true;
+          dragStartRef.current = {
+            x: e.clientX,
+            y: e.clientY,
+            ox: transformRef.current?.offsetX ?? 0,
+            oy: transformRef.current?.offsetY ?? 0,
+          };
+          fitAnimRef.current = null;
         }
         return;
       }
@@ -3464,6 +3506,25 @@ export const OverviewMap: React.FC = () => {
       if (puzzleModeRef.current) {
         setTooltip((prev) => (prev.visible ? { ...prev, visible: false } : prev));
         const subMode = puzzleDragSubModeRef.current;
+
+        if (subMode === "pan" && isDraggingRef.current && transformRef.current && overviewGrid) {
+          const dx = e.clientX - dragStartRef.current.x;
+          const dy = e.clientY - dragStartRef.current.y;
+          if (Math.abs(dx) > 2 || Math.abs(dy) > 2) hasDraggedRef.current = true;
+          transformRef.current = clampTransform(
+            {
+              ...transformRef.current,
+              offsetX: dragStartRef.current.ox + dx,
+              offsetY: dragStartRef.current.oy + dy,
+            },
+            worldGridRef.current ?? overviewGrid,
+            canvas.width,
+            canvas.height,
+          );
+          canvas.style.cursor = "grabbing";
+          dirtyRef.current = true;
+          return;
+        }
 
         if (subMode === "translate" && puzzleSelectedIdsRef.current.size > 0) {
           hasDraggedRef.current = true;
@@ -3694,6 +3755,7 @@ export const OverviewMap: React.FC = () => {
         canvas.width,
         canvas.height,
       );
+      rebasePuzzleTransformsForViewChange(transformRef.current);
       dirtyRef.current = true;
     };
 
@@ -3726,6 +3788,7 @@ export const OverviewMap: React.FC = () => {
         puzzleHandleEdgeRef.current = null;
         puzzleRotateActuallyDraggedRef.current = false;
         puzzleDragSubModeRef.current = null;
+        isDraggingRef.current = false;
         return;
       }
       // Commit the drawn rectangle as a bbox (if it has meaningful area).
@@ -3798,6 +3861,7 @@ export const OverviewMap: React.FC = () => {
         canvas.width,
         canvas.height,
       );
+      rebasePuzzleTransformsForViewChange(transformRef.current);
       dirtyRef.current = true;
     };
 
@@ -4388,6 +4452,7 @@ export const OverviewMap: React.FC = () => {
           canvas.width,
           canvas.height,
         );
+        rebasePuzzleTransformsForViewChange(transformRef.current);
         dirtyRef.current = true;
         return;
       }
@@ -4443,6 +4508,7 @@ export const OverviewMap: React.FC = () => {
     setPuzzleSelectedIds,
     setOverviewOpen,
     setPendingDropIn,
+    rebasePuzzleTransformsForViewChange,
   ]);
 
   // ---------------------------------------------------------------------------

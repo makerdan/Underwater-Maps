@@ -28,6 +28,7 @@ import { useTerrainStore } from "@/lib/terrainStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useSettingsStore, type PuzzleLayout } from "@/lib/settingsStore";
+import { usePuzzleStore } from "@/lib/puzzleStore";
 import { computeInitialTransform, lonLatToCanvas } from "@/lib/overviewRenderer";
 import type { TerrainData } from "@workspace/api-client-react";
 import * as testHelpersModule from "@/lib/testHelpers";
@@ -735,5 +736,27 @@ describe("OverviewMap — puzzle multi-select", () => {
     expect(sessionStorage.getItem("bathyscan:puzzleGroups")).toBeNull();
     expect(localStorage.getItem("bathyscan:puzzleTransforms")).toBeNull();
     expect(localStorage.getItem("bathyscan:puzzleGroups")).toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
+  // 12. Empty-space drag pans the viewport without creating a tile transform
+  // -------------------------------------------------------------------------
+  it("pans the overview from empty puzzle background and keeps selection clear", async () => {
+    const { canvas, setPuzzleMode, setSelection, getTransform } = await renderAndCapture();
+
+    await act(async () => { setPuzzleMode(true); });
+    await act(async () => { setSelection([DATASET_A]); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 40)); });
+
+    const before = usePuzzleStore.getState().overviewTransform;
+    expect(before).not.toBeNull();
+    // The upper-left canvas corner is outside both tiles in the fitted world frame.
+    await drag(canvas, 10, 10, 30, 20);
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+
+    const after = usePuzzleStore.getState().overviewTransform;
+    expect(after?.offsetX).toBeCloseTo((before?.offsetX ?? 0) + 30, 0);
+    expect(after?.offsetY).toBeCloseTo((before?.offsetY ?? 0) + 20, 0);
+    expect(getTransform(DATASET_A)).toBeNull();
   });
 });
