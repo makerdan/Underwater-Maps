@@ -20,7 +20,7 @@ import {
 } from "@/lib/waterTemp";
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
-import { useSettingsStore } from "@/lib/settingsStore";
+import { useSettingsStore, type ColormapTheme } from "@/lib/settingsStore";
 import { useTerrainStore } from "@/lib/terrainStore";
 import {
   useGetUserDatasetsIdHyd93Features,
@@ -49,7 +49,6 @@ import {
   usePaletteStore,
 } from "@/lib/paletteStore";
 import { flushServerSync } from "@/hooks/useServerSettingsSync";
-import type { ColormapTheme } from "@/lib/settingsStore";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(2,8,18,0.94)",

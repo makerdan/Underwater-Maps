@@ -373,7 +373,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       setImportWaypoints(preview.parsed.waypoints.length > 0);
       setImportRoutes(preview.parsed.routes.length > 0);
     },
-    [bounds, createPreview, dailyRouteTimezone],
+    [createPreview, dailyRouteTimezone],
   );
 
   const onFileChosen = useCallback(
@@ -419,7 +419,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       setImportWaypoints(preview.parsed.waypoints.length > 0);
       setImportRoutes(preview.parsed.routes.length > 0);
     },
-     [phase, bounds, createPreview, dailyRouteTimezone],
+     [phase, createPreview, dailyRouteTimezone],
   );
 
   /** Called from the "Edit column mapping" link on the preview step. */
@@ -712,6 +712,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     qc,
     terrain,
     markerType,
+    temporary,
     toast,
     onClose,
     postMarkers,
