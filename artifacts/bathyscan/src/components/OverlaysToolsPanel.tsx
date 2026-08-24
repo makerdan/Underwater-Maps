@@ -49,6 +49,7 @@ import {
   usePaletteStore,
 } from "@/lib/paletteStore";
 import { flushServerSync } from "@/hooks/useServerSettingsSync";
+import { SIDEBAR_HEADING } from "@/components/SidebarSection";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(2,8,18,0.94)",
@@ -265,12 +266,7 @@ const ViewscreenDepthPalette: React.FC = () => {
         }}
       >
         <span
-          style={{
-            color: "#94a3b8",
-            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-          }}
+           style={SIDEBAR_HEADING}
         >
           Depth Palette
         </span>

@@ -86,9 +86,12 @@ const uploadCallbacks = vi.hoisted(() => {
 // can trigger a file drop without clicking.
 const dropzoneCapture = vi.hoisted(() => {
   let fn: ((files: File[], rejected: unknown[]) => void) | null = null;
+  const open = vi.fn();
   return {
     set(f: (files: File[], rejected: unknown[]) => void) { fn = f; },
     trigger(files: File[]) { fn?.(files, []); },
+    open,
+    reset() { open.mockClear(); },
   };
 });
 
@@ -124,6 +127,7 @@ vi.mock("react-dropzone", () => ({
       getRootProps: () => ({ "data-testid": "dropzone" }),
       getInputProps: () => ({ "data-testid": "dropzone-input" }),
       isDragActive: false,
+      open: dropzoneCapture.open,
     };
   },
 }));
@@ -241,7 +245,7 @@ describe("DatasetPanel", () => {
     // The outer header button carries the "Datasets" title.
     expect(screen.getByText("Datasets")).toBeInTheDocument();
     // Default state: panel is expanded, so the ▾ chevron is shown.
-    expect(screen.getByText("▾")).toBeInTheDocument();
+    expect(screen.getAllByText("▾").length).toBeGreaterThanOrEqual(1);
   });
 
   it("renders the MY LIBRARY section header in expanded state", () => {
@@ -272,6 +276,15 @@ describe("DatasetPanel", () => {
     });
     render(<DatasetPanel />);
     expect(screen.getByTestId("dropzone-terrain")).toBeInTheDocument();
+  });
+
+  it("opens the native chooser when an external upload request is received", () => {
+    dropzoneCapture.reset();
+    usePanelCollapseStore.setState({
+      collapsed: { ...DEFAULTS, uploadTerrainAccordion: false },
+    });
+    render(<DatasetPanel uploadRequest={1} />);
+    expect(dropzoneCapture.open).toHaveBeenCalledTimes(1);
   });
 });
 

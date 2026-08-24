@@ -30,14 +30,16 @@ const SHELL: React.CSSProperties = {
   pointerEvents: "auto",
 };
 
-const HEADER_TITLE: React.CSSProperties = {
-  fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
-  letterSpacing: "0.2em",
-  textTransform: "uppercase",
-  color: "#00e5ff",
-  textShadow: "0 0 6px rgba(0,229,255,0.5)",
+export const SIDEBAR_HEADING: React.CSSProperties = {
+  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+  fontSize: "calc(15px * var(--bs-font-scale, 1))",
   fontWeight: 700,
+  letterSpacing: "0.12em",
+  color: "#cbd5e1",
+  textTransform: "uppercase",
 };
+
+const HEADER_TITLE: React.CSSProperties = SIDEBAR_HEADING;
 
 // Divider used between sibling sections inside a group — matches the
 // subtle dashed treatment used between subsections inside a single section.
@@ -120,14 +122,14 @@ export const SidebarSection: React.FC<SidebarSectionProps> = ({
               minWidth: 0,
             }}
           >
-            <span className="sidebar-section-title" style={HEADER_TITLE}>
-              {title}
-            </span>
             <span
               className="sidebar-section-chevron"
               style={{ color: "#cbd5e1", fontSize: "calc(33px * var(--bs-font-scale, 1))", lineHeight: 1 }}
             >
               {collapsed ? "▸" : "▾"}
+            </span>
+            <span className="sidebar-section-title" style={HEADER_TITLE}>
+              {title}
             </span>
           </button>
         </ViewscreenTooltip>

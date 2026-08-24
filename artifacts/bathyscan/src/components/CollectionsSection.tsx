@@ -16,6 +16,7 @@
  * All state is server-persisted per user via /api/user/collections.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SIDEBAR_HEADING } from "@/components/SidebarSection";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetUserCollections,
@@ -626,7 +627,7 @@ export const CollectionsSection: React.FC = () => {
           data-testid="btn-collections-toggle"
           onClick={() => setOpen((o) => !o)}
           className="flex items-center gap-1 hover:bg-white/5"
-          style={{ background: "transparent", border: "none", cursor: "pointer", color: "#ffffff", fontSize: "calc(12.5px * var(--bs-font-scale, 1))", letterSpacing: "0.12em", padding: "2px 4px" }}
+          style={{ ...SIDEBAR_HEADING, background: "transparent", border: "none", cursor: "pointer", padding: "2px 4px" }}
         >
           {open ? "▼" : "▶"} DATASET COLLECTIONS {sorted.length > 0 ? `(${sorted.length})` : ""}
         </button>

@@ -317,6 +317,8 @@ function useLastSessionServerSync() {
 function Main() {
   const [, setLocation] = useLocation();
   const setPanelCollapsed = usePanelCollapseStore((s) => s.setCollapsed);
+  const setShowDatasetPanel = useSettingsStore((s) => s.setShowDatasetPanel);
+  const [uploadRequest, setUploadRequest] = useState(0);
   // MOBILE-ONLY gate flag: true on phones (≤767px). Computed SYNCHRONOUSLY on
   // the first render (useIsMobileImmediate, not useIsMobile) so the 3D
   // TourScene — and therefore any WebGL context — is never mounted on mobile,
@@ -1532,14 +1534,18 @@ function Main() {
                   id="mapData"
                   title="Your Data"
                   headerAction={
-                    <button
+                    <ViewscreenTooltip label="Drop file here, or click to browse" side="right">
+                      <button
                       type="button"
                       data-testid="btn-header-upload-dataset"
                       aria-label="Upload Dataset(s)"
-                      title="Upload your own dataset file"
+                        title="Upload your own dataset file"
                       onClick={(event) => {
                         event.stopPropagation();
+                          setShowDatasetPanel(true);
+                        setPanelCollapsed("mapData", false);
                         setPanelCollapsed("uploadTerrainAccordion", false);
+                          setUploadRequest((request) => request + 1);
                       }}
                       style={{
                         alignSelf: "center",
@@ -1557,10 +1563,11 @@ function Main() {
                       }}
                     >
                       Upload Dataset(s)
-                    </button>
+                      </button>
+                    </ViewscreenTooltip>
                   }
                 >
-                  {(!terrain || showDatasetPanel) ? <DatasetPanel embedded /> : null}
+                  {(!terrain || showDatasetPanel) ? <DatasetPanel embedded uploadRequest={uploadRequest} /> : null}
                 </SidebarSection>
               </SidebarSectionGroup>
 

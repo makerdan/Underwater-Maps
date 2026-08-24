@@ -79,6 +79,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { resolveOfflineScope } from "@/lib/offlineScopeResolver";
 import { useOfflineScopeStore } from "@/lib/offlineScopeStore";
+import { SIDEBAR_HEADING } from "@/components/SidebarSection";
 
 const GpsImportDialog = React.lazy(() =>
   import("@/components/GpsImportDialog").then(({ GpsImportDialog: Dialog }) => ({
@@ -794,9 +795,11 @@ const VisibleDatasetRows: React.FC<{
 
 interface DatasetPanelProps {
   embedded?: boolean;
+  /** Increment to open the native file chooser from an external sidebar action. */
+  uploadRequest?: number;
 }
 
-export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) => {
+export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false, uploadRequest = 0 }) => {
   const {
     datasetId,
     setDatasetId,
@@ -2891,7 +2894,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
   const isAnyUploadBusy = postDatasetsUpload.isPending || chunkedPhase === "uploading" || chunkedPhase === "processing" || gcsPhase === "uploading" || gcsPhase === "processing" || rasterExtractPhase === "extracting" || rasterExtractPhase === "committing";
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive, open: openFileChooser } = useDropzone({
     onDrop,
     accept: {
       "text/csv": [".csv"],
@@ -2913,6 +2916,12 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     // Files ≤ 50 MB use the regular multer path; the server enforces limits there.
     disabled: isAnyUploadBusy,
   });
+
+  useEffect(() => {
+    if (uploadRequest > 0 && uploadOpen && !isAnyUploadBusy) {
+      openFileChooser();
+    }
+  }, [uploadRequest, uploadOpen, isAnyUploadBusy, openFileChooser]);
 
   // ─── Markers ──────────────────────────────────────────────────────────────
   const markersOpen = !usePanelCollapseStore((s) => s.collapsed.markersAccordion);
@@ -3093,7 +3102,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             className="flex-1 flex items-center justify-between"
             style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", fontFamily: "inherit", padding: 0, textAlign: "left" }}
           >
-            <span className="uppercase tracking-widest" style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", ...CYAN, fontWeight: 700 }}>
+             <span className="uppercase tracking-widest" style={SIDEBAR_HEADING}>
               Datasets
             </span>
             <div className="flex items-center gap-2">
@@ -3128,17 +3137,10 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                 onClick={() => togglePanel("myLibrary")}
                 aria-expanded={!myLibraryCollapsed}
                 className="px-3 py-1 flex items-center gap-2 flex-1 hover:bg-white/5 transition-colors"
-                style={{
-                  fontSize: "calc(15px * var(--bs-font-scale, 1))",
-                  letterSpacing: "0.12em",
-                  color: "#cbd5e1",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  textAlign: "left",
-                }}
+                style={{ ...SIDEBAR_HEADING, background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
               >
-                <span>{myLibraryCollapsed ? "▾ MY LIBRARY" : "▲ MY LIBRARY"}</span>
+                <span aria-hidden="true">{myLibraryCollapsed ? "▸" : "▾"}</span>
+                <span>MY LIBRARY</span>
                 {anyLoading && (
                   <span className="animate-spin" style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#cbd5e1" }}>◌</span>
                 )}
@@ -3793,8 +3795,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       </div>
                     )}
 
-                    <div
-                      {...getRootProps()}
+                    <ViewscreenTooltip label={`Accepted file types: ${SUPPORTED_EXTENSIONS}`} side="top" align="center">
+                      <div
+                       {...getRootProps()}
                       data-testid="dropzone-terrain"
                       className="text-center cursor-pointer transition-colors rounded"
                       style={{
@@ -3874,9 +3877,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 4 }}>
                             Your file was uploaded safely. It will appear in your datasets once conversion finishes. You can drop a new file while you wait.
                           </div>
-                          <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#cbd5e1" }}>
-                            Drop file here, or click to browse
-                          </div>
                         </div>
                       ) : (
                         <>
@@ -3920,9 +3920,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                               </button>
                             </div>
                           )}
-                          <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#cbd5e1", marginBottom: 3 }}>
-                            Drop file here, or click to browse
-                          </div>
                           <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#cbd5e1" }}>
                             any size · large files upload in chunks{isSignedIn ? " · auto-saved" : ""}
                           </div>
@@ -3934,7 +3931,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           )}
                         </>
                       )}
-                    </div>
+                      </div>
+                    </ViewscreenTooltip>
 
                     {pendingPdfFile && (
                       <div
