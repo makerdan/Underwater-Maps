@@ -46,6 +46,7 @@ import { useUiStore, useTimelineVisible, type SelectedHotspot } from "@/lib/uiSt
 import { useTimelineStore } from "@/lib/timelineStore";
 import { useContextMenuStore, type ContextMenuItem } from "@/lib/contextMenuStore";
 import { lonLatToWorldXZ, isSyntheticGrid } from "@/lib/terrain";
+import { unionGeoBounds } from "@workspace/shared-types";
 import {
   puzzleLayoutToGeoCorrections,
   rebasePuzzleTransformsForView,
@@ -2288,22 +2289,13 @@ export const OverviewMap: React.FC = () => {
       nodataBoundarySegmentsRef.current.set(v.datasetId, buildNodataBoundarySegments(og));
     }
 
-    // Compute the combined bbox when 2+ datasets have overview grids loaded.
-    if (withGrid.length > 1) {
-      let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
-      for (const v of withGrid) {
-        const og = v.overviewGrid;
-        if (!og) continue;
-        minLon = Math.min(minLon, og.minLon);
-        maxLon = Math.max(maxLon, og.maxLon);
-        minLat = Math.min(minLat, og.minLat);
-        maxLat = Math.max(maxLat, og.maxLat);
-      }
-      // Cast: only bbox fields are used by projection helpers; depth array is unused.
-      worldGridRef.current = { minLon, maxLon, minLat, maxLat } as unknown as import("@workspace/api-client-react").TerrainData;
-    } else {
-      worldGridRef.current = null;
-    }
+    // All 2D surfaces use the same circular-longitude union. A null result
+    // preserves single-dataset behavior; the primary grid remains the fallback.
+    const geographicFrame = unionGeoBounds(withGrid.map((v) => v.overviewGrid));
+    // Cast: only bbox fields are used by projection helpers; depth array is unused.
+    worldGridRef.current = geographicFrame
+      ? geographicFrame as unknown as import("@workspace/api-client-react").TerrainData
+      : null;
     // Sync reference grid into puzzleStore so MarkerLayer can apply puzzle
     // transforms without being co-located with the OverviewMap canvas.
     usePuzzleStore.getState().setWorldGrid(worldGridRef.current);

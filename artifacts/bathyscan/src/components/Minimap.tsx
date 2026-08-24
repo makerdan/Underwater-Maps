@@ -14,7 +14,13 @@ import { MARKER_COLOR } from "@/lib/markerConstants";
 import { loadMarkerIconImage, peekMarkerIconImage } from "@/lib/markerIcons";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useSatelliteTileStore } from "@/lib/satelliteTileStore";
-import { geographicLonRange, longitudeOnBboxFrame } from "@/lib/geographicBounds";
+import {
+  projectGeoPoint,
+  unprojectGeoPoint,
+  unionGeoBounds,
+  unwrapLongitude,
+  longitudeSpan,
+} from "@workspace/shared-types";
 
 const W = 180;
 const H = 180;
@@ -53,27 +59,10 @@ export function computeMinimapUnionBbox(
   visibleDatasets: VisibleDataset[],
   primaryTerrain: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null | undefined,
 ): { minLon: number; maxLon: number; minLat: number; maxLat: number } | null {
-  // Always start from the primary terrain's bbox if available, so the primary
-  // heatmap is never clipped out of the canvas during secondary overview loading.
-  let minLon = primaryTerrain ? primaryTerrain.minLon : Infinity;
-  let maxLon = primaryTerrain ? primaryTerrain.maxLon : -Infinity;
-  let minLat = primaryTerrain ? primaryTerrain.minLat : Infinity;
-  let maxLat = primaryTerrain ? primaryTerrain.maxLat : -Infinity;
-
-  // Expand the bbox with any secondary (or primary) overviewGrid extents.
-  for (const v of visibleDatasets) {
-    const g = v.overviewGrid;
-    if (!g) continue;
-    if (g.minLon < minLon) minLon = g.minLon;
-    if (g.maxLon > maxLon) maxLon = g.maxLon;
-    if (g.minLat < minLat) minLat = g.minLat;
-    if (g.maxLat > maxLat) maxLat = g.maxLat;
-  }
-
-  if (!isFinite(minLon) || !isFinite(maxLon) || !isFinite(minLat) || !isFinite(maxLat)) {
-    return null;
-  }
-  return { minLon, maxLon, minLat, maxLat };
+  return unionGeoBounds([
+    primaryTerrain,
+    ...visibleDatasets.map((entry) => entry.overviewGrid),
+  ]);
 }
 
 /**
@@ -84,14 +73,26 @@ function datasetCanvasRect(
   dataBbox: { minLon: number; maxLon: number; minLat: number; maxLat: number },
   unionBbox: { minLon: number; maxLon: number; minLat: number; maxLat: number },
 ): { x: number; y: number; w: number; h: number } {
-  const lonRange = geographicLonRange(unionBbox);
-  const latRange = unionBbox.maxLat - unionBbox.minLat || 1;
-  const x0 = ((longitudeOnBboxFrame(dataBbox.minLon, unionBbox) - unionBbox.minLon) / lonRange) * W;
-  const x1 = ((longitudeOnBboxFrame(dataBbox.maxLon, unionBbox) - unionBbox.minLon) / lonRange) * W;
-  // North-up: maxLat maps to small y (top), minLat maps to large y (bottom)
-  const y0 = H - ((dataBbox.maxLat - unionBbox.minLat) / latRange) * H;
-  const y1 = H - ((dataBbox.minLat - unionBbox.minLat) / latRange) * H;
-  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  const northWest = projectGeoPoint(
+    { lon: dataBbox.minLon, lat: dataBbox.maxLat },
+    unionBbox,
+    W,
+    H,
+  );
+  const southEast = projectGeoPoint(
+    { lon: dataBbox.maxLon, lat: dataBbox.minLat },
+    unionBbox,
+    W,
+    H,
+  );
+  const x = Math.min(northWest.x, southEast.x);
+  const y = Math.min(northWest.y, southEast.y);
+  return {
+    x,
+    y,
+    w: Math.abs(southEast.x - northWest.x),
+    h: Math.abs(southEast.y - northWest.y),
+  };
 }
 
 /**
@@ -337,13 +338,15 @@ function drawMarkerDots(
   maxLat: number,
   onIconReady?: () => void,
 ) {
-  const lonRange = maxLon - minLon || 1;
-  const latRange = maxLat - minLat || 1;
-
   for (const m of markers) {
-    const px = ((m.lon - minLon) / lonRange) * W;
-    // North-up: invert y so high-lat (North) is at top.
-    const py = H - ((m.lat - minLat) / latRange) * H;
+    const projected = projectGeoPoint(
+      { lon: m.lon, lat: m.lat },
+      { minLon, maxLon, minLat, maxLat },
+      W,
+      H,
+    );
+    const px = projected.x;
+    const py = projected.y;
     if (px < 0 || px > W || py < 0 || py > H) continue;
 
     const color = MARKER_COLOR[m.type] ?? "#e2e8f0";
@@ -698,9 +701,9 @@ export const Minimap: React.FC = () => {
     //    the primary terrain is offset within the canvas.
     if (camLon !== null && camLat !== null) {
       const bbox = unionBboxRef.current ?? currentTerrain;
-      const lonRange = geographicLonRange(bbox);
+      const lonRange = bbox.maxLon - bbox.minLon || 1;
       const latRange = bbox.maxLat - bbox.minLat || 1;
-      const px = ((longitudeOnBboxFrame(camLon, bbox) - bbox.minLon) / lonRange) * W;
+      const px = ((camLon - bbox.minLon) / lonRange) * W;
       // North-up: invert y so high-lat (North) is at top.
       const py = H - ((camLat - bbox.minLat) / latRange) * H;
       if (px >= 0 && px <= W && py >= 0 && py <= H) {
@@ -827,21 +830,16 @@ export const Minimap: React.FC = () => {
     // lon/lat → world coords via the primary terrain bbox so teleport targets
     // always land within the loaded 3D mesh.
     const bbox = unionBboxRef.current ?? terrain;
-    const bboxLonRange = geographicLonRange(bbox);
-    const bboxLatRange = bbox.maxLat - bbox.minLat || 1;
-    const lon = longitudeOnBboxFrame(bbox.minLon + (px / W) * bboxLonRange, bbox);
-    // North-up: py=0 → maxLat (North), py=H → minLat (South)
-    const lat = bbox.minLat + (1 - py / H) * bboxLatRange;
+    const { lon, lat } = unprojectGeoPoint({ x: px, y: py }, bbox, W, H);
 
     // Clamp lon/lat to the primary terrain's geographic extent so clicks on
     // secondary-only regions of the union bbox still teleport within the loaded
     // 3D mesh rather than producing out-of-range world coordinates.
-    const terrainLon = longitudeOnBboxFrame(lon, terrain);
-    const terrainFrameMax = terrain.minLon + geographicLonRange(terrain);
-    const clampedLon = Math.max(terrain.minLon, Math.min(terrainFrameMax, terrainLon));
+    const terrainLon = unwrapLongitude(lon, terrain);
+    const clampedLon = Math.max(terrain.minLon, Math.min(terrain.minLon + longitudeSpan(terrain), terrainLon));
     const clampedLat = Math.max(terrain.minLat, Math.min(terrain.maxLat, lat));
 
-    const terrLonRange = geographicLonRange(terrain);
+    const terrLonRange = longitudeSpan(terrain);
     const terrLatRange = terrain.maxLat - terrain.minLat || 1;
     const worldX = ((clampedLon - terrain.minLon) / terrLonRange) * WORLD_SIZE - WORLD_SIZE / 2;
     const worldZ = ((clampedLat - terrain.minLat) / terrLatRange) * WORLD_SIZE - WORLD_SIZE / 2;
@@ -872,24 +870,21 @@ export const Minimap: React.FC = () => {
       // terrain grid coordinates so the survey-gap check is accurate even
       // when the primary terrain is offset within the union-bbox canvas.
       const bbox = unionBboxRef.current ?? terrain;
-      const bboxLonRange = geographicLonRange(bbox);
-      const bboxLatRange = bbox.maxLat - bbox.minLat || 1;
-      const lon = longitudeOnBboxFrame(bbox.minLon + (px / W) * bboxLonRange, bbox);
-      const lat = bbox.minLat + (1 - py / H) * bboxLatRange;
+      const { lon, lat } = unprojectGeoPoint({ x: px, y: py }, bbox, W, H);
+      const primaryLon = unwrapLongitude(lon, terrain);
 
       // Only show "Survey gap" when the cursor is inside the primary terrain.
       if (
-        longitudeOnBboxFrame(lon, terrain) < terrain.minLon ||
-        longitudeOnBboxFrame(lon, terrain) > terrain.minLon + geographicLonRange(terrain) ||
+        primaryLon < terrain.minLon || primaryLon > terrain.minLon + longitudeSpan(terrain) ||
         lat < terrain.minLat || lat > terrain.maxLat
       ) {
         setCanvasTooltip("Click to teleport here");
         return;
       }
 
-      const terrLonRange = geographicLonRange(terrain);
+      const terrLonRange = longitudeSpan(terrain);
       const terrLatRange = terrain.maxLat - terrain.minLat || 1;
-      const gx = Math.min(terrain.width - 1, Math.floor(((longitudeOnBboxFrame(lon, terrain) - terrain.minLon) / terrLonRange) * terrain.width));
+      const gx = Math.min(terrain.width - 1, Math.floor(((primaryLon - terrain.minLon) / terrLonRange) * terrain.width));
       const gy = Math.min(terrain.height - 1, Math.floor(((lat - terrain.minLat) / terrLatRange) * terrain.height));
       const depth = terrain.depths[gy * terrain.width + gx];
       const isNull = depth === null || depth === undefined || isNaN(depth as number);

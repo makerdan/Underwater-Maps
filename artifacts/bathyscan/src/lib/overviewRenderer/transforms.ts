@@ -3,6 +3,13 @@
  * coordinate conversions for the OverviewMap. No React, no drawing.
  */
 import type { TerrainData } from "@workspace/api-client-react";
+import {
+  longitudeSpan,
+  projectGeoPoint,
+  unprojectGeoPoint,
+  unwrapLongitude,
+  type GeoBounds,
+} from "@workspace/shared-types";
 
 // ---------------------------------------------------------------------------
 // Transform
@@ -28,10 +35,7 @@ export interface OverviewTransform {
  * e.g. minLon=170, maxLon=-170  →  span = 20°
  */
 export function lonRangeOf(grid: TerrainData): number {
-  if (grid.minLon > grid.maxLon) {
-    return grid.maxLon + 360 - grid.minLon;
-  }
-  return grid.maxLon - grid.minLon || 1;
+  return longitudeSpan(grid);
 }
 
 /**
@@ -40,10 +44,7 @@ export function lonRangeOf(grid: TerrainData): number {
  * e.g. with minLon=170: lon=-175 → 185 (so the fraction is (185-170)/20 = 0.75)
  */
 export function normaliseLon(lon: number, grid: TerrainData): number {
-  if (grid.minLon > grid.maxLon && lon < grid.minLon) {
-    return lon + 360;
-  }
-  return lon;
+  return unwrapLongitude(lon, grid);
 }
 
 /** Compute (offsetX, offsetY) for a lon/lat point given the transform. */
@@ -53,15 +54,14 @@ export function lonLatToCanvas(
   grid: TerrainData,
   t: OverviewTransform,
 ): [number, number] {
-  const lonRange = lonRangeOf(grid);
+  const lonRange = longitudeSpan(grid);
   const latRange = grid.maxLat - grid.minLat || 1;
   const terrainW = t.pxPerDeg * lonRange * t.scale;
   const terrainH = t.pxPerDeg * latRange * t.scale;
-  const normLon = normaliseLon(lon, grid);
+  const projected = projectGeoPoint({ lon, lat }, grid, terrainW, terrainH);
   return [
-    t.offsetX + ((normLon - grid.minLon) / lonRange) * terrainW,
-    // North-up: higher latitudes (North) map to smaller Y values (top of canvas).
-    t.offsetY + (1 - (lat - grid.minLat) / latRange) * terrainH,
+    t.offsetX + projected.x,
+    t.offsetY + projected.y,
   ];
 }
 
@@ -72,19 +72,18 @@ export function canvasToLonLat(
   grid: TerrainData,
   t: OverviewTransform,
 ): { lon: number; lat: number } {
-  const lonRange = lonRangeOf(grid);
-  const latRange = grid.maxLat - grid.minLat || 1;
+  const bounds = grid as GeoBounds;
+  const lonRange = longitudeSpan(bounds);
+  const latRange = bounds.maxLat - bounds.minLat || 1;
   const terrainW = t.pxPerDeg * lonRange * t.scale;
   const terrainH = t.pxPerDeg * latRange * t.scale;
-  let lon = grid.minLon + ((cx - t.offsetX) / terrainW) * lonRange;
-  // Wrap back into [-180, 180] only for antimeridian-crossing bboxes where the
-  // computed lon can legitimately exceed 180 (e.g. normalised 185 → -175).
-  if (grid.minLon > grid.maxLon && lon > 180) lon -= 360;
-  return {
-    lon,
-    // Inverse of the North-up Y formula in lonLatToCanvas.
-    lat: grid.minLat + (1 - (cy - t.offsetY) / terrainH) * latRange,
-  };
+  const point = unprojectGeoPoint(
+    { x: cx - t.offsetX, y: cy - t.offsetY },
+    bounds,
+    terrainW,
+    terrainH,
+  );
+  return point;
 }
 
 /** Build the initial transform so the terrain fits into the canvas at 88% fill. */
@@ -124,10 +123,7 @@ export function computeFitTransform(
   canvasW: number,
   canvasH: number,
 ): OverviewTransform {
-  const lonRange =
-    bbox.minLon > bbox.maxLon
-      ? bbox.maxLon + 360 - bbox.minLon || 1
-      : bbox.maxLon - bbox.minLon || 1;
+  const lonRange = longitudeSpan(bbox);
   const latRange = bbox.maxLat - bbox.minLat || 1;
   const margin = 0.88;
   const pxPerDeg = Math.min(
