@@ -1569,7 +1569,7 @@ function Main() {
                         </button>
                       </ViewscreenTooltip>
                       <div
-                        style={{ position: "relative", display: "inline-flex" }}
+                        style={{ position: "relative", display: "inline-flex", marginRight: "0.25in" }}
                         onMouseEnter={() => setUploadFormatsHovered(true)}
                         onMouseLeave={() => setUploadFormatsHovered(false)}
                       >
