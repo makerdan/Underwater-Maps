@@ -11,6 +11,7 @@
  *   (e) unreadable schema file → warning emitted, scan continues;
  *   (f) missing or extra columns → named column diagnostics;
  *   (g) matching columns → passes.
+ *   (h) type, nullability, default, foreign-key, and check drift → diagnostics.
  */
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -296,6 +297,44 @@ describe("column parity", () => {
     const result = runScript(repo);
     assert.equal(result.status, 0, `expected exit 0\nstderr: ${result.stderr}`);
     assert.match(result.stdout, /columns and/);
+  });
+
+  it("(h) reports mismatched column properties and named checks", () => {
+    const repo = makeFakeRepo("property-drift");
+    writeSchema(
+      repo,
+      "children.ts",
+      `
+      import { pgTable, text, uuid, check } from "drizzle-orm/pg-core";
+      import { sql } from "drizzle-orm";
+      export const children = pgTable("children", {
+        id: uuid("id").primaryKey().defaultRandom(),
+        parentId: uuid("parent_id").references(() => parents.id, { onDelete: "cascade" }),
+        label: text("label").notNull().default("ready"),
+      }, (table) => [
+        check("children_label_check", sql\`\${table.label} <> ''\`),
+      ]);
+      `,
+    );
+    writeTestDb(
+      repo,
+      `
+      CREATE TABLE parents (id uuid PRIMARY KEY);
+      CREATE TABLE children (
+        id text PRIMARY KEY DEFAULT gen_random_uuid(),
+        parent_id uuid REFERENCES parents(id) ON DELETE SET NULL,
+        label text DEFAULT 'wrong'
+      );
+      `,
+    );
+
+    const result = runScript(repo);
+    assert.equal(result.status, 1, `expected exit 1\nstderr: ${result.stderr}`);
+    assert.match(result.stderr, /children\.id type: schema=uuid, test-db\.ts=text/);
+    assert.match(result.stderr, /children\.label nullable: schema=false, test-db\.ts=true/);
+    assert.match(result.stderr, /children\.label default: schema=ready, test-db\.ts=wrong/);
+    assert.match(result.stderr, /children\.parent_id references: schema=parents\/cascade, test-db\.ts=parents\/set null/);
+    assert.match(result.stderr, /children constraint children_label_check: missing from test-db\.ts/);
   });
 });
 

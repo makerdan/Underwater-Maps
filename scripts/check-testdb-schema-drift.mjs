@@ -24,8 +24,9 @@
  * (via `CREATE TABLE <name>`) are checked. Tables that have no presence in
  * test-db.ts are intentionally skipped because they have no constraint tests.
  *
- * Exit 1 if any mirrored table has missing or extra columns, or if any
- * uniqueIndex name is missing from its DDL; 0 otherwise.
+ * Exit 1 if any mirrored table has missing or extra columns, mismatched
+ * column properties/foreign keys/check constraints, or if any uniqueIndex
+ * name is missing from its DDL; 0 otherwise.
  *
  * Usage:
  *   node scripts/check-testdb-schema-drift.mjs
@@ -182,6 +183,196 @@ export function extractDdlTableColumns(slice) {
   return columns;
 }
 
+function splitTopLevel(text) {
+  const items = [];
+  let item = "";
+  let depth = 0;
+  let quote = null;
+  for (const ch of text) {
+    if (quote) {
+      item += ch;
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") {
+      quote = ch;
+      item += ch;
+    } else if (ch === "(" || ch === "{" || ch === "[") {
+      depth++;
+      item += ch;
+    } else if (ch === ")" || ch === "}" || ch === "]") {
+      depth--;
+      item += ch;
+    } else if (ch === "," && depth === 0) {
+      items.push(item);
+      item = "";
+    } else {
+      item += ch;
+    }
+  }
+  if (item.trim()) items.push(item);
+  return items;
+}
+
+function normalizeType(type) {
+  return type.toLowerCase().replace(/\s+/g, " ").trim()
+    .replace(/^timestamp without time zone$/, "timestamp")
+    .replace(/^timestamp with time zone$/, "timestamptz")
+    .replace(/^double precision$/, "double precision");
+}
+
+function normalizeDefault(value) {
+  if (!value) return null;
+  return value.toLowerCase().replace(/\s+/g, " ").replace(/[()]/g, "").replace(/^['"]|['"]$/g, "").trim()
+    .replace(/^current_timestamp$/, "now")
+    .replace(/^now$/, "now")
+    .replace(/^gen_random_uuid$/, "gen_random_uuid");
+}
+
+function normalizeIdentifier(value) {
+  return value.replace(/Table$/, "").replace(/[A-Z]/g, (ch) => `_${ch.toLowerCase()}`).replace(/^_/, "");
+}
+
+function extractCreateBody(slice) {
+  const open = slice.indexOf("(");
+  if (open < 0) return "";
+  let depth = 0;
+  let quote = null;
+  for (let i = open; i < slice.length; i++) {
+    const ch = slice[i];
+    if (quote) {
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === "`") quote = ch;
+    else if (ch === "(") depth++;
+    else if (ch === ")" && --depth === 0) return slice.slice(open + 1, i);
+  }
+  return "";
+}
+
+function columnPropertyFromBuilder(entry) {
+  const match = entry.trim().match(/^\w+\s*:\s*(\w+)\s*\(([\s\S]*?)\)/);
+  if (!match) return null;
+  const builder = match[1].toLowerCase();
+  const args = match[2];
+  const type = {
+    text: "text", uuid: "uuid", real: "real", jsonb: "jsonb", integer: "integer",
+    serial: "serial", bigint: "bigint", boolean: "boolean",
+  }[builder];
+  if (!type && builder !== "timestamp") return null;
+  const property = {
+    type: type ?? (/\bwithTimezone\s*:\s*true/.test(entry) ? "timestamptz" : "timestamp"),
+    nullable: !/\.notNull\s*\(\s*\)/.test(entry),
+    primaryKey: /\.primaryKey\s*\(\s*\)/.test(entry),
+    default: null,
+    references: null,
+  };
+  if (/\.defaultRandom\s*\(\s*\)/.test(entry)) property.default = "gen_random_uuid";
+  else if (/\.defaultNow\s*\(\s*\)/.test(entry)) property.default = "now";
+  else {
+    const defaultMatch = entry.match(/\.default\s*\(\s*("[^"]*"|'[^']*'|-?\d+(?:\.\d+)?|true|false|\[\]|\{\})\s*\)/);
+    if (defaultMatch) property.default = normalizeDefault(defaultMatch[1].replace(/^['"]|['"]$/g, ""));
+  }
+  const target = entry.match(/\.references\s*\(\s*\(\s*[^)]*\)\s*(?::\s*[^=]+)?=>\s*([\w$]+)\s*\./)?.[1];
+  const ref = entry.match(/\.references\s*\([\s\S]*?onDelete\s*:\s*["']([^"']+)["']/);
+  if (target || /\.references\s*\(/.test(entry)) {
+    property.references = {
+      table: target ? normalizeIdentifier(target) : "unknown",
+      onDelete: ref?.[1].toLowerCase() ?? "no action",
+    };
+  }
+  return property;
+}
+
+/** Extract deterministic column properties from pgTable object literals. */
+export function extractDrizzleTableDefinitions(content) {
+  content = stripComments(content);
+  const tables = new Map();
+  for (const match of content.matchAll(/pgTable\s*\(\s*["']([^"']+)["']/g)) {
+    const open = content.indexOf("{", match.index + match[0].length);
+    if (open < 0) continue;
+    let depth = 0, close = -1, quote = null;
+    for (let i = open; i < content.length; i++) {
+      const ch = content[i];
+      if (quote) { if (ch === "\\") i++; else if (ch === quote) quote = null; continue; }
+      if (ch === '"' || ch === "'" || ch === "`") quote = ch;
+      else if (ch === "{") depth++;
+      else if (ch === "}" && --depth === 0) { close = i; break; }
+    }
+    if (close < 0) continue;
+    const columns = new Map();
+    for (const entry of splitTopLevel(content.slice(open + 1, close))) {
+      const name = entry.trim().match(/^(\w+)\s*:/)?.[1];
+      const property = columnPropertyFromBuilder(entry);
+      const dbName = entry.trim().match(/^\w+\s*:\s*\w+\s*\(\s*["']([^"']+)["']/)?.[1];
+      if (name && dbName && property) columns.set(dbName.toLowerCase(), property);
+    }
+    const nextTable = content.indexOf("pgTable", close + 1);
+    const tableTail = content.slice(close, nextTable < 0 ? content.length : nextTable);
+    const checks = [...tableTail.matchAll(/check\s*\(\s*["']([^"']+)["']/g)]
+      .map((m) => m[1].toLowerCase());
+    tables.set(match[1].toLowerCase(), { columns, checks });
+  }
+  return tables;
+}
+
+/** Extract deterministic column properties and named checks from CREATE TABLE DDL. */
+export function extractDdlTableDefinitions(slice) {
+  const columns = new Map();
+  const checks = [];
+  for (const entry of splitTopLevel(extractCreateBody(slice))) {
+    const trimmed = entry.trim();
+    const check = trimmed.match(/^constraint\s+["'`]?([\w]+)["'`]?\s+check\b/i);
+    if (check) { checks.push(check[1].toLowerCase()); continue; }
+    if (/^(constraint|primary|unique|foreign)\b/i.test(trimmed)) continue;
+    const nameMatch = trimmed.match(/^(?:"([^"]+)"|`([^`]+)`|([a-z_]\w*))\s+/i);
+    if (!nameMatch) continue;
+    const name = (nameMatch[1] ?? nameMatch[2] ?? nameMatch[3]).toLowerCase();
+    const afterName = trimmed.slice(nameMatch[0].length);
+    const typeMatch = afterName.match(/^(timestamp\s+(?:with|without)\s+time\s+zone|[a-z]+)/i);
+    if (!typeMatch) continue;
+    const rest = afterName.slice(typeMatch[0].length);
+    const property = {
+      type: normalizeType(typeMatch[1]),
+      nullable: !/\bnot\s+null\b/i.test(rest),
+      primaryKey: /\bprimary\s+key\b/i.test(rest),
+      default: normalizeDefault(trimmed.match(/\bdefault\s+(.+?)(?=\s+(?:not\s+null|primary\s+key|references|constraint|check)\b|$)/i)?.[1]),
+      references: null,
+    };
+    const ref = rest.match(/\breferences\s+\w+\s*\([^)]*\)(?:\s+on\s+delete\s+([a-z ]+))?/i);
+    if (ref) property.references = {
+      table: normalizeIdentifier(ref[0].match(/\breferences\s+(\w+)/i)[1]),
+      onDelete: (ref[1] ?? "no action").trim().toLowerCase(),
+    };
+    columns.set(name, property);
+  }
+  return { columns, checks };
+}
+
+function compareTableDefinitions(expected, actual, table) {
+  const differences = [];
+  for (const [column, e] of expected.columns) {
+    const a = actual.columns.get(column);
+    if (!a) continue;
+    for (const property of ["type", "nullable", "default", "primaryKey"]) {
+      if (e[property] !== a[property]) {
+        differences.push(`${table}.${column} ${property}: schema=${String(e[property])}, test-db.ts=${String(a[property])}`);
+      }
+    }
+    if (JSON.stringify(e.references) !== JSON.stringify(a.references)) {
+      differences.push(`${table}.${column} references: schema=${e.references ? `${e.references.table}/${e.references.onDelete}` : "none"}, test-db.ts=${a.references ? `${a.references.table}/${a.references.onDelete}` : "none"}`);
+    }
+  }
+  for (const check of expected.checks) {
+    if (!actual.checks.includes(check)) differences.push(`${table} constraint ${check}: missing from test-db.ts`);
+  }
+  for (const check of actual.checks) {
+    if (!expected.checks.includes(check)) differences.push(`${table} constraint ${check}: extra in test-db.ts`);
+  }
+  return differences;
+}
+
 /**
  * True when the (lowercased, comment-stripped) table slice contains a real
  * unique clause for the index name: `UNIQUE INDEX <name>` (covers
@@ -227,6 +418,8 @@ const schemaFiles = readdirSync(schemaDir)
 const violations = [];
 /** @type {{ file: string; table: string; missing: string[]; extra: string[] }[]} */
 const columnViolations = [];
+/** @type {{ file: string; differences: string[] }[]} */
+const propertyViolations = [];
 let checkedCount = 0;
 let checkedColumnCount = 0;
 
@@ -244,6 +437,7 @@ for (const file of schemaFiles) {
   }
 
   const drizzleColumns = extractDrizzleTableColumns(content);
+  const drizzleDefinitions = extractDrizzleTableDefinitions(content);
 
   // All pgTable("table_name", …) calls in this file, with their positions so
   // each uniqueIndex can be attributed to the nearest preceding table.
@@ -269,6 +463,18 @@ for (const file of schemaFiles) {
         table,
         missing,
         extra,
+      });
+    }
+    const expectedDefinition = drizzleDefinitions.get(table.toLowerCase());
+    if (expectedDefinition) {
+      const differences = compareTableDefinitions(
+        expectedDefinition,
+        extractDdlTableDefinitions(tableSlices.get(table.toLowerCase()) ?? ""),
+        table,
+      );
+      if (differences.length > 0) propertyViolations.push({
+        file: `lib/db/src/schema/${file}`,
+        differences,
       });
     }
   }
@@ -309,13 +515,17 @@ for (const file of schemaFiles) {
 // Report
 // ---------------------------------------------------------------------------
 
-if (columnViolations.length > 0 || violations.length > 0) {
+if (columnViolations.length > 0 || propertyViolations.length > 0 || violations.length > 0) {
   console.error(
     "[check:testdb-schema-drift] FAIL — Drizzle schema and test-db.ts DDL differ:\n",
   );
   for (const v of columnViolations) {
     if (v.missing.length > 0) console.error(`  ${v.table}: missing from test-db.ts: ${v.missing.join(", ")}`);
     if (v.extra.length > 0) console.error(`  ${v.table}: extra in test-db.ts: ${v.extra.join(", ")}`);
+    console.error(`    schema file : ${v.file}\n`);
+  }
+  for (const v of propertyViolations) {
+    for (const difference of v.differences) console.error(`  ${difference}`);
     console.error(`    schema file : ${v.file}\n`);
   }
   for (const v of violations) {
@@ -325,7 +535,7 @@ if (columnViolations.length > 0 || violations.length > 0) {
     console.error();
   }
   console.error(
-    "  Fix: make the table columns match, and add a matching CREATE UNIQUE INDEX <name> … or\n" +
+    "  Fix: make the table columns and properties match, and add a matching CREATE UNIQUE INDEX <name> … or\n" +
     "  CONSTRAINT <name> UNIQUE (…) clause to the appropriate CREATE TABLE\n" +
     "  block in lib/db/src/__tests__/test-db.ts. The name must appear inside\n" +
     "  that table's DDL block (comments don't count).",
