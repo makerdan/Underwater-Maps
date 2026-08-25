@@ -312,6 +312,7 @@ export const ForecastStrip: React.FC = () => {
                 tabIndex={0}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleSlotClick(slot.relHour); }}
                 aria-label={`${isNow ? "Now" : formatUtcHour(slot.isoTime)} UTC — wind ${slot.windSpeedKnots.toFixed(0)} kn, wave ${slot.waveHeightM.toFixed(1)} m${fishing ? ", good conditions" : ""}`}
+                title={`Preview conditions at ${isNow ? "now" : `${formatUtcHour(slot.isoTime)} UTC`}; click to move the planner to this hour`}
                 style={{
                   width: 46,
                   flexShrink: 0,

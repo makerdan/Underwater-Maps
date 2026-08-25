@@ -135,6 +135,7 @@ export const TripWindowPanel: React.FC = () => {
                 data-testid={`boat-preset-${preset.label.toLowerCase().replace(/\s+/g, "-")}`}
                 onClick={() => applyPreset(preset)}
                 aria-pressed={active}
+                title={`Use ${preset.label.toLowerCase()} thresholds for go and no-go conditions`}
                 style={{
                   fontFamily: mono,
                   fontSize: "calc(12px * var(--bs-font-scale, 1))",
@@ -192,6 +193,7 @@ export const TripWindowPanel: React.FC = () => {
                 onChange={(e) => set(parseFloat(e.target.value))}
                 style={{ width: "100%", accentColor: "#00e5ff" }}
                 aria-label={`${label} threshold: ${formatted}`}
+                title={`Adjust the ${label.toLowerCase()} threshold used to classify trip windows`}
               />
             </div>
           );
@@ -212,6 +214,7 @@ export const TripWindowPanel: React.FC = () => {
                 data-testid={`trip-length-${h}`}
                 onClick={() => setTripMinDurationH(h)}
                 aria-pressed={active}
+                title={h === 0 ? "Show trip windows of any duration" : `Only highlight windows at least ${h} hours long`}
                 style={{
                   fontFamily: mono,
                   fontSize: "calc(13px * var(--bs-font-scale, 1))",

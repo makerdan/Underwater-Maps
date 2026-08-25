@@ -1689,8 +1689,14 @@ function Main() {
                 PLAN MODE — Tides, Currents, Routes, Forecast
             ══════════════════════════════════════════════════ */}
             <div style={{ display: sidebarMode === 'plan' ? 'flex' : 'none', flexDirection: 'column', gap: 8 }}>
-              {/* (1) Conditions — Tides + Currents stacked under one collapse */}
-              <SidebarSectionGroup>
+              {/* One shared Plan tool container. Each row keeps independent,
+                  persisted collapse state while expanded content flows downward. */}
+              <SidebarSectionGroup wide testId="plan-tools">
+                <SidebarSection id="tripWindows" title="Trip Windows">
+                  <ErrorBoundary label="trip window panel">
+                    <TripWindowPanel />
+                  </ErrorBoundary>
+                </SidebarSection>
                 <SidebarSection id="conditions" title="Conditions">
                   {tidalOverlay && (
                     <ErrorBoundary label="tide station panel">
@@ -1720,33 +1726,12 @@ function Main() {
                     <CurrentsPanel embedded />
                   </ErrorBoundary>
                 </SidebarSection>
-              </SidebarSectionGroup>
-
-              {/* Timeline hint — shown when tidal overlay or currents simulation is active */}
-              {(tidalOverlay || currentsEnabled) && (
-                <div
-                  data-testid="plan-timeline-hint"
-                  style={{
-                    minWidth: "min(460px, 100vw - 32px)",
-                    maxWidth: 520,
-                    padding: "7px 10px",
-                    background: "rgba(0,229,255,0.04)",
-                    border: "1px dashed rgba(0,229,255,0.18)",
-                    borderRadius: 4,
-                    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                    letterSpacing: "0.13em",
-                    color: "#64748b",
-                    pointerEvents: "none",
-                  }}
-                >
-                  <span style={{ color: "#00e5ff", marginRight: 5 }}>▸</span>
-                  Use the timeline scrubber at the bottom of the screen to preview conditions over time.
-                </div>
-              )}
-
-              {/* (2) Drift & Route — drift planner */}
-              <SidebarSectionGroup>
+                <SidebarSection id="forecast" title="Forecast">
+                  <ForecastStrip />
+                </SidebarSection>
+                <SidebarSection id="routes" title="Routes">
+                  <RoutesPanel embedded />
+                </SidebarSection>
                 <SidebarSection id="driftRoute" title="Drift & Route">
                   <DriftPlannerPanel />
                   {!driftPlannerActive ? (
@@ -1795,22 +1780,29 @@ function Main() {
                 </SidebarSection>
               </SidebarSectionGroup>
 
-              {/* Routes list — standalone card, appears between Drift and Forecast */}
-              <RoutesPanel />
-
-              <SidebarSectionGroup>
-                <SidebarSection id="forecast" title="Forecast">
-                  <ForecastStrip />
-                </SidebarSection>
-              </SidebarSectionGroup>
-
-              <SidebarSectionGroup>
-                <SidebarSection id="tripWindows" title="Trip Windows">
-                  <ErrorBoundary label="trip window panel">
-                    <TripWindowPanel />
-                  </ErrorBoundary>
-                </SidebarSection>
-              </SidebarSectionGroup>
+              {/* Timeline hint — points to the fixed bottom timeline, not this
+                  scrollable sidebar, when time-aware tools are active. */}
+              {(tidalOverlay || currentsEnabled) && (
+                <div
+                  data-testid="plan-timeline-hint"
+                  style={{
+                    minWidth: "min(460px, 100vw - 32px)",
+                    maxWidth: 520,
+                    padding: "7px 10px",
+                    background: "rgba(0,229,255,0.04)",
+                    border: "1px dashed rgba(0,229,255,0.18)",
+                    borderRadius: 4,
+                    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                    letterSpacing: "0.13em",
+                    color: "#64748b",
+                    pointerEvents: "none",
+                  }}
+                >
+                  <span style={{ color: "#00e5ff", marginRight: 5 }}>▸</span>
+                  Use the fixed timeline at the bottom of the screen to preview conditions over time.
+                </div>
+              )}
 
               {/* Back to Explore shortcut */}
               <button

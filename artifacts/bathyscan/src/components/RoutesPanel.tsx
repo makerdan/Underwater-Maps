@@ -34,6 +34,11 @@ interface RouteWaypoint {
   depth: number;
 }
 
+interface RoutesPanelProps {
+  /** Render only the route list when hosted by the shared Plan container. */
+  embedded?: boolean;
+}
+
 interface SavedRoute {
   id: string;
   name: string;
@@ -126,7 +131,7 @@ export function routesQueryKey(datasetId: string) {
   return ["routes", datasetId] as const;
 }
 
-export const RoutesPanel: React.FC = () => {
+export const RoutesPanel: React.FC<RoutesPanelProps> = ({ embedded = false }) => {
   const { isSignedIn, isLoaded } = useUser();
   const { datasetId, terrain } = useAppState();
   const units = useSettingsStore((s) => s.units);
@@ -252,8 +257,8 @@ export const RoutesPanel: React.FC = () => {
 
   return (
     <>
-      <div data-testid="routes-panel" style={PANEL_STYLE}>
-        <div style={{ display: "flex", alignItems: "center", paddingRight: 6 }}>
+      <div data-testid="routes-panel" style={embedded ? { width: "100%", pointerEvents: "auto" } : PANEL_STYLE}>
+        {!embedded && <div style={{ display: "flex", alignItems: "center", paddingRight: 6 }}>
           <button
             type="button"
             onClick={() => toggle("routes")}
@@ -268,9 +273,9 @@ export const RoutesPanel: React.FC = () => {
             </span>
           </button>
           <HelpIcon articleId="saved-routes" label="Saved routes" />
-        </div>
+        </div>}
 
-        {!collapsed && (
+        {(embedded || !collapsed) && (
           <div style={{ padding: "6px 10px 10px" }}>
             {!isSignedIn ? (
               <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#94a3b8", textAlign: "center", padding: "8px 0" }}>
@@ -348,6 +353,7 @@ export const RoutesPanel: React.FC = () => {
                           type="button"
                           style={ACTION_BTN_STYLE}
                           aria-label={`Load route ${route.name}`}
+                          title={`Load ${route.name} into the depth profile`}
                           disabled={!terrain}
                           onClick={() => loadRoute(route)}
                         >
@@ -362,6 +368,7 @@ export const RoutesPanel: React.FC = () => {
                             color: isFlyingThis ? "#fde68a" : "#cbd5e1",
                           }}
                           aria-label={isFlyingThis ? "Stop flying route" : `Fly route ${route.name}`}
+                          title={isFlyingThis ? "Stop flying this route" : `Fly the boat along ${route.name}`}
                           disabled={!terrain}
                           onClick={() => flyRoute(route)}
                         >
@@ -375,6 +382,7 @@ export const RoutesPanel: React.FC = () => {
                             cursor: deleteMutation.isPending ? "not-allowed" : "pointer",
                           }}
                           aria-label={`Delete route ${route.name}`}
+                          title={`Delete ${route.name}`}
                           disabled={deleteMutation.isPending}
                           onClick={() => setConfirmDeleteRoute(route)}
                         >

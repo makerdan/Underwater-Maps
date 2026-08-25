@@ -552,6 +552,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                       >
                       <button
                         onClick={() => onDepthLayerChange(l)}
+                        title={`Show the ${LAYER_LABELS[l].toLowerCase()} current layer`}
                         style={{
                           fontSize: "calc(15px * var(--bs-font-scale, 1))",
                           padding: "3px 7px",
@@ -639,6 +640,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                   <button
                     data-testid={`tide-day-btn-${offset}`}
                     onClick={() => setDay(offset)}
+                    title={dayTip}
                     style={{
                       fontSize: "calc(15px * var(--bs-font-scale, 1))",
                       padding: "2px 6px",
@@ -694,6 +696,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                   onClick={() => jumpToSlack(prevSlackMs)}
                   disabled={prevSlackMs === null}
                   data-testid="slack-prev"
+                  title={prevSlackMs === null ? "No earlier slack window is available" : "Jump to the previous slack window"}
                   style={{
                     fontSize: "calc(15px * var(--bs-font-scale, 1))",
                     padding: "2px 7px",
@@ -726,6 +729,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                   onClick={() => jumpToSlack(nextSlackMs)}
                   disabled={nextSlackMs === null}
                   data-testid="slack-next"
+                  title={nextSlackMs === null ? "No upcoming slack window is available" : "Jump to the next slack window"}
                   style={{
                     fontSize: "calc(15px * var(--bs-font-scale, 1))",
                     padding: "2px 7px",
@@ -781,6 +785,8 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                     max={23}
                     value={scrubHour}
                     onChange={(e) => setHour(parseInt(e.target.value, 10))}
+                    aria-label="Select tide prediction hour"
+                    title="Scrub the local tide prediction hour; the fixed bottom timeline overrides this when active"
                     style={{
                       position: "absolute",
                       left: 0,

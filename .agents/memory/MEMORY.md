@@ -141,3 +141,4 @@
 - [Overview reference overlay e2e](overview-reference-overlay-e2e.md) — after viewport changes, wait for the next live snapshot before asserting anchored or dataset-bounds image placement.
 - [Puzzle layout density metadata](puzzle-layout-density.md) — pair legacy pixel offsets with optional save-time density so restores stay geographically aligned across viewports.
 - [Geographic continuous longitude frame](geographic-continuous-frame.md) — compare wrapped GPS/map longitudes on the eastward interval beginning at the dataset minLon.
+- [Sidebar responsive CSSOM expectation](sidebar-responsive-cssom.md) — wide sidebar min-width assertion is a deterministic jsdom/CSSOM baseline mismatch, unrelated to Plan tools.

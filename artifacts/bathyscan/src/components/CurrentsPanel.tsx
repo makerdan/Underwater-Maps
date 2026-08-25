@@ -202,6 +202,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
             data-testid="currents-enable"
             style={toggleBtn(false)}
             onClick={() => setCurrentsEnabled(true)}
+            title="Enable the currents simulation and its controls"
           >
             ○ ENABLE CURRENTS
           </button>
@@ -223,6 +224,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
             data-testid="currents-disable"
             style={{ ...toggleBtn(true), flex: 0, padding: "2px 8px" }}
             onClick={() => setCurrentsEnabled(false)}
+            title="Disable the currents simulation"
           >
             OFF
           </button>
@@ -235,6 +237,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
             data-testid="currents-disable"
             style={{ ...toggleBtn(true), flex: 0, padding: "2px 8px" }}
             onClick={() => setCurrentsEnabled(false)}
+            title="Disable the currents simulation"
           >
             OFF
           </button>
@@ -246,6 +249,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
           data-testid="currents-source-manual"
           style={toggleBtn(currentsSource === "manual")}
           onClick={() => setCurrentsSource("manual")}
+          title="Enter current direction and speed yourself"
         >
           MANUAL
         </button>
@@ -282,6 +286,8 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
               onChange={(e) => setCurrentsManualDirectionDeg(Number(e.target.value) || 0)}
               style={input}
               data-testid="currents-manual-dir"
+              aria-label="Manual current direction in degrees"
+              title="Set the direction the current is moving toward"
             />
           </div>
           <div style={{ flex: 1 }}>
@@ -295,6 +301,8 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
               onChange={(e) => setCurrentsManualSpeedKt(displayToKnots(Number(e.target.value) || 0, units))}
               style={input}
               data-testid="currents-manual-speed"
+              aria-label="Manual current speed"
+              title="Set the manually observed current speed"
             />
           </div>
         </div>
@@ -369,6 +377,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
             }}
             onClick={() => setCurrentsAutoAdvance(!currentsAutoAdvance)}
             data-testid="currents-auto-advance"
+            title={currentsAutoAdvance ? "Pause automatic tide-phase animation" : "Animate the tide phase automatically"}
           >
             {currentsAutoAdvance ? "◉ AUTO-ADVANCE" : "○ AUTO-ADVANCE"}
           </button>
@@ -379,6 +388,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
             style={toggleBtn(currentsShowParticles)}
             onClick={() => setCurrentsShowParticles(!currentsShowParticles)}
             data-testid="currents-toggle-particles"
+            title="Show or hide moving current particles"
           >
             ✦ PART
           </button>
@@ -386,6 +396,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
             style={toggleBtn(currentsShowArrows)}
             onClick={() => setCurrentsShowArrows(!currentsShowArrows)}
             data-testid="currents-toggle-arrows"
+            title="Show or hide current direction arrows"
           >
             ➤ ARR
           </button>
@@ -393,6 +404,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
             style={toggleBtn(currentsShowStreamlines)}
             onClick={() => setCurrentsShowStreamlines(!currentsShowStreamlines)}
             data-testid="currents-toggle-streams"
+            title="Show or hide current streamlines"
           >
             ∿ FLOW
           </button>
