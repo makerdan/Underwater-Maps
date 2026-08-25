@@ -300,6 +300,57 @@ describe("CollectionsSection", () => {
     expect(screen.getByTestId("collection-members-empty-col-empty")).toBeInTheDocument();
   });
 
+  it("exposes a disabled Load action for empty collections", () => {
+    currentCollections = [COLLECTION_EMPTY];
+    renderWithProviders(<CollectionsSection />);
+    const load = screen.getByTestId("btn-load-collection-col-empty");
+    expect(load).toBeDisabled();
+    expect(load).toHaveAttribute("aria-label", 'Load collection "Empty Collection" into 3D Explore');
+    expect(load).toHaveAttribute("title", "This collection has no datasets to load");
+  });
+
+  it("loads standard collections with source-aware members and enters Explore", async () => {
+    const activateCollection = vi.fn();
+    const original = useTerrainStore.getState().activateCollection;
+    useTerrainStore.setState({ activateCollection });
+    currentCollections = [COLLECTION_TRIP];
+    useUiStore.getState().setOverviewOpen(true);
+    useUiStore.getState().setSidebarMode("plan");
+    currentSaves = [{ id: "save-1", datasetId: "catalog-1" }];
+    renderWithProviders(<CollectionsSection />);
+
+    fireEvent.click(screen.getByTestId("btn-load-collection-col-trip"));
+    await waitFor(() => expect(activateCollection).toHaveBeenCalledWith([
+      { datasetId: "ds-1", source: "user" },
+      { datasetId: "catalog-1", source: "preset" },
+    ]));
+    expect(useUiStore.getState().overviewOpen).toBe(false);
+    expect(useUiStore.getState().sidebarMode).toBe("explore");
+    expect(screen.getByTestId("btn-load-collection-col-trip")).toBeEnabled();
+    useTerrainStore.setState({ activateCollection: original });
+  });
+
+  it("keeps available members loading and reports an unavailable catalog save", async () => {
+    const activateCollection = vi.fn();
+    const original = useTerrainStore.getState().activateCollection;
+    useTerrainStore.setState({ activateCollection });
+    currentCollections = [{
+      ...COLLECTION_TRIP,
+      members: [
+        COLLECTION_TRIP.members[0],
+        { id: "mem-missing", kind: "catalogSave", refId: "missing", name: "Not Ready", createdAt: "2024-01-03T00:00:00Z" },
+      ],
+    }];
+    renderWithProviders(<CollectionsSection />);
+
+    fireEvent.click(screen.getByTestId("btn-load-collection-col-trip"));
+    await waitFor(() => expect(activateCollection).toHaveBeenCalledWith([
+      { datasetId: "ds-1", source: "user" },
+    ]));
+    expect(screen.getByTestId("collection-load-warning-col-trip")).toHaveTextContent(/Not Ready/);
+    useTerrainStore.setState({ activateCollection: original });
+  });
+
   it("creates a collection via + new and invalidates the query", async () => {
     renderWithProviders(<CollectionsSection />);
     fireEvent.click(screen.getByTestId("btn-new-collection"));

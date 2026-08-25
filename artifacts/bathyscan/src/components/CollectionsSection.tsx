@@ -218,17 +218,21 @@ const CollectionRow: React.FC<{
   onOpenSettings?: () => void;
   /** Special collections only: load members + enter puzzle mode + restore layout. */
   onActivate?: () => void;
+  /** Load resolvable members into the 3D Explore view without puzzle mode. */
+  onLoad?: () => void;
   /** True while the activate flow is loading datasets. */
   activating?: boolean;
   /** Names of saved members that were unavailable during the last activation. */
   unavailableMemberNames?: string[];
+  /** Actionable error from the most recent ordinary collection load. */
+  loadError?: string | null;
   /**
    * Apply-to-3D badge: "applied" (teal) when the 3D scene reflects this
    * collection's saved puzzle layout, "outdated" (amber) when the layout was
    * edited after applying. Null/undefined hides the badge.
    */
   geoBadge?: "applied" | "outdated" | null;
-}> = ({ collection, expanded, onToggle, onRename, onDelete, onRemoveMember, removingMemberIds, onDownloadOffline, offlineRollup = "none", onOpenSettings, onActivate, activating = false, unavailableMemberNames = [], geoBadge = null }) => {
+}> = ({ collection, expanded, onToggle, onRename, onDelete, onRemoveMember, removingMemberIds, onDownloadOffline, offlineRollup = "none", onOpenSettings, onActivate, onLoad, activating = false, unavailableMemberNames = [], loadError = null, geoBadge = null }) => {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -336,6 +340,16 @@ const CollectionRow: React.FC<{
                 style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.35)", borderRadius: 3, color: "#fbbf24", cursor: activating ? "wait" : "pointer", fontSize: "calc(10.5px * var(--bs-font-scale, 1))", padding: "1px 6px", flexShrink: 0, letterSpacing: "0.05em", whiteSpace: "nowrap" }}
               >{activating ? "⟳ …" : "⧉ Puzzle"}</button>
             )}
+            {onLoad && (
+              <button
+                data-testid={`btn-load-collection-${collection.id}`}
+                aria-label={`Load collection "${collection.name}" into 3D Explore`}
+                title={collection.members.length === 0 ? "This collection has no datasets to load" : "Load member datasets into 3D Explore"}
+                disabled={activating || collection.members.length === 0}
+                onClick={onLoad}
+                style={{ background: "rgba(0,229,255,0.08)", border: "1px solid rgba(0,229,255,0.35)", borderRadius: 3, color: "#67e8f9", cursor: activating ? "wait" : collection.members.length === 0 ? "not-allowed" : "pointer", fontSize: "calc(10.5px * var(--bs-font-scale, 1))", padding: "1px 7px", flexShrink: 0, letterSpacing: "0.05em", whiteSpace: "nowrap", opacity: collection.members.length === 0 ? 0.5 : 1 }}
+              >{activating ? "Loading…" : "Load"}</button>
+            )}
             {onOpenSettings && (
               <button
                 data-testid={`btn-collection-settings-${collection.id}`}
@@ -380,8 +394,18 @@ const CollectionRow: React.FC<{
           role="status"
           style={{ padding: "3px 26px 5px", color: "#fbbf24", fontSize: "calc(12px * var(--bs-font-scale, 1))", lineHeight: 1.35 }}
         >
-          Unavailable puzzle piece{unavailableMemberNames.length === 1 ? "" : "s"}: {unavailableMemberNames.join(", ")}
+          {collection.collectionKind === "special"
+            ? `Unavailable puzzle piece${unavailableMemberNames.length === 1 ? "" : "s"}: ${unavailableMemberNames.join(", ")}`
+            : `Unavailable member${unavailableMemberNames.length === 1 ? "" : "s"} skipped: ${unavailableMemberNames.join(", ")}`}
         </div>
+      )}
+      {loadError && (
+        <ErrorMessage
+          data-testid={`collection-load-error-${collection.id}`}
+          role="alert"
+          message={loadError}
+          style={{ padding: "3px 26px 5px", color: "#fca5a5", fontSize: "calc(12px * var(--bs-font-scale, 1))" }}
+        />
       )}
       {expanded && (
         <div style={{ paddingLeft: 26 }}>
@@ -473,6 +497,8 @@ export const CollectionsSection: React.FC = () => {
   const [createSpecial, setCreateSpecial] = useState(false);
   const [settingsForId, setSettingsForId] = useState<string | null>(null);
   const [activatingId, setActivatingId] = useState<string | null>(null);
+  const activatingRef = useRef<string | null>(null);
+  const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
   // Freshly-created collection kept as a fallback so the settings sheet can
   // open immediately, before the collections query refetch lands.
   const [createdFallback, setCreatedFallback] = useState<DatasetCollection | null>(null);
@@ -558,7 +584,8 @@ export const CollectionsSection: React.FC = () => {
    * and enable the background reference overlay.
    */
   const handleActivate = useCallback(async (c: DatasetCollection) => {
-    if (activatingId) return;
+    if (activatingRef.current) return;
+    activatingRef.current = c.id;
     setActivatingId(c.id);
     try {
       const terrain = useTerrainStore.getState();
@@ -584,9 +611,61 @@ export const CollectionsSection: React.FC = () => {
       await useSpecialCollectionStore.getState().activateForPuzzle(c, unresolvedMemberNames);
       useUiStore.getState().setOverviewOpen(true);
     } finally {
+      activatingRef.current = null;
       setActivatingId(null);
     }
-  }, [activatingId, memberDatasetId, setCollectionLoadNotice]);
+  }, [memberDatasetId, setCollectionLoadNotice]);
+
+  /**
+   * Load a collection into the normal multi-dataset 3D view. This deliberately
+   * shares member resolution with Puzzle activation, but never opens Overview
+   * or restores puzzle state.
+   */
+  const handleLoad = useCallback(async (c: DatasetCollection) => {
+    if (activatingRef.current || c.members.length === 0) return;
+    activatingRef.current = c.id;
+    setActivatingId(c.id);
+    setLoadErrors((errors) => {
+      const next = { ...errors };
+      delete next[c.id];
+      return next;
+    });
+    try {
+      const unresolvedMemberNames = c.members
+        .filter((m) => !memberDatasetId(m))
+        .map((m) => m.name);
+      setCollectionLoadNotice(
+        unresolvedMemberNames.length > 0
+          ? { collectionId: c.id, memberNames: unresolvedMemberNames }
+          : null,
+      );
+      const entries = c.members.flatMap((m) => {
+        const datasetId = memberDatasetId(m);
+        if (!datasetId) return [];
+        return [{
+          datasetId,
+          source: m.kind === "dataset" ? "user" as const : "preset" as const,
+        }];
+      });
+      if (entries.length === 0) {
+        throw new Error("No collection members are available to load yet.");
+      }
+      useTerrainStore.getState().activateCollection(entries);
+      // A normal collection load replaces any puzzle overlay/layout and must
+      // not leave the user in the Overview-only presentation.
+      useSpecialCollectionStore.getState().deactivate();
+      useUiStore.getState().setOverviewOpen(false);
+      useUiStore.getState().setSidebarMode("explore");
+    } catch (err) {
+      setLoadErrors((errors) => ({
+        ...errors,
+        [c.id]: err instanceof Error ? err.message : "Could not load this collection. Try again.",
+      }));
+    } finally {
+      activatingRef.current = null;
+      setActivatingId(null);
+    }
+  }, [memberDatasetId, setCollectionLoadNotice]);
 
   // Apply-to-3D badge state: which collection's saved layout the 3D scene
   // currently reflects (and whether it has been edited since applying).
@@ -710,10 +789,12 @@ export const CollectionsSection: React.FC = () => {
               offlineRollup={collectionRollup(c)}
               onOpenSettings={c.collectionKind === "special" ? () => setSettingsForId(c.id) : undefined}
               onActivate={c.collectionKind === "special" ? () => void handleActivate(c) : undefined}
+              onLoad={() => void handleLoad(c)}
               activating={activatingId === c.id}
               unavailableMemberNames={
                 collectionLoadNotice?.collectionId === c.id ? collectionLoadNotice.memberNames : []
               }
+              loadError={loadErrors[c.id] ?? null}
               geoBadge={geoLayout?.collectionId === c.id ? geoLayout.status : null}
             />
           ))}
