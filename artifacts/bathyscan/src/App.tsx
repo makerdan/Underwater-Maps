@@ -1574,7 +1574,7 @@ function Main() {
                         onMouseLeave={() => setUploadFormatsHovered(false)}
                       >
                         <ViewscreenTooltip
-                          label="Accepted formats: .csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .xml, .nmea, .gz, .pdf"
+                          label={`Any size · large files upload in chunks${isSignedIn ? " · auto-saved" : ""} · accepted formats: .csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .xml, .nmea, .gz, .pdf`}
                           side="right"
                         >
                           <button
@@ -1636,7 +1636,7 @@ function Main() {
                               pointerEvents: "none",
                             }}
                           >
-                            Accepted formats: .csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .xml, .nmea, .gz, .pdf
+                            Any size · large files upload in chunks{isSignedIn ? " · auto-saved" : ""} · accepted formats: .csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .xml, .nmea, .gz, .pdf
                           </div>
                         )}
                       </div>

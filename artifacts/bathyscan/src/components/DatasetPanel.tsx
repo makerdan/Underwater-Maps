@@ -3928,9 +3928,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false, up
                               </button>
                             </div>
                           )}
-                          <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#cbd5e1" }}>
-                            any size · large files upload in chunks{isSignedIn ? " · auto-saved" : ""}
-                          </div>
                           {activeUploadError && (
                             <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#f87171", marginTop: 4 }}>⚠ upload error — click for details</div>
                           )}
