@@ -29,7 +29,7 @@ import {
 import { useSettingsStore, getDataSnapshot } from "@/lib/settingsStore";
 import { parseSettingsResponse } from "@/lib/settingsResponseSchema";
 import { usePaletteStore } from "@/lib/paletteStore";
-import { usePanelCollapseStore, type PanelId } from "@/lib/panelCollapseStore";
+import { usePanelCollapseStore, PANEL_IDS, type PanelId } from "@/lib/panelCollapseStore";
 import { useZoneOverlayStore } from "@/lib/zoneOverlayStore";
 import { useUiStore, CURRENT_DEPTH_LAYERS } from "@/lib/uiStore";
 import { performSignOutCleanup } from "./signoutCleanup";
@@ -627,7 +627,7 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
         for (const [id, val] of Object.entries(
           serverRec.panelCollapse as Record<string, unknown>,
         )) {
-          if (typeof val === "boolean") {
+          if (PANEL_IDS.includes(id as PanelId) && typeof val === "boolean") {
             setCollapsed(id as PanelId, val);
           }
         }

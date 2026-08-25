@@ -117,6 +117,32 @@ describe("parseSettingsResponse — (a) fully valid response", () => {
   });
 });
 
+describe("parseSettingsResponse — panel layout preferences", () => {
+  it("preserves a valid panel collapse map", () => {
+    const result = parseSettingsResponse({
+      panelCollapse: { routes: false, forecast: true },
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      value: { panelCollapse: { routes: false, forecast: true } },
+      skippedKeys: [],
+    });
+  });
+
+  it("skips a malformed panel collapse map instead of hydrating it", () => {
+    const result = parseSettingsResponse({
+      panelCollapse: { routes: false, forecast: "expanded" },
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      value: {},
+      skippedKeys: ["panelCollapse"],
+    });
+  });
+});
+
 // ── (b) Response with unknown extra keys ──────────────────────────────────────
 
 describe("parseSettingsResponse — (b) unknown extra keys passed through", () => {

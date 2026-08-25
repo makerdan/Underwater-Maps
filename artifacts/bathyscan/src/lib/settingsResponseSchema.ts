@@ -43,6 +43,7 @@ const strArr = z.array(z.string()).optional().catch(undefined);
 const numArr = z.array(z.number()).optional().catch(undefined);
 const unknownNull = z.unknown().nullable().optional();
 const unknownObj = z.record(z.string(), z.unknown()).optional().catch(undefined);
+const boolRecord = z.record(z.string(), z.boolean()).optional().catch(undefined);
 const unknownArr = z.array(z.unknown()).optional().catch(undefined);
 
 // ── Known-field schema ─────────────────────────────────────────────────────────
@@ -245,6 +246,10 @@ export const settingsFieldSchemas = {
   crosshairMenuGamepadButton: numNull,
 
   // Sync metadata
+  // Panel expansion state is part of the settings contract even though the
+  // live value remains in panelCollapseStore. Validate it here so malformed
+  // server data cannot be copied into the layout store during hydration.
+  panelCollapse: boolRecord,
   lastSyncedAt: strNull,
   syncedSnapshot: unknownNull,
 

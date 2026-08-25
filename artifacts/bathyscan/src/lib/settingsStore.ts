@@ -52,7 +52,7 @@ import {
   resolveKeyBindings,
   type ShortcutActionId,
 } from "./keyBindings";
-import { usePanelCollapseStore, type PanelId } from "./panelCollapseStore";
+import { usePanelCollapseStore, PANEL_IDS, type PanelId } from "./panelCollapseStore";
 import { FLY_DEFAULT_SPEED_TIER } from "./boatSpeed";
 // NOTE: terrainStore also imports settingsStore — intentional circular ESM
 // import.  Both accesses (getActiveCap in terrainStore, autoEvict call in
@@ -1727,7 +1727,14 @@ export const useSettingsStore = create<SettingsStore>()(
               const serverCollapse = partialRec.panelCollapse as Record<string, boolean>;
               const { collapsed, setCollapsed } = usePanelCollapseStore.getState();
               // Start from local state so localStorage-only keys are preserved.
-              const merged = { ...collapsed, ...serverCollapse };
+              const merged = {
+                ...collapsed,
+                ...Object.fromEntries(
+                  Object.entries(serverCollapse).filter(([panelId, value]) =>
+                    PANEL_IDS.includes(panelId as PanelId) && typeof value === "boolean",
+                  ),
+                ),
+              };
               for (const [panelId, value] of Object.entries(merged)) {
                 if (collapsed[panelId as PanelId] !== value) {
                   setCollapsed(panelId as PanelId, value);
