@@ -110,6 +110,7 @@ export const SidebarModeTabs: React.FC = () => {
   return (
     <div
       data-testid="sidebar-mode-tabs"
+      className="sidebar-mode-tabs"
       style={{
         display: "flex",
         width: "100%",
@@ -138,7 +139,7 @@ export const SidebarModeTabs: React.FC = () => {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                padding: isMobile ? "12px 4px" : "8px 2px",
+                padding: isMobile ? "12px 4px" : "0 2px",
                 minHeight: isMobile ? 44 : undefined,
                 background: isActive
                   ? "rgba(0,229,255,0.12)"

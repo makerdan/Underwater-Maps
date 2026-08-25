@@ -349,6 +349,13 @@ body.bs-daylight .bs-settings-page [data-nav-active="true"] {
 .sidebar-section-header {
   padding: 8px 12px;
 }
+.sidebar-mode-tabs {
+  height: 50px;
+}
+.sidebar-mode-tabs > button,
+.sidebar-mode-tabs > * > button {
+  height: 100%;
+}
 .sidebar-section-body {
   padding: 4px 0;
 }
@@ -373,6 +380,9 @@ body.bs-daylight .bs-settings-page [data-nav-active="true"] {
   .sidebar-section-header {
     padding: 6px 10px;
   }
+  .sidebar-mode-tabs {
+    height: 40px;
+  }
   .sidebar-section-title {
     font-size: calc(15px * var(--bs-font-scale, 1)) !important;
     letter-spacing: 0.18em !important;
@@ -395,6 +405,9 @@ body.bs-daylight .bs-settings-page [data-nav-active="true"] {
 @media (max-height: 680px) {
   .sidebar-section-header {
     padding: 5px 10px;
+  }
+  .sidebar-mode-tabs {
+    height: 38px;
   }
   .sidebar-section-item {
     padding: 5px 10px;
