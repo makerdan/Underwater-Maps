@@ -67,7 +67,6 @@ import { useUndoableMarkerDelete } from "@/hooks/useUndoableMarkerDelete";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { GpsExportDialog } from "@/components/GpsExportDialog";
 import { ReassignMarkersDialog } from "@/components/ReassignMarkersDialog";
-import { SUPPORTED_EXTENSIONS } from "@/components/FileUpload";
 import { useActiveLoadStore } from "@/lib/activeLoadStore";
 import { NoDataAvailableError } from "@/lib/fetchWithProgress";
 import { makeProgressTerrainFetcher } from "@/lib/progressTerrainFetcher";
@@ -3795,7 +3794,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false, up
                       </div>
                     )}
 
-                    <ViewscreenTooltip label={`Accepted file types: ${SUPPORTED_EXTENSIONS}`} side="top" align="center">
+                    <ViewscreenTooltip label="Drop a file here or click the upload button above to browse" side="top" align="center">
                       <div
                        {...getRootProps()}
                       data-testid="dropzone-terrain"
@@ -3922,9 +3921,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false, up
                           )}
                           <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#cbd5e1" }}>
                             any size · large files upload in chunks{isSignedIn ? " · auto-saved" : ""}
-                          </div>
-                          <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginTop: 4 }}>
-                            {SUPPORTED_EXTENSIONS}
                           </div>
                           {activeUploadError && (
                             <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#f87171", marginTop: 4 }}>⚠ upload error — click for details</div>

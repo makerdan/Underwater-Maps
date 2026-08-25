@@ -1534,7 +1534,7 @@ function Main() {
                   id="mapData"
                   title="Your Data"
                   headerAction={
-                    <ViewscreenTooltip label="Drop file here, or click to browse" side="right">
+                    <ViewscreenTooltip label="Drop a file here or click to browse. Accepted formats: .csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .xml, .nmea, .gz, .pdf" side="right">
                       <button
                       type="button"
                       data-testid="btn-header-upload-dataset"
