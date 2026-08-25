@@ -215,14 +215,14 @@ test.describe("BathyScan — Overview Map", () => {
     await expect(page.locator(OVERLAY_HEADER)).toHaveCount(0, { timeout: 5_000 });
   });
 
-  test("✕ CLOSE button dismisses the overlay", async ({ page }) => {
+  test("Close overview map button dismisses the overlay", async ({ page }) => {
     if (!(await ensureSignedInOrSkip(page))) return;
 
     await openOverview(page);
 
-    const closeBtn = page.getByRole("button", { name: /✕\s*CLOSE/ });
+    const closeBtn = page.getByRole("button", { name: "Close overview map" });
     await expect(closeBtn).toBeVisible({ timeout: 5_000 });
-    await closeBtn.dispatchEvent("click");
+    await closeBtn.click();
 
     await expect(page.locator(OVERLAY_HEADER)).toHaveCount(0, { timeout: 5_000 });
   });
@@ -275,6 +275,18 @@ test.describe("BathyScan — Overview Map", () => {
       await expect
         .poll(() => header.evaluate((element) => element.scrollLeft))
         .toBeGreaterThan(0);
+    });
+
+    test("Close overview map button dismisses the overlay", async ({ page }) => {
+      if (!(await ensureSignedInOrSkip(page))) return;
+
+      await openOverview(page);
+
+      const closeBtn = page.getByRole("button", { name: "Close overview map" });
+      await expect(closeBtn).toBeVisible({ timeout: 5_000 });
+      await closeBtn.click();
+
+      await expect(page.locator(OVERLAY_HEADER)).toHaveCount(0, { timeout: 5_000 });
     });
   });
 

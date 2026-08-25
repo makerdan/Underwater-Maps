@@ -450,7 +450,7 @@ body.bs-daylight .bs-settings-page [data-nav-active="true"] {
   .overview-map-header {
     flex-wrap: wrap;
     height: auto !important;
-    padding: 8px 12px !important;
+    padding: 8px 120px 8px 12px !important;
     gap: 6px;
     align-content: flex-start;
   }

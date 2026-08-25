@@ -6671,6 +6671,11 @@ export const OverviewMap: React.FC = () => {
             aria-label="Close overview map"
             onClick={() => setOverviewOpen(false)}
             style={{
+              position: "absolute",
+              top: 6,
+              right: 12,
+              minWidth: 44,
+              minHeight: 28,
               pointerEvents: "auto",
               background: "none",
               border: "1px solid rgba(0,229,255,0.2)",
