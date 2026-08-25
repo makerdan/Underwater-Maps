@@ -1,0 +1,42 @@
+Geographically Place Map Tiles
+What & Why
+Apply the canonical geographic frame to the Overview and Minimap rendering paths so each unedited dataset tile, marker, camera arrow, click target, and background tile is placed from its canonical GPS bounds—even when the visible collection spans the antimeridian or a primary overview grid loads late.
+
+Done looks like
+Overview and Minimap place every canonical dataset tile in the same GPS location and preserve north-up orientation.
+Markers, camera arrows, waypoint/click conversion, satellite/terrain tile requests, and fit/pan bounds use the same continuous geographic frame as rendered tiles.
+A manual puzzle adjustment remains an explicit visual correction layered over canonical placement; this task does not alter its edit, persistence, zoom, or pan mechanics.
+Invalid or unresolved bounds do not create a plausible but misplaced tile; the map shows the established unavailable state and the dataset inspector explains why.
+Out of scope
+Puzzle-mode zoom stabilization, background panning, snapping, rotation, grouping, or persistence covered by the existing puzzle-stability draft.
+Changing dataset source metadata, reprojection, georeferencing, or automatic data repair.
+New basemaps, map engines, or replacement of React Three Fiber.
+Steps
+Drive rendering from the common frame — Replace per-surface bbox arithmetic with the canonical geographic bounds/projection helpers for tile rectangles, union frames, and antimeridian continuity.
+Keep related map behaviors co-located — Route marker/camera/click conversions and tile-fetch/cache bounds through the same canonical frame so visual and interactive GPS positions cannot diverge.
+Respect data readiness — Preserve canonical placement for ready/conditional data and avoid rendering a falsely located tile when required bounds are unresolved; link the state to the existing loading/inspection flow.
+Prove cross-surface agreement — Extend Overview and Minimap integration tests with multiple datasets, a delayed primary grid, antimeridian bounds, markers, camera position, and click/waypoint round-trips.
+Pre-existing failures to ignore
+None known at plan time. Plan-mode baseline execution cannot create Vitest's temporary cache in this read-only workspace, so no suite failure was observed or classified.
+
+Flaky-test rule: If a test fails, retry it 3× in isolation before concluding it is a regression you caused. Only treat a consistent 3/3 failure as your responsibility.
+
+Validation
+Command: test-standard Why: Overview and Minimap coordinate behavior changes require the frontend unit and integration suites without a new API route. Do not escalate: Run exactly this command. Pre-existing failures are handled above — they are never a reason to run a heavier tier.
+
+Regression Guard
+Covers: Multiple visible datasets, including a dateline-crossing dataset or late-loading primary overview grid; prior duplicated frame arithmetic could render a tile, marker, arrow, or click target in a different GPS location on the Overview versus Minimap. Test location: artifacts/bathyscan/src/__tests__/overviewMap.componentIntegration.test.ts, artifacts/bathyscan/src/__tests__/Minimap.test.tsx, and artifacts/bathyscan/src/__tests__/OverviewMap.waypointClick.test.tsx What it checks: Asserts both canvases use identical canonical coordinates for every tile and GPS overlay and that canvas-to-GPS interaction round-trips remain correct through delayed loading and antimeridian bounds.
+
+Relevant files
+artifacts/bathyscan/src/components/OverviewMap.tsx
+artifacts/bathyscan/src/components/Minimap.tsx
+artifacts/bathyscan/src/lib/overviewRenderer/transforms.ts
+artifacts/bathyscan/src/hooks/useTerrainTile.ts
+artifacts/bathyscan/src/__tests__/overviewMap.componentIntegration.test.ts
+artifacts/bathyscan/src/__tests__/Minimap.test.tsx
+artifacts/bathyscan/src/__tests__/OverviewMap.waypointClick.test.tsx
+Dependencies
+
+Create canonical geographic frame
+Open task
+Publish dataset audit reports
