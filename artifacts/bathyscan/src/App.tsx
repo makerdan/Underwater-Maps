@@ -1741,7 +1741,7 @@ function Main() {
                   }}
                 >
                   <span style={{ color: "#00e5ff", marginRight: 5 }}>▸</span>
-                  Use the timeline bar below to preview conditions over time.
+                  Use the timeline scrubber at the bottom of the screen to preview conditions over time.
                 </div>
               )}
 
