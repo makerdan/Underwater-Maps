@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { datasetDomain } from "../domains/datasets/index.js";
 import { uploadDomain } from "../domains/upload/index.js";
 import { terrainDomain } from "../domains/terrain/index.js";
 import { catalogSearchDomain } from "../domains/catalog-search/index.js";
@@ -15,6 +16,7 @@ import { platformDomain } from "../domains/platform/index.js";
  */
 export const API_DOMAINS = [
   platformDomain,
+  datasetDomain,
   uploadDomain,
   terrainDomain,
   catalogSearchDomain,
@@ -24,6 +26,7 @@ export const API_DOMAINS = [
 /** Stable source-directory keys used by structural checks and tooling. */
 export const API_DOMAIN_KEYS = [
   "platform",
+  "datasets",
   "upload",
   "terrain",
   "catalog-search",

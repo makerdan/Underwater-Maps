@@ -1425,7 +1425,16 @@ function multerErrorHandler(
   next(err);
 }
 
-const router = Router();
+/**
+ * Capability routers for the dataset HTTP surface.
+ *
+ * The implementation and shared lifecycle helpers remain together during this
+ * decomposition so behavior stays unchanged, but each route family is exposed
+ * through its own router and composed independently by the owning domain.
+ */
+export const datasetDiscoveryRouter = Router();
+export const datasetTerrainRouter = Router();
+export const datasetIngestionRouter = Router();
 
 /**
  * Look up the caller's "smoothTerrainSpikes" preference. Defaults to true
@@ -1451,7 +1460,7 @@ async function getSmoothingPreference(req: import("express").Request): Promise<b
 }
 
 // ── GET /datasets ─────────────────────────────────────────────────────────────
-router.get("/datasets", asyncHandler(async (req, res): Promise<void> => {
+datasetDiscoveryRouter.get("/datasets", asyncHandler(async (req, res): Promise<void> => {
   const queryParsed = DatasetsQuerySchema.safeParse(req.query);
   if (!queryParsed.success) {
     logger.warn(
@@ -1512,7 +1521,7 @@ const PresetIdParamSchema = z
   .max(128)
   .regex(/^[a-zA-Z0-9_-]+$/, "Preset id must contain only alphanumeric characters, hyphens, or underscores");
 
-router.delete("/datasets/presets/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+datasetDiscoveryRouter.delete("/datasets/presets/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const idParsed = PresetIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
     logger.warn(
@@ -1555,7 +1564,7 @@ const DatasetIdParamSchema = z
 const CUSTOM_DATASET_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRateLimit, asyncHandler(async (req, res): Promise<void> => {
+datasetTerrainRouter.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
     logger.warn(
@@ -1614,7 +1623,7 @@ router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRat
 }));
 
 // ── GET /datasets/:id/overview ────────────────────────────────────────────────
-router.get("/datasets/:id/overview", asyncHandler(async (req, res): Promise<void> => {
+datasetTerrainRouter.get("/datasets/:id/overview", asyncHandler(async (req, res): Promise<void> => {
   const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
     logger.warn(
@@ -1670,7 +1679,7 @@ router.get("/datasets/:id/overview", asyncHandler(async (req, res): Promise<void
 }));
 
 // ── GET /datasets/:id/preview ─────────────────────────────────────────────────
-router.get("/datasets/:id/preview", asyncHandler(async (req, res): Promise<void> => {
+datasetTerrainRouter.get("/datasets/:id/preview", asyncHandler(async (req, res): Promise<void> => {
   const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
     logger.warn(
@@ -1738,7 +1747,7 @@ router.get("/datasets/:id/preview", asyncHandler(async (req, res): Promise<void>
 // ── GET /datasets/:id/zones?h=<gridHash> ──────────────────────────────────────
 // Returns the cached AI zone classification identified by gridHash.
 // The :id path segment is used only for auth/ownership checks.
-router.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> => {
+datasetTerrainRouter.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> => {
   const { id } = req.params as { id: string };
 
   // Validate ?h= and ?w= via Zod — rejects array injection and unknown values.
@@ -1841,7 +1850,7 @@ router.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> =
 //   size — integer grid resolution, clamped to [32, 256] (default 128)
 //
 // No auth required — land elevation data is public.
-router.get("/terrain/land", asyncHandler(async (req, res): Promise<void> => {
+datasetTerrainRouter.get("/terrain/land", asyncHandler(async (req, res): Promise<void> => {
   // Validate bbox (string, not array) and size via Zod — rejects array injection
   // and non-finite values before any manual parseFloat.
   const parsedQuery = TerrainLandQuerySchema.safeParse(req.query);
@@ -1890,7 +1899,7 @@ router.get("/terrain/land", asyncHandler(async (req, res): Promise<void> => {
 // Auth-required so anonymous users cannot probe our upstream APIs.
 //
 // Max bbox: 10° × 10°.  Returns 400 for out-of-range params.
-router.get("/terrain/download/info", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+datasetTerrainRouter.get("/terrain/download/info", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   // Validate via Zod — rejects array injection on any cardinal param (e.g.
   // ?north[]=45&north[]=50 would previously resolve to parseFloat("45,50")=45).
   const parsedQuery = TerrainDownloadInfoQuerySchema.safeParse(req.query);
@@ -1934,7 +1943,7 @@ const TerrainDownloadQuerySchema = z.object({
   .refine((d) => d.north - d.south <= 10, { message: "Bounding box must be at most 10° latitude span", path: ["north"] })
   .refine((d) => d.east - d.west <= 10, { message: "Bounding box must be at most 10° longitude span", path: ["east"] });
 
-router.get("/terrain/download", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+datasetTerrainRouter.get("/terrain/download", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const parsedQuery = TerrainDownloadQuerySchema.safeParse(req.query);
   if (!parsedQuery.success) {
     logger.warn(
@@ -1988,7 +1997,7 @@ router.get("/terrain/download", requireAuth, asyncHandler(async (req, res): Prom
 // `savedDatasetId`. The viewer loads the uploaded terrain by hitting the
 // unified per-user read path (/user/datasets/:id/{terrain,overview}) — there
 // is no longer an anonymous "upload" placeholder dataset id.
-router.post(
+datasetIngestionRouter.post(
   "/datasets/upload",
   datasetUploadRateLimit,
   requireAuth,
@@ -2283,7 +2292,7 @@ router.post(
 // The token expires in 5 minutes.  Pass it to /datasets/raster-commit to
 // complete the pipeline with (optionally corrected) labels.
 
-router.post(
+datasetIngestionRouter.post(
   "/datasets/raster-extract",
   datasetUploadRateLimit,
   requireAuth,
@@ -2381,7 +2390,7 @@ const RasterCommitBboxSchema = z.object({
   message: "min longitude/latitude must be strictly less than max",
 });
 
-router.post(
+datasetIngestionRouter.post(
   "/datasets/raster-commit",
   datasetUploadRateLimit,
   requireAuth,
@@ -2519,7 +2528,7 @@ router.post(
 // returns the uploadId.  Subsequent chunk-submit and finalize calls must supply
 // a uploadId that originated from this endpoint — client-supplied UUIDs are
 // rejected with 403 to prevent session-slot squatting.
-router.post(
+datasetIngestionRouter.post(
   "/datasets/upload/start",
   requireAuth,
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -2540,7 +2549,7 @@ router.post(
 // The first chunk (chunkIndex === 0) verifies the server-issued session and
 // registers the sessionJobId. Subsequent chunks must come from the same user.
 // Returns { received: chunkIndex }.
-router.post(
+datasetIngestionRouter.post(
   "/datasets/upload/chunk",
   requireAuth,
   uploadChunkMiddleware.single("file"),
@@ -2779,7 +2788,7 @@ router.post(
 // to the DB (the upload_jobs row stores the uploadId since migration 0009) so
 // the caller's identity can still be verified without requiring chunk 0 to be
 // re-sent.
-router.get(
+datasetIngestionRouter.get(
   "/datasets/upload/chunk/status/:uploadId",
   requireAuth,
   validateParams(UploadIdParamSchema, "GET /api/datasets/upload/chunk/status/:uploadId"),
@@ -2897,13 +2906,12 @@ router.get(
     }, "GET /api/datasets/upload/chunk/status/:uploadId"));
   }),
 );
-
 // ── POST /datasets/upload/chunk/finalize ──────────────────────────────────────
 // Called after all chunks have been sent. Enqueues an async job that reassembles
 // the chunks, parses the file, builds the terrain grid, and saves to DB.
 // Body (JSON): { uploadId, fileName, totalChunks, resolution? }
 // Returns { jobId }.
-router.post(
+datasetIngestionRouter.post(
   "/datasets/upload/chunk/finalize",
   requireAuth,
   validateBody(ChunkFinalizeBodySchema, "POST /api/datasets/upload/chunk/finalize"),
@@ -3159,7 +3167,7 @@ const GcsUrlBodySchema = z.object({
 // The client uploads directly to GCS — the API server's memory is never involved.
 // Body (JSON): { fileName: string }
 // Returns: { uploadUrl, objectKey }
-router.post(
+datasetIngestionRouter.post(
   "/datasets/upload/request-gcs-url",
   requireAuth,
   datasetUploadRateLimit,
@@ -3197,7 +3205,7 @@ router.post(
 //
 // GCS fallback results are cached for 30 s to avoid hammering GCS on every poll.
 // Response: { status, datasetId?, error? }
-router.get(
+datasetIngestionRouter.get(
   "/datasets/upload/gcs-job-status",
   requireAuth,
   validateQuery(GcsJobStatusQuerySchema, "GET /api/datasets/upload/gcs-job-status", {
@@ -3288,7 +3296,7 @@ router.get(
 // after a server restart) so the client always gets a meaningful response
 // instead of a bare 404 / eternal spinner.
 // Response: { status, progress, error?, datasetId? }
-router.get(
+datasetIngestionRouter.get(
   "/datasets/upload/jobs/:jobId",
   requireAuth,
   validateParams(JobIdParamSchema, "GET /api/datasets/upload/jobs/:jobId"),
@@ -3368,5 +3376,3 @@ router.get(
     // and can compute elapsed time themselves, but no ETA until re-queued.
   }),
 );
-
-export default router;

@@ -75,11 +75,13 @@ vi.mock("@clerk/shared/keys", () => ({
 // ---------------------------------------------------------------------------
 
 import app from "../app.js";
-import datasetsRouter from "../routes/datasets.js";
+import datasetDiscoveryRouter from "../routes/datasets-discovery.js";
+import datasetTerrainRouter from "../routes/datasets-terrain.js";
+import datasetIngestionRouter from "../routes/datasets-ingestion.js";
 import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
 import { datasetZonesCache, zoneCacheKey } from "../routes/poe.js";
 import { previewBboxForDownload, buildBboxCsvRows } from "../lib/terrain.js";
-import { findDuplicateRoutes, countRoutes } from "./helpers/routeGuard.js";
+import { findDuplicateRoutes, findDuplicateRoutesAcross, countRoutes } from "./helpers/routeGuard.js";
 import { fetchCopernicusDem } from "../lib/copernicusDem.js";
 
 const mockPreview = vi.mocked(previewBboxForDownload);
@@ -102,20 +104,26 @@ beforeEach(() => {
 // 1. Duplicate-route guard
 // ---------------------------------------------------------------------------
 
-describe("datasets router structural guard", () => {
-  it("registers every (method, path) pair at most once", () => {
+describe("dataset capability routers structural guard", () => {
+  it.each([
+    ["discovery", datasetDiscoveryRouter],
+    ["terrain", datasetTerrainRouter],
+    ["ingestion", datasetIngestionRouter],
+  ])("registers every %s (method, path) pair at most once", (_name, router) => {
     expect(
-      countRoutes(datasetsRouter),
-      "datasets router registered no routes — Express internals changed?",
-    ).toBeGreaterThan(10);
+      countRoutes(router),
+      "dataset capability router registered no routes — Express internals changed?",
+    ).toBeGreaterThan(0);
 
-    const duplicates = findDuplicateRoutes(datasetsRouter);
-    expect(
-      duplicates,
-      `Duplicate route registration(s) on the datasets router — this is the signature of a ` +
-        `mis-merge in src/routes/datasets.ts. Duplicated: ${duplicates.join(", ")}. ` +
-        `Delete the extra registration(s); keep exactly one handler per (method, path).`,
-    ).toEqual([]);
+    expect(findDuplicateRoutes(router)).toEqual([]);
+  });
+
+  it("keeps all dataset capability routes disjoint", () => {
+    expect(findDuplicateRoutesAcross([
+      [datasetDiscoveryRouter, ""],
+      [datasetTerrainRouter, ""],
+      [datasetIngestionRouter, ""],
+    ])).toEqual([]);
   });
 });
 

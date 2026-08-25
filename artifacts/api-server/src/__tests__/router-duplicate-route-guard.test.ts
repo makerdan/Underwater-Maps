@@ -60,10 +60,13 @@ import {
   countRoutes,
   countRoutesDeep,
   findDuplicateRoutesAcross,
+  getRouterStack,
 } from "./helpers/routeGuard.js";
 import { API_DOMAINS, API_DOMAIN_KEYS } from "../routes/index.js";
 
 import { uploadIngestionRouter } from "../domains/upload/ingestion.js";
+import datasetDiscoveryRouter from "../routes/datasets-discovery.js";
+import datasetTerrainRouter from "../routes/datasets-terrain.js";
 import healthRouter from "../routes/health.js";
 import poeRouter from "../routes/poe.js";
 import markersRouter from "../routes/markers.js";
@@ -112,6 +115,8 @@ import platformIntegrationsRouter from "../domains/platform/integrations-router.
 /** name = the routes/<name>.ts module the router comes from. */
 const ROUTERS: Array<[name: string, router: unknown]> = [
   ["poe", poeRouter],
+  ["datasets-discovery", datasetDiscoveryRouter],
+  ["datasets-terrain", datasetTerrainRouter],
   ["upload-ingestion", uploadIngestionRouter],
   ["markers", markersRouter],
   ["catches", catchesRouter],
@@ -263,6 +268,60 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
       ),
     );
     expect(findDuplicateRoutesDeep(fieldDataRouter)).toEqual([]);
+  });
+
+  it("dataset capability composition retains the complete route inventory exactly once", async () => {
+    const { datasetDomain } = await import("../domains/datasets/index.js");
+    expect(countRoutes(datasetDiscoveryRouter)).toBe(2);
+    expect(countRoutes(datasetTerrainRouter)).toBe(7);
+    expect(countRoutes(uploadIngestionRouter)).toBe(10);
+    expect(countRoutesDeep(datasetDomain.router)).toBe(
+      countRoutes(datasetDiscoveryRouter) + countRoutes(datasetTerrainRouter),
+    );
+    expect(findDuplicateRoutesDeep(datasetDomain.router)).toEqual([]);
+    expect(findDuplicateRoutesAcross([
+      [datasetDiscoveryRouter, ""],
+      [datasetTerrainRouter, ""],
+      [uploadIngestionRouter, ""],
+    ])).toEqual([]);
+  });
+
+  it("keeps the documented dataset endpoint inventory assigned to one capability", () => {
+    const routePairs = (router: unknown) => (getRouterStack(router) ?? [])
+      .flatMap((layer) => {
+        if (!layer.route) return [];
+        const paths = Array.isArray(layer.route.path) ? layer.route.path : [layer.route.path];
+        return paths.flatMap((routePath) => Object.entries(layer.route!.methods)
+          .filter(([, enabled]) => enabled)
+          .map(([method]) => `${method.toUpperCase()} ${routePath}`));
+      })
+      .sort();
+
+    expect(routePairs(datasetDiscoveryRouter)).toEqual([
+      "DELETE /datasets/presets/:id",
+      "GET /datasets",
+    ]);
+    expect(routePairs(datasetTerrainRouter)).toEqual([
+      "GET /datasets/:id/overview",
+      "GET /datasets/:id/preview",
+      "GET /datasets/:id/terrain",
+      "GET /datasets/:id/zones",
+      "GET /terrain/download",
+      "GET /terrain/download/info",
+      "GET /terrain/land",
+    ]);
+    expect(routePairs(uploadIngestionRouter)).toEqual([
+      "GET /datasets/upload/chunk/status/:uploadId",
+      "GET /datasets/upload/gcs-job-status",
+      "GET /datasets/upload/jobs/:jobId",
+      "POST /datasets/raster-commit",
+      "POST /datasets/raster-extract",
+      "POST /datasets/upload",
+      "POST /datasets/upload/chunk",
+      "POST /datasets/upload/chunk/finalize",
+      "POST /datasets/upload/request-gcs-url",
+      "POST /datasets/upload/start",
+    ]);
   });
 
   it.each(API_DOMAINS)("$name domain is composed", (domain) => {

@@ -2,13 +2,14 @@
  * Dataset upload ingestion boundary.
  *
  * The dataset route file still owns the upload protocol implementation, but
- * this module is the upload domain's composition seam for its dataset routes
- * and lifecycle operations. Keeping the boundary here lets the upload domain
- * expose recovery and cleanup without making bootstrap depend on route files.
+ * this module is the upload domain's composition seam for its focused ingestion
+ * routes and lifecycle operations. Keeping the boundary here lets the upload
+ * domain expose recovery and cleanup without making bootstrap depend on route
+ * files.
  */
-import datasetsRouter from "../../routes/datasets.js";
+import datasetIngestionRouter from "../../routes/datasets-ingestion.js";
 
-export const uploadIngestionRouter = datasetsRouter;
+export const uploadIngestionRouter = datasetIngestionRouter;
 export default uploadIngestionRouter;
 
 export {

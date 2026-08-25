@@ -1,6 +1,6 @@
 ---
 name: Aug-2026 baseline failures — mostly resolved
-description: Status of the 2026-08 documented baseline failures after the 2026-08-17 bug audit; only the puzzle e2e toSatisfy failure and the plan-archive lint gates remain live.
+description: Status of the 2026-08 documented baseline failures after the 2026-08-17 bug audit, including deterministic unrelated UI and schema-gate failures found by backend validation.
 ---
 
 # Aug-2026 baseline failures — audit-verified status (2026-08-17)
@@ -61,3 +61,25 @@ the inactive GPS label is `MY LOCATION` instead of `LIVE GPS`, and the session
 save button remains alongside named-layout save. The file also fails typecheck
 from the same stale expectations. Verified 3/3 in isolation on the current
 tree; unrelated to API-only changes.
+
+## 2026-08-24 — cross-cutting unit and schema baseline
+The full tier has deterministic failures in unrelated BathyScan UI expectations:
+the My Library chevron copy, missing Clerk test-provider coverage, puzzle
+geo-transform precision, responsive sidebar CSSOM output, offline-pack
+freshness, and settings-import key parity. They reproduce together in isolated
+retries and are not caused by API route composition. `check:schema-stale` also
+fails because the newest migration lacks its generated Drizzle snapshot.
+
+**Why:** These failures cross independent UI, test harness, and database
+maintenance surfaces; changing a backend route split to silence them would
+create unrelated scope and risk.
+
+**How to apply:** For an unrelated backend task, rerun the affected files in
+isolation before citing this baseline. If the same signatures persist, record
+them as validation context and keep the task focused; do not treat them as a
+reason to alter API behavior.
+
+The palette E2E settings cross-device reset also fails deterministically in
+isolation because the fixed “Settings synced” indicator intercepts clicks on
+the reset confirmation. Treat that as settings UI/test coverage work, not a
+dataset-route regression.
