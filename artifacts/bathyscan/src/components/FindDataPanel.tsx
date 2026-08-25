@@ -1758,38 +1758,6 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               autoFocus
               data-testid="find-data-search-input"
             />
-            <div style={{ display: "flex", gap: 4, marginTop: 8, flexWrap: "wrap" }}>
-              {["", "bathymetry", "substrate", "habitat", "lidar", "chart", "intertidal"].map((dt) => (
-                <ViewscreenTooltip
-                  key={dt}
-                  label={
-                    dt === "" ? "Show all data types" :
-                    dt === "intertidal" ? "Filter to intertidal / shoreline entries" :
-                    `Filter to ${dt} datasets`
-                  }
-                  side="bottom"
-                >
-                <button
-                  onClick={() => setDataTypeFilter(dt)}
-                  style={{
-                    fontSize: "calc(12px * var(--bs-font-scale, 1))",
-                    padding: "2px 8px",
-                    borderRadius: 3,
-                    border: `1px solid ${dataTypeFilter === dt ? "rgba(0,229,255,0.4)" : "rgba(255,255,255,0.08)"}`,
-                    background: dataTypeFilter === dt ? "rgba(0,229,255,0.1)" : "transparent",
-                    color: dataTypeFilter === dt ? "#00e5ff" : "#94a3b8",
-                    cursor: "pointer",
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {dt === "" ? "All" :
-                   dt === "intertidal" ? `${DATA_TYPE_ICONS.intertidal} Intertidal / Shoreline` :
-                   (DATA_TYPE_ICONS[dt] ?? "") + " " + dt}
-                </button>
-                </ViewscreenTooltip>
-              ))}
-            </div>
             <CatalogResultFilters
               filters={{ ...resultFilters, type: dataTypeFilter === "intertidal" ? "" : dataTypeFilter }}
               onChange={(next) => {

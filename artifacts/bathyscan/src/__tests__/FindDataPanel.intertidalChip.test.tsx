@@ -206,8 +206,12 @@ function renderPanel() {
   return renderWithProviders(<FindDataPanel onClose={onClose} />);
 }
 
-function getChip(label: string | RegExp) {
-  return screen.getByRole("button", { name: label });
+function getTypeFilter() {
+  return screen.getByRole("combobox", { name: "Filter by type" });
+}
+
+function selectType(value: string) {
+  fireEvent.change(getTypeFilter(), { target: { value } });
 }
 
 // ---------------------------------------------------------------------------
@@ -225,8 +229,7 @@ describe("FindDataPanel — Intertidal / Shoreline filter chip", () => {
 
   it("renders the Intertidal / Shoreline chip in the filter bar", () => {
     renderPanel();
-    const chip = getChip(/Intertidal \/ Shoreline/i);
-    expect(chip).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Intertidal \/ shoreline/i })).toBeInTheDocument();
   });
 
   it("clicking the chip narrows results to only INTERTIDAL_CATALOG_IDS entries", () => {
@@ -238,7 +241,7 @@ describe("FindDataPanel — Intertidal / Shoreline filter chip", () => {
     expect(screen.getByText("Alaska Bathymetry 2024")).toBeInTheDocument();
 
     // Click the Intertidal / Shoreline chip.
-    fireEvent.click(getChip(/Intertidal \/ Shoreline/i));
+    selectType("intertidal");
 
     // Only the intertidal entry should remain visible.
     expect(screen.getByText("ADF&G Intertidal Clam Habitat")).toBeInTheDocument();
@@ -249,7 +252,7 @@ describe("FindDataPanel — Intertidal / Shoreline filter chip", () => {
 
   it("the intertidal chip does NOT forward dataType=intertidal to the catalog API", () => {
     renderPanel();
-    fireEvent.click(getChip(/Intertidal \/ Shoreline/i));
+    selectType("intertidal");
     // The component should send undefined (not "intertidal") as the dataType
     // param — "intertidal" is a client-side-only concept.
     expect(catalogSearchParams.dataType).toBeUndefined();
@@ -260,7 +263,7 @@ describe("FindDataPanel — Intertidal / Shoreline filter chip", () => {
 
     // Click the habitat chip — server responds with both habitat entries
     // (including the intertidal one).
-    fireEvent.click(getChip(/🐟 habitat/i));
+    selectType("habitat");
 
     // Both habitat entries should be visible.
     expect(screen.getByText("ADF&G Intertidal Clam Habitat")).toBeInTheDocument();
@@ -275,7 +278,7 @@ describe("FindDataPanel — Intertidal / Shoreline filter chip", () => {
     // only — dataType alone must never be enough to pass the guard.
     renderPanel();
 
-    fireEvent.click(getChip(/Intertidal \/ Shoreline/i));
+    selectType("intertidal");
 
     // The intertidal entry (id in set) should appear.
     expect(screen.getByText("ADF&G Intertidal Clam Habitat")).toBeInTheDocument();
@@ -287,10 +290,10 @@ describe("FindDataPanel — Intertidal / Shoreline filter chip", () => {
   it("clicking Intertidal then All restores the full result list", () => {
     renderPanel();
 
-    fireEvent.click(getChip(/Intertidal \/ Shoreline/i));
+    selectType("intertidal");
     expect(screen.queryByText("Pacific Kelp Habitat")).not.toBeInTheDocument();
 
-    fireEvent.click(getChip(/^All$/i));
+    selectType("");
 
     expect(screen.getByText("ADF&G Intertidal Clam Habitat")).toBeInTheDocument();
     expect(screen.getByText("Pacific Kelp Habitat")).toBeInTheDocument();
@@ -328,7 +331,7 @@ describe.each([...INTERTIDAL_CATALOG_IDS])(
 
     it("chip is active → only this entry is shown", () => {
       renderPanel();
-      fireEvent.click(getChip(/Intertidal \/ Shoreline/i));
+      selectType("intertidal");
 
       // The entry for this specific ID must be visible.
       expect(
@@ -342,7 +345,7 @@ describe.each([...INTERTIDAL_CATALOG_IDS])(
 
     it("chip is active → dataType=intertidal is never sent to the API", () => {
       renderPanel();
-      fireEvent.click(getChip(/Intertidal \/ Shoreline/i));
+      selectType("intertidal");
       expect(catalogSearchParams.dataType).toBeUndefined();
     });
   },
