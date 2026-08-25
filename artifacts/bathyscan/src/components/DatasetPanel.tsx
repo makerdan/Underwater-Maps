@@ -892,6 +892,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false, up
   const [chunkedJobEta, setChunkedJobEta] = useState<number | null>(null);
   const [chunkedError, setChunkedError] = useState<string | null>(null);
   const [lastChunkedFile, setLastChunkedFile] = useState<File | null>(null);
+  const lastHandledUploadRequestRef = useRef(0);
 
   // ─── GCS upload state (oversized files > GCS_THRESHOLD via presigned URL) ──
   // processing_timeout: upload succeeded, background conversion is still running
@@ -2917,9 +2918,17 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false, up
   });
 
   useEffect(() => {
-    if (uploadRequest > 0 && uploadOpen && !isAnyUploadBusy) {
-      openFileChooser();
-    }
+    if (
+      uploadRequest <= 0 ||
+      uploadRequest === lastHandledUploadRequestRef.current ||
+      !uploadOpen ||
+      isAnyUploadBusy
+    ) return;
+    // Consume the request before opening the native picker. The dropzone
+    // callback can be recreated during the resulting render; without this
+    // guard, that dependency change reopens the same picker repeatedly.
+    lastHandledUploadRequestRef.current = uploadRequest;
+    openFileChooser();
   }, [uploadRequest, uploadOpen, isAnyUploadBusy, openFileChooser]);
 
   // ─── Markers ──────────────────────────────────────────────────────────────

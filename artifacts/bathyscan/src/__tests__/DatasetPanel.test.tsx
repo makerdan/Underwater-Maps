@@ -283,7 +283,9 @@ describe("DatasetPanel", () => {
     usePanelCollapseStore.setState({
       collapsed: { ...DEFAULTS, uploadTerrainAccordion: false },
     });
-    render(<DatasetPanel uploadRequest={1} />);
+    const { rerender } = render(<DatasetPanel uploadRequest={1} />);
+    expect(dropzoneCapture.open).toHaveBeenCalledTimes(1);
+    rerender(<DatasetPanel uploadRequest={1} />);
     expect(dropzoneCapture.open).toHaveBeenCalledTimes(1);
   });
 });
