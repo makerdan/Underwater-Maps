@@ -182,9 +182,9 @@ export const SidebarSectionGroup: React.FC<SidebarSectionGroupProps> = ({
     ...SHELL,
     ...(wide
       ? {
-          width: "min(calc(520px + 2in), calc(100vw - 32px))",
-          minWidth: "min(calc(520px + 2in), calc(100vw - 32px))",
-          maxWidth: "min(calc(520px + 2in), calc(100vw - 32px))",
+          width: "min(calc(520px + 2.25in), calc(100vw - 32px))",
+          minWidth: "min(calc(520px + 2.25in), calc(100vw - 32px))",
+          maxWidth: "min(calc(520px + 2.25in), calc(100vw - 32px))",
         }
       : {}),
     // Hide any sub-pixel bleed from inner segments past the rounded corners.
