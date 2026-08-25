@@ -3353,7 +3353,7 @@ export const OverviewMap: React.FC = () => {
       // re-run because their own deps did not change. The unmount cleanup
       // below is the sole place that clears the store.
     };
-  }, [overviewGrid, rebasePuzzleTransformsForViewChange]);
+  }, [appTerrain, overviewGrid, rebasePuzzleTransformsForViewChange]);
 
   // Clear puzzleStore only on component unmount so 3D markers revert to their
   // original positions when the panel is closed, but NOT on intermediate
