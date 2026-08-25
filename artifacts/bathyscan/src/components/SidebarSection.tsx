@@ -101,7 +101,7 @@ export const SidebarSection: React.FC<SidebarSectionProps> = ({
       className="sidebar-section"
       style={shellStyle}
     >
-      <div style={{ display: "flex", alignItems: "stretch", borderBottom: collapsed ? "none" : "1px solid rgba(0,229,255,0.12)" }}>
+      <div style={{ display: "flex", alignItems: "stretch", position: "relative", borderBottom: collapsed ? "none" : "1px solid rgba(0,229,255,0.12)" }}>
         <ViewscreenTooltip
           label={collapsed ? `Expand ${title}` : `Collapse ${title}`}
           side="right"
@@ -128,7 +128,17 @@ export const SidebarSection: React.FC<SidebarSectionProps> = ({
             >
               {collapsed ? "▸" : "▾"}
             </span>
-            <span className="sidebar-section-title" style={HEADER_TITLE}>
+            <span
+              className="sidebar-section-title"
+              style={{
+                ...HEADER_TITLE,
+                position: "absolute",
+                left: "50%",
+                transform: "translateX(-50%)",
+                whiteSpace: "nowrap",
+                pointerEvents: "none",
+              }}
+            >
               {title}
             </span>
           </button>
