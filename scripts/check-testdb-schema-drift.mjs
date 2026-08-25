@@ -26,7 +26,7 @@
  *
  * Exit 1 if any mirrored table has missing or extra columns, mismatched
  * column properties/foreign keys/check constraints, or if any uniqueIndex
- * name is missing from its DDL; 0 otherwise.
+ * name or definition is missing from or differs from its DDL; 0 otherwise.
  *
  * Usage:
  *   node scripts/check-testdb-schema-drift.mjs
@@ -212,6 +212,137 @@ function splitTopLevel(text) {
   }
   if (item.trim()) items.push(item);
   return items;
+}
+
+function matchingParen(text, open) {
+  let depth = 0;
+  let quote = null;
+  for (let i = open; i < text.length; i++) {
+    const ch = text[i];
+    if (quote) {
+      if (ch === "\\") i++;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === "`") quote = ch;
+    else if (ch === "(") depth++;
+    else if (ch === ")" && --depth === 0) return i;
+  }
+  return -1;
+}
+
+function normalizeIndexExpression(value) {
+  return value
+    .replace(/sql\s*`([\s\S]*?)`/g, "$1")
+    .replace(/\$\{\s*(?:\w+\.)?(\w+)\s*\}/g, (_, name) =>
+      name.replace(/[A-Z]/g, (ch) => `_${ch.toLowerCase()}`),
+    )
+    .replace(/\b(?:table|t)\.(\w+)/g, (_, name) =>
+      name.replace(/[A-Z]/g, (ch) => `_${ch.toLowerCase()}`),
+    )
+    .replace(/["'`]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/\(\s+/g, "(")
+    .replace(/\s+\)/g, ")")
+    .trim()
+    .toLowerCase();
+}
+
+function extractChainedCall(text, start, method) {
+  let depth = 0;
+  let quote = null;
+  let chainEnd = text.length;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (quote) {
+      if (ch === "\\") i++;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === "`") quote = ch;
+    else if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    else if (ch === "," && depth === 0) {
+      chainEnd = i;
+      break;
+    }
+  }
+  const match = new RegExp(`\\.${method}\\s*\\(`, "g");
+  match.lastIndex = start;
+  const found = match.exec(text);
+  if (!found || found.index >= chainEnd) return null;
+  const open = text.indexOf("(", found.index);
+  const close = matchingParen(text, open);
+  if (close < 0) return null;
+  return text.slice(open + 1, close);
+}
+
+/**
+ * Extract uniqueIndex definitions from a schema file. The expressions are
+ * canonicalized into the same simple SQL form used by the test DDL parser.
+ */
+export function extractDrizzleUniqueIndexes(content) {
+  const indexes = new Map();
+  for (const match of content.matchAll(/uniqueIndex\s*\(\s*["']([^"']+)["']\s*\)/g)) {
+    const callClose = content.indexOf(")", match.index + match[0].length - 1);
+    const on = extractChainedCall(content, callClose + 1, "on");
+    if (!on) continue;
+    const where = extractChainedCall(content, callClose + 1, "where");
+    indexes.set(match[1].toLowerCase(), {
+      columns: splitTopLevel(on).map(normalizeIndexExpression),
+      where: where == null ? null : normalizeIndexExpression(where),
+    });
+  }
+  return indexes;
+}
+
+function extractDdlIndexCall(slice, indexName) {
+  const escaped = indexName.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const indexMatch = slice.match(new RegExp(
+    `unique\\s+index\\s+(?:if\\s+not\\s+exists\\s+)?(?:concurrently\\s+)?["'\`]?${escaped}["'\`]?\\s+on\\s+\\w+\\s*\\(`,
+  ));
+  if (indexMatch) {
+    const open = slice.indexOf("(", indexMatch.index + indexMatch[0].length - 1);
+    const close = matchingParen(slice, open);
+    if (close >= 0) {
+      const where = slice.slice(close + 1).match(/\bwhere\b([\s\S]*?)(?=;|$)/i)?.[1] ?? null;
+      return {
+        columns: splitTopLevel(slice.slice(open + 1, close)).map(normalizeIndexExpression),
+        where: where == null ? null : normalizeIndexExpression(where),
+      };
+    }
+  }
+
+  const constraintMatch = slice.match(new RegExp(
+    `constraint\\s+["'\`]?${escaped}["'\`]?\\s+unique\\s*\\(`,
+  ));
+  if (constraintMatch) {
+    const open = slice.indexOf("(", constraintMatch.index + constraintMatch[0].length - 1);
+    const close = matchingParen(slice, open);
+    if (close >= 0) {
+      return {
+        columns: splitTopLevel(slice.slice(open + 1, close)).map(normalizeIndexExpression),
+        where: null,
+      };
+    }
+  }
+  return null;
+}
+
+export function compareUniqueIndexDefinitions(expected, actual, table, indexName) {
+  if (!actual) return `${table} uniqueIndex("${indexName}") definition: missing from test-db.ts`;
+  const differences = [];
+  if (JSON.stringify(expected.columns) !== JSON.stringify(actual.columns)) {
+    differences.push(
+      `${table} uniqueIndex("${indexName}") columns: schema=${expected.columns.join(", ")}, test-db.ts=${actual.columns.join(", ")}`,
+    );
+  }
+  if (expected.where !== actual.where) {
+    differences.push(
+      `${table} uniqueIndex("${indexName}") WHERE: schema=${expected.where ?? "none"}, test-db.ts=${actual.where ?? "none"}`,
+    );
+  }
+  return differences.length > 0 ? differences.join("; ") : null;
 }
 
 function normalizeType(type) {
@@ -416,6 +547,8 @@ const schemaFiles = readdirSync(schemaDir)
 
 /** @type {{ file: string; tables: string[]; indexName: string }[]} */
 const violations = [];
+/** @type {{ file: string; table: string; indexName: string; difference: string }[]} */
+const indexDefinitionViolations = [];
 /** @type {{ file: string; table: string; missing: string[]; extra: string[] }[]} */
 const columnViolations = [];
 /** @type {{ file: string; differences: string[] }[]} */
@@ -438,6 +571,7 @@ for (const file of schemaFiles) {
 
   const drizzleColumns = extractDrizzleTableColumns(content);
   const drizzleDefinitions = extractDrizzleTableDefinitions(content);
+  const drizzleIndexes = extractDrizzleUniqueIndexes(content);
 
   // All pgTable("table_name", …) calls in this file, with their positions so
   // each uniqueIndex can be attributed to the nearest preceding table.
@@ -498,14 +632,32 @@ for (const file of schemaFiles) {
     if (mirrored.length === 0) continue; // table not in test-db.ts → out of scope
 
     checkedCount++;
-    const satisfied = mirrored.some((t) =>
+    const matchingTable = mirrored.find((t) =>
       sliceHasUniqueClause(tableSlices.get(t) ?? "", indexName),
     );
-    if (!satisfied) {
+    if (!matchingTable) {
       violations.push({
         file: `lib/db/src/schema/${file}`,
         tables: mirrored,
         indexName,
+      });
+      continue;
+    }
+    const expected = drizzleIndexes.get(indexName.toLowerCase());
+    const difference = expected
+      ? compareUniqueIndexDefinitions(
+        expected,
+        extractDdlIndexCall(tableSlices.get(matchingTable) ?? "", indexName),
+        matchingTable,
+        indexName,
+      )
+      : null;
+    if (difference) {
+      indexDefinitionViolations.push({
+        file: `lib/db/src/schema/${file}`,
+        table: matchingTable,
+        indexName,
+        difference,
       });
     }
   }
@@ -515,7 +667,12 @@ for (const file of schemaFiles) {
 // Report
 // ---------------------------------------------------------------------------
 
-if (columnViolations.length > 0 || propertyViolations.length > 0 || violations.length > 0) {
+if (
+  columnViolations.length > 0 ||
+  propertyViolations.length > 0 ||
+  violations.length > 0 ||
+  indexDefinitionViolations.length > 0
+) {
   console.error(
     "[check:testdb-schema-drift] FAIL — Drizzle schema and test-db.ts DDL differ:\n",
   );
@@ -533,6 +690,10 @@ if (columnViolations.length > 0 || propertyViolations.length > 0 || violations.l
     console.error(`    schema file : ${v.file}`);
     console.error(`    table(s)    : ${v.tables.join(", ")} (present in test-db.ts)`);
     console.error();
+  }
+  for (const v of indexDefinitionViolations) {
+    console.error(`  ${v.difference}`);
+    console.error(`    schema file : ${v.file}\n`);
   }
   console.error(
     "  Fix: make the table columns and properties match, and add a matching CREATE UNIQUE INDEX <name> … or\n" +

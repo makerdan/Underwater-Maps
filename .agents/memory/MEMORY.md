@@ -142,3 +142,4 @@
 - [Puzzle layout density metadata](puzzle-layout-density.md) — pair legacy pixel offsets with optional save-time density so restores stay geographically aligned across viewports.
 - [Geographic continuous longitude frame](geographic-continuous-frame.md) — compare wrapped GPS/map longitudes on the eastward interval beginning at the dataset minLon.
 - [Sidebar responsive CSSOM expectation](sidebar-responsive-cssom.md) — wide sidebar min-width assertion is a deterministic jsdom/CSSOM baseline mismatch, unrelated to Plan tools.
+- [Schema unique-index definition parity](schema-unique-index-definition-parity.md) — compare ordered expressions and bounded, normalized partial predicates, not only index names.

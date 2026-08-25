@@ -26,6 +26,8 @@ import {
   extractDrizzleTableColumns,
   extractDdlTableColumns,
   sliceHasUniqueClause,
+  extractDrizzleUniqueIndexes,
+  compareUniqueIndexDefinitions,
 } from "../check-testdb-schema-drift.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -94,6 +96,20 @@ export const markers = pgTable("markers", {
   id: text("id").primaryKey(),
   label: text("label").notNull(),
 });
+`;
+
+const PARTIAL_SCHEMA = `
+import { pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+export const folders = pgTable("folders", {
+  userId: text("user_id").notNull(),
+  name: text("name").notNull(),
+  parentId: text("parent_id"),
+}, (table) => [
+  uniqueIndex("folders_root_uniq")
+    .on(table.userId, sql\`lower(\${table.name})\`)
+    .where(sql\`\${table.parentId} IS NULL\`),
+]);
 `;
 
 describe("scoped index search", () => {
@@ -338,6 +354,46 @@ describe("column parity", () => {
   });
 });
 
+describe("unique-index definition parity", () => {
+  it("reports indexed-column drift with table and index names", () => {
+    const repo = makeFakeRepo("unique-column-drift");
+    writeSchema(repo, "folders.ts", PARTIAL_SCHEMA);
+    writeTestDb(repo, `
+      CREATE TABLE folders (
+        user_id text NOT NULL,
+        name text NOT NULL,
+        parent_id text
+      );
+      CREATE UNIQUE INDEX folders_root_uniq ON folders (user_id, name)
+        WHERE parent_id IS NULL;
+    `);
+
+    const result = runScript(repo);
+    assert.equal(result.status, 1, `expected exit 1\nstderr: ${result.stderr}`);
+    assert.match(result.stderr, /folders uniqueIndex\("folders_root_uniq"\) columns:/);
+    assert.match(result.stderr, /schema=user_id, lower\(name\), test-db\.ts=user_id, name/);
+  });
+
+  it("reports partial-index predicate drift with table and index names", () => {
+    const repo = makeFakeRepo("unique-where-drift");
+    writeSchema(repo, "folders.ts", PARTIAL_SCHEMA);
+    writeTestDb(repo, `
+      CREATE TABLE folders (
+        user_id text NOT NULL,
+        name text NOT NULL,
+        parent_id text
+      );
+      CREATE UNIQUE INDEX folders_root_uniq ON folders (user_id, lower(name))
+        WHERE parent_id IS NOT NULL;
+    `);
+
+    const result = runScript(repo);
+    assert.equal(result.status, 1, `expected exit 1\nstderr: ${result.stderr}`);
+    assert.match(result.stderr, /folders uniqueIndex\("folders_root_uniq"\) WHERE:/);
+    assert.match(result.stderr, /schema=parent_id is null, test-db\.ts=parent_id is not null/);
+  });
+});
+
 describe("helper units", () => {
   it("stripComments removes SQL line, block, and TS line comments", () => {
     const out = stripComments(
@@ -373,5 +429,35 @@ describe("helper units", () => {
       `CREATE TABLE markers (id text, label text, CONSTRAINT markers_pk PRIMARY KEY (id));`,
     );
     assert.deepEqual([...ddl].sort(), ["id", "label"]);
+  });
+
+  it("extracts unique-index columns and deterministic predicates", () => {
+    const indexes = extractDrizzleUniqueIndexes(`
+      uniqueIndex("folders_root").on(t.userId, sql\`lower(\${t.name})\`)
+        .where(sql\`\${t.parentId} IS NULL\`)
+    `);
+    assert.deepEqual(indexes.get("folders_root"), {
+      columns: ["user_id", "lower(name)"],
+      where: "parent_id is null",
+    });
+  });
+
+  it("reports unique-index column and WHERE definition drift", () => {
+    const expected = {
+      columns: ["user_id", "lower(name)"],
+      where: "parent_id is null",
+    };
+    const actual = {
+      columns: ["user_id", "name"],
+      where: "parent_id is not null",
+    };
+    assert.match(
+      compareUniqueIndexDefinitions(expected, actual, "dataset_folders", "folders_root"),
+      /dataset_folders uniqueIndex\("folders_root"\) columns: schema=user_id, lower\(name\), test-db\.ts=user_id, name/,
+    );
+    assert.match(
+      compareUniqueIndexDefinitions(expected, actual, "dataset_folders", "folders_root"),
+      /WHERE: schema=parent_id is null, test-db\.ts=parent_id is not null/,
+    );
   });
 });
