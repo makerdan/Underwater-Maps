@@ -1610,7 +1610,7 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
   return (
     <div style={{ padding: "8px 8px 0" }}>
       {/* Section header row */}
-      <div style={{ fontSize: "calc(11px * var(--bs-font-scale, 1))", letterSpacing: "0.15em", textTransform: "uppercase", color: "#64748b", marginBottom: 8, marginTop: 2, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+      <div style={{ fontSize: "calc(11px * var(--bs-font-scale, 1))", letterSpacing: "0.15em", textTransform: "uppercase", color: "#64748b", marginBottom: 3, marginTop: 2, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
         <button
           onClick={async () => {
             const name = `New folder ${userFolders.length + 1}`;
