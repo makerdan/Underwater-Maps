@@ -248,6 +248,48 @@ function normalizeIndexExpression(value) {
     .toLowerCase();
 }
 
+/**
+ * PostgreSQL index terms may carry modifiers after the expression. Drizzle
+ * exposes sort/null ordering as chained methods on indexed columns, while the
+ * hand-written DDL uses SQL keywords. Keep the expression representation
+ * stable for existing callers and extract the supported modifiers separately.
+ */
+function extractIndexTermModifiers(value) {
+  const source = value
+    .replace(/sql\s*`([\s\S]*?)`/g, "$1")
+    .replace(/\$\{\s*(?:\w+\.)?(\w+)\s*\}/g, (_, name) =>
+      name.replace(/[A-Z]/g, (ch) => `_${ch.toLowerCase()}`),
+    )
+    .replace(/\b(?:table|t)\.(\w+)/g, (_, name) =>
+      name.replace(/[A-Z]/g, (ch) => `_${ch.toLowerCase()}`),
+    );
+  const chain = {
+    sort: /\.\s*(asc|desc)\s*\(\s*\)/i.exec(source)?.[1]?.toLowerCase() ?? null,
+    nulls: /\.\s*nulls(First|Last)\s*\(\s*\)/i.exec(source)?.[1]?.toLowerCase() ?? null,
+  };
+  const chainCollation = source.match(/\.\s*collate\s*\(\s*["'`]([^"'`]+)["'`]\s*\)/i)?.[1];
+  const sqlCollation = source.match(/\bcollate\s+(?:"([^"]+)"|'([^']+)'|([a-z_][\w.$]*))/i);
+  const ddlSort = source.match(/\b(asc|desc)\b(?:\s+nulls\s+(?:first|last)\b)?\s*$/i)?.[1]?.toLowerCase();
+  const ddlNulls = source.match(/\bnulls\s+(first|last)\b/i)?.[1]?.toLowerCase();
+  return {
+    sort: chain.sort ?? ddlSort ?? null,
+    nulls: chain.nulls ?? ddlNulls ?? null,
+    collation: (chainCollation ?? sqlCollation?.[1] ?? sqlCollation?.[2] ?? sqlCollation?.[3] ?? null)?.toLowerCase() ?? null,
+  };
+}
+
+function normalizeIndexTerm(value) {
+  const modifiers = extractIndexTermModifiers(value);
+  const expression = normalizeIndexExpression(
+    value
+      .replace(/\.\s*(?:asc|desc|nullsFirst|nullsLast)\s*\(\s*\)/gi, "")
+      .replace(/\.\s*collate\s*\(\s*["'`][^"'`]+["'`]\s*\)/gi, "")
+      .replace(/\s+\bcollate\s+(?:"[^"]+"|'[^']+'|[a-z_][\w.$]*)/gi, "")
+      .replace(/\s+\b(?:asc|desc)\b(?:\s+\bnulls\s+(?:first|last)\b)?\s*$/i, ""),
+  );
+  return { expression, modifiers };
+}
+
 function extractChainedCall(text, start, method) {
   let depth = 0;
   let quote = null;
@@ -289,7 +331,8 @@ export function extractDrizzleUniqueIndexes(content) {
     if (!on) continue;
     const where = extractChainedCall(content, callClose + 1, "where");
     indexes.set(match[1].toLowerCase(), {
-      columns: splitTopLevel(on).map(normalizeIndexExpression),
+      columns: splitTopLevel(on).map((term) => normalizeIndexTerm(term).expression),
+      modifiers: splitTopLevel(on).map((term) => normalizeIndexTerm(term).modifiers),
       where: where == null ? null : normalizeIndexExpression(where),
     });
   }
@@ -307,7 +350,8 @@ function extractDdlIndexCall(slice, indexName) {
     if (close >= 0) {
       const where = slice.slice(close + 1).match(/\bwhere\b([\s\S]*?)(?=;|$)/i)?.[1] ?? null;
       return {
-        columns: splitTopLevel(slice.slice(open + 1, close)).map(normalizeIndexExpression),
+        columns: splitTopLevel(slice.slice(open + 1, close)).map((term) => normalizeIndexTerm(term).expression),
+        modifiers: splitTopLevel(slice.slice(open + 1, close)).map((term) => normalizeIndexTerm(term).modifiers),
         where: where == null ? null : normalizeIndexExpression(where),
       };
     }
@@ -321,7 +365,8 @@ function extractDdlIndexCall(slice, indexName) {
     const close = matchingParen(slice, open);
     if (close >= 0) {
       return {
-        columns: splitTopLevel(slice.slice(open + 1, close)).map(normalizeIndexExpression),
+        columns: splitTopLevel(slice.slice(open + 1, close)).map((term) => normalizeIndexTerm(term).expression),
+        modifiers: splitTopLevel(slice.slice(open + 1, close)).map((term) => normalizeIndexTerm(term).modifiers),
         where: null,
       };
     }
@@ -336,6 +381,33 @@ export function compareUniqueIndexDefinitions(expected, actual, table, indexName
     differences.push(
       `${table} uniqueIndex("${indexName}") columns: schema=${expected.columns.join(", ")}, test-db.ts=${actual.columns.join(", ")}`,
     );
+  }
+  const expectedModifiers = expected.modifiers ?? expected.columns.map(() => ({
+    sort: null,
+    nulls: null,
+    collation: null,
+  }));
+  const actualModifiers = actual.modifiers ?? actual.columns.map(() => ({
+    sort: null,
+    nulls: null,
+    collation: null,
+  }));
+  for (let i = 0; i < Math.max(expectedModifiers.length, actualModifiers.length); i++) {
+    const e = expectedModifiers[i] ?? { sort: null, nulls: null, collation: null };
+    const a = actualModifiers[i] ?? { sort: null, nulls: null, collation: null };
+    const expression = expected.columns[i] ?? actual.columns[i] ?? `term ${i + 1}`;
+    for (const [key, label] of [
+      ["sort", "sort direction"],
+      ["nulls", "NULL ordering"],
+      ["collation", "collation"],
+    ]) {
+      if (e[key] !== a[key]) {
+        differences.push(
+          `${table} uniqueIndex("${indexName}") ${label} for ${expression}: ` +
+          `schema=${e[key] ?? "default"}, test-db.ts=${a[key] ?? "default"}`,
+        );
+      }
+    }
   }
   if (expected.where !== actual.where) {
     differences.push(

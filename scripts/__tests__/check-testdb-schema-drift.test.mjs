@@ -392,6 +392,59 @@ describe("unique-index definition parity", () => {
     assert.match(result.stderr, /folders uniqueIndex\("folders_root_uniq"\) WHERE:/);
     assert.match(result.stderr, /schema=parent_id is null, test-db\.ts=parent_id is not null/);
   });
+
+  it("reports sort, NULL ordering, and collation drift with table and index names", () => {
+    const repo = makeFakeRepo("unique-modifier-drift");
+    writeSchema(
+      repo,
+      "folders.ts",
+      `
+      import { pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
+      export const folders = pgTable("folders", {
+        name: text("name").notNull(),
+      }, (table) => [
+        uniqueIndex("folders_name_uniq").on(
+          table.name.desc().nullsLast(),
+          sql\`\${table.name} COLLATE "C"\`,
+        ),
+      ]);
+      `,
+    );
+    writeTestDb(repo, `
+      CREATE TABLE folders (name text NOT NULL);
+      CREATE UNIQUE INDEX folders_name_uniq ON folders
+        (name ASC NULLS FIRST, name COLLATE "POSIX");
+    `);
+
+    const result = runScript(repo);
+    assert.equal(result.status, 1, `expected exit 1\nstderr: ${result.stderr}`);
+    assert.match(result.stderr, /folders uniqueIndex\("folders_name_uniq"\) sort direction for name: schema=desc, test-db\.ts=asc/);
+    assert.match(result.stderr, /folders uniqueIndex\("folders_name_uniq"\) NULL ordering for name: schema=last, test-db\.ts=first/);
+    assert.match(result.stderr, /folders uniqueIndex\("folders_name_uniq"\) collation for name: schema=c, test-db\.ts=posix/);
+  });
+
+  it("accepts matching sort, NULL ordering, and collation modifiers", () => {
+    const repo = makeFakeRepo("unique-modifier-match");
+    writeSchema(
+      repo,
+      "folders.ts",
+      `
+      import { pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
+      export const folders = pgTable("folders", {
+        name: text("name").notNull(),
+      }, (table) => [
+        uniqueIndex("folders_name_uniq").on(table.name.desc().nullsLast()),
+      ]);
+      `,
+    );
+    writeTestDb(repo, `
+      CREATE TABLE folders (name text NOT NULL);
+      CREATE UNIQUE INDEX folders_name_uniq ON folders (name DESC NULLS LAST);
+    `);
+
+    const result = runScript(repo);
+    assert.equal(result.status, 0, `expected exit 0\nstderr: ${result.stderr}`);
+  });
 });
 
 describe("helper units", () => {
@@ -438,6 +491,10 @@ describe("helper units", () => {
     `);
     assert.deepEqual(indexes.get("folders_root"), {
       columns: ["user_id", "lower(name)"],
+      modifiers: [
+        { sort: null, nulls: null, collation: null },
+        { sort: null, nulls: null, collation: null },
+      ],
       where: "parent_id is null",
     });
   });
