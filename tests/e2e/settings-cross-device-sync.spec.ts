@@ -67,8 +67,7 @@ test.describe("Settings cross-device sync", () => {
     const startingValue = await colormapTrigger.getAttribute("data-value");
     if (startingValue === "viridis") {
       await selectColormap("ocean");
-      // Wait for the auto-sync debounce (300 ms) + PUT round-trip.
-      await page.waitForTimeout(1500);
+      await page.evaluate(() => window.__bathyTest!.waitForServerSettingsSync());
     }
 
     await selectColormap("viridis");
@@ -122,7 +121,6 @@ test.describe("Settings cross-device sync", () => {
     //    user's server-side row for subsequent test runs.
     await page.locator("[data-testid='reset-all-btn']").click();
     await page.locator("[data-testid='confirm-reset-all-btn']").click();
-    // Wait for debounced auto-sync (300 ms) + PUT round-trip.
-    await page.waitForTimeout(1500);
+    await page.evaluate(() => window.__bathyTest!.waitForServerSettingsSync());
   });
 });

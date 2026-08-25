@@ -30,6 +30,7 @@ vi.mock("@/hooks/useServerSettingsSync", () => ({
 }));
 
 import { SettingsSyncIndicator } from "@/components/SettingsSyncIndicator";
+import { GlobalResetFooter } from "@/pages/settings/components/GlobalResetFooter";
 
 beforeEach(() => {
   authState.isSignedIn = true;
@@ -41,10 +42,12 @@ beforeEach(() => {
 describe("SettingsSyncIndicator", () => {
   it("distinguishes acknowledged settings from locally pending settings", () => {
     render(<SettingsSyncIndicator />);
-    expect(screen.getByTestId("global-settings-sync-status")).toHaveAttribute(
+    const status = screen.getByTestId("global-settings-sync-status");
+    expect(status).toHaveAttribute(
       "data-sync-state",
       "acknowledged",
     );
+    expect(status).toHaveClass("pointer-events-none");
 
     unackedState.value = true;
     act(() => syncControl.setStatus({ syncing: true, lastSyncFailed: false }));
@@ -53,6 +56,24 @@ describe("SettingsSyncIndicator", () => {
       "pending",
     );
     expect(screen.getByText("Settings pending sync")).toBeInTheDocument();
+  });
+
+  it("does not block global reset confirmation while settings are acknowledged", () => {
+    render(
+      <>
+        <SettingsSyncIndicator />
+        <GlobalResetFooter />
+      </>,
+    );
+
+    expect(screen.getByTestId("global-settings-sync-status")).toHaveAttribute(
+      "data-sync-state",
+      "acknowledged",
+    );
+    fireEvent.click(screen.getByTestId("reset-all-btn"));
+    expect(screen.getByRole("group", { name: "Confirm reset" })).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("confirm-reset-all-btn"));
+    expect(screen.getByTestId("reset-flash")).toBeInTheDocument();
   });
 
   it("keeps failed state actionable and retries through the canonical flush", () => {

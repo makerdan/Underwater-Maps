@@ -33,7 +33,7 @@ export function SettingsSyncIndicator() {
         data-sync-state="acknowledged"
         role="status"
         aria-live="polite"
-        className="fixed bottom-3 left-1/2 z-[210] -translate-x-1/2 rounded border border-slate-700/70 bg-slate-950/90 px-3 py-1.5 font-mono text-[12px] tracking-wide text-slate-400 shadow-lg backdrop-blur-sm"
+        className="pointer-events-none fixed bottom-3 left-1/2 z-[210] -translate-x-1/2 rounded border border-slate-700/70 bg-slate-950/90 px-3 py-1.5 font-mono text-[12px] tracking-wide text-slate-400 shadow-lg backdrop-blur-sm"
       >
         Settings synced
       </div>

@@ -126,8 +126,7 @@ test.describe("Depth palette cross-device sync", () => {
     // ── Cleanup: restore palette defaults so we don't pollute the shared
     //    dev user's server-side row for subsequent test runs.
     await page.locator('[data-testid="palette-reset-btn"]').click();
-    // Wait for the debounced auto-sync (300 ms) + PUT round-trip.
-    await page.waitForTimeout(1500);
+    await page.evaluate(() => window.__bathyTest!.waitForServerSettingsSync());
   });
 
   test("Custom-theme band colour reaches PUT /api/settings payload and rehydrates on a fresh device", async ({
