@@ -23,6 +23,7 @@ import { useTerrainStore } from "@/lib/terrainStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useLiveModeStore } from "@/lib/liveMode";
+import { useTrailStore } from "@/lib/trailStore";
 import { TrailRecorder } from "@/components/TrailRecorder";
 import {
   lonLatToWorldXZ,
@@ -32,6 +33,13 @@ import {
 import { formatDepth } from "@/lib/units";
 
 const MONO = "'JetBrains Mono', 'Fira Code', monospace";
+
+const LIVE_INTERVALS = [
+  { label: "5 s", ms: 5_000 },
+  { label: "10 s", ms: 10_000 },
+  { label: "30 s", ms: 30_000 },
+  { label: "60 s", ms: 60_000 },
+];
 
 const cardStyle: React.CSSProperties = {
   minWidth: 230,
@@ -72,6 +80,11 @@ export const LivePanel: React.FC = () => {
   const followPausedByInteraction = gpsFollowState === "paused";
   const setGpsFollowMode = useCameraStore((s) => s.setGpsFollowMode);
   const followResumeDelaySec = useSettingsStore((s) => s.followResumeDelaySec);
+  const recording = useTrailStore((s) => s.recording);
+  const pointCount = useTrailStore((s) => s.currentPoints.length);
+  const setSamplingInterval = useTrailStore((s) => s.setSamplingInterval);
+  const gpsRecordingInterval = useSettingsStore((s) => s.gpsRecordingInterval);
+  const setGpsRecordingInterval = useSettingsStore((s) => s.setGpsRecordingInterval);
 
   const overviewGrid = useTerrainStore((s) => s.overviewGrid);
   const units = useSettingsStore((s) => s.units);
@@ -111,6 +124,11 @@ export const LivePanel: React.FC = () => {
     (statusText === "ERROR" || statusText === "OFF") &&
     gpsRetryAttempt === 0 &&
     !gpsRecoveryFailed;
+
+  const handleSetInterval = (ms: number) => {
+    setGpsRecordingInterval(ms);
+    setSamplingInterval(ms);
+  };
 
   const handleDiveToGps = () => {
     if (!gpsPosition || !overviewGrid) return;
@@ -321,6 +339,68 @@ export const LivePanel: React.FC = () => {
       {/* ── Trail recorder — full UI (name, colour, interval, start/stop,
              draft recovery, overflow/offline notices) ── */}
       <div data-testid="live-trail-section">
+        <div
+          data-testid="live-trail-indicator"
+          style={{
+            ...cardStyle,
+            minWidth: 0,
+            maxWidth: "none",
+            boxSizing: "border-box",
+            gap: 8,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <span style={labelStyle}>GPS Trail</span>
+            <strong
+              data-testid="live-trail-status-text"
+              style={{
+                color: recording ? "#ef4444" : "#94a3b8",
+                fontSize: "calc(13px * var(--bs-font-scale, 1))",
+                letterSpacing: "0.12em",
+              }}
+            >
+              {recording ? "RECORDING" : "PAUSED"}
+            </strong>
+          </div>
+          <div
+            data-testid="live-trail-point-count"
+            style={{ color: "#e2e8f0", fontSize: "calc(13px * var(--bs-font-scale, 1))" }}
+          >
+            {pointCount} pts
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+            <span style={{ color: "#94a3b8", fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.1em" }}>
+              INTERVAL
+            </span>
+            <div
+              data-testid="live-interval-control"
+              style={{ display: "flex", gap: 3, marginLeft: 4 }}
+            >
+              {LIVE_INTERVALS.map((interval) => (
+                <button
+                  key={interval.ms}
+                  type="button"
+                  data-testid={`live-interval-${interval.ms}`}
+                  aria-pressed={gpsRecordingInterval === interval.ms}
+                  onClick={() => handleSetInterval(interval.ms)}
+                  style={{
+                    background: gpsRecordingInterval === interval.ms ? "rgba(0,229,255,0.15)" : "none",
+                    border: `1px solid ${gpsRecordingInterval === interval.ms ? "rgba(0,229,255,0.5)" : "rgba(0,229,255,0.1)"}`,
+                    borderRadius: 3,
+                    color: gpsRecordingInterval === interval.ms ? "#00e5ff" : "#94a3b8",
+                    fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                    padding: "6px 8px",
+                    minHeight: 32,
+                    cursor: "pointer",
+                    fontFamily: MONO,
+                  }}
+                >
+                  {interval.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
         <TrailRecorder inLivePanel />
       </div>
 

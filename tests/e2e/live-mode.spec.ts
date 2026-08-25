@@ -55,6 +55,9 @@ const BASE = {
   llmDisclosureAcknowledged: true,
   // Fast sampling so trail points accrue within test timeouts.
   gpsRecordingInterval: 1000,
+  // Live mode starts/resumes the trail only when the user has enabled
+  // auto-start recording.
+  autoStartTrailRecording: true,
 };
 
 async function waitForSidebarTabs(page: Parameters<typeof test.beforeEach>[0]["page"]) {

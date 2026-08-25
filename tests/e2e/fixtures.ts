@@ -74,6 +74,9 @@ export const DEFAULT_SETTINGS = {
   showCompassMinimap: true,
   hasSeenOnboarding: true,
   hasSeenToolbarRelocationHint: true,
+  // Live-mode acceptance tests expect entering Live to start/resume the
+  // recorder; individual tests can still override this setting explicitly.
+  autoStartTrailRecording: true,
   // sidebarMode persists server-side per user; a spec that switches to Plan
   // (or Live) would otherwise leak that mode into the next spec, hiding the
   // Explore tab's DatasetPanel and breaking remove-dataset flows.
