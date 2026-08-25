@@ -319,6 +319,8 @@ function Main() {
   const setPanelCollapsed = usePanelCollapseStore((s) => s.setCollapsed);
   const setShowDatasetPanel = useSettingsStore((s) => s.setShowDatasetPanel);
   const [uploadRequest, setUploadRequest] = useState(0);
+  const [uploadFormatsHovered, setUploadFormatsHovered] = useState(false);
+  const [uploadFormatsPinned, setUploadFormatsPinned] = useState(false);
   // MOBILE-ONLY gate flag: true on phones (≤767px). Computed SYNCHRONOUSLY on
   // the first render (useIsMobileImmediate, not useIsMobile) so the 3D
   // TourScene — and therefore any WebGL context — is never mounted on mobile,
@@ -1566,34 +1568,78 @@ function Main() {
                           Upload Dataset(s)
                         </button>
                       </ViewscreenTooltip>
-                      <ViewscreenTooltip
-                        label="Accepted formats: .csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .xml, .nmea, .gz, .pdf"
-                        side="right"
+                      <div
+                        style={{ position: "relative", display: "inline-flex" }}
+                        onMouseEnter={() => setUploadFormatsHovered(true)}
+                        onMouseLeave={() => setUploadFormatsHovered(false)}
                       >
-                        <button
-                          type="button"
-                          aria-label="Show accepted upload formats"
-                          data-testid="btn-upload-format-info"
-                          style={{
-                            width: 20,
-                            height: 20,
-                            padding: 0,
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            color: "#7dd3fc",
-                            background: "rgba(0,229,255,0.08)",
-                            border: "1px solid rgba(0,229,255,0.3)",
-                            borderRadius: "50%",
-                            cursor: "help",
-                            fontFamily: "inherit",
-                            fontSize: "calc(12px * var(--bs-font-scale, 1))",
-                            fontWeight: 700,
-                          }}
+                        <ViewscreenTooltip
+                          label="Accepted formats: .csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .xml, .nmea, .gz, .pdf"
+                          side="right"
                         >
-                          i
-                        </button>
-                      </ViewscreenTooltip>
+                          <button
+                            type="button"
+                            aria-label="Show accepted upload formats"
+                            aria-expanded={uploadFormatsPinned || uploadFormatsHovered}
+                            data-testid="btn-upload-format-info"
+                            title="Show accepted upload formats"
+                            onFocus={() => setUploadFormatsHovered(true)}
+                            onBlur={() => setUploadFormatsHovered(false)}
+                            onClick={() => setUploadFormatsPinned((pinned) => !pinned)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Escape") {
+                                setUploadFormatsPinned(false);
+                                event.currentTarget.blur();
+                              }
+                            }}
+                            style={{
+                              width: 20,
+                              height: 20,
+                              padding: 0,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "#7dd3fc",
+                              background: "rgba(0,229,255,0.08)",
+                              border: "1px solid rgba(0,229,255,0.3)",
+                              borderRadius: "50%",
+                              cursor: "help",
+                              fontFamily: "inherit",
+                              fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                              fontWeight: 700,
+                            }}
+                          >
+                            i
+                          </button>
+                        </ViewscreenTooltip>
+                        {(uploadFormatsPinned || uploadFormatsHovered) && (
+                          <div
+                            role="tooltip"
+                            data-testid="upload-format-tooltip"
+                            style={{
+                              position: "absolute",
+                              top: "calc(100% + 8px)",
+                              right: 0,
+                              width: 286,
+                              padding: "9px 10px",
+                              color: "#e2e8f0",
+                              background: "rgba(0,8,18,0.98)",
+                              border: "1px solid rgba(0,229,255,0.35)",
+                              borderRadius: 4,
+                              boxShadow: "0 8px 22px rgba(0,0,0,0.38)",
+                              fontFamily: "inherit",
+                              fontSize: "calc(11px * var(--bs-font-scale, 1))",
+                              lineHeight: 1.5,
+                              letterSpacing: "0.02em",
+                              textAlign: "left",
+                              zIndex: 20,
+                              pointerEvents: "none",
+                            }}
+                          >
+                            Accepted formats: .csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .xml, .nmea, .gz, .pdf
+                          </div>
+                        )}
+                      </div>
                     </div>
                   }
                 >
