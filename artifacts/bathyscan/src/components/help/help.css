@@ -251,20 +251,26 @@
   color: #cbd5e1;
 }
 .hm-h1 {
-  font-size: 33px;
-  color: #e2e8f0;
+  font-family: var(--bs-heading-font);
+  font-size: var(--bs-heading-1-size);
+  font-weight: 700;
+  color: var(--bs-heading-1-color);
   margin: 0 0 14px;
   letter-spacing: 0.04em;
 }
 .hm-h2 {
-  font-size: 24px;
-  color: #00e5ff;
+  font-family: var(--bs-heading-font);
+  font-size: var(--bs-heading-2-size);
+  font-weight: 700;
+  color: var(--bs-heading-2-color);
   margin: 22px 0 10px;
   letter-spacing: 0.06em;
 }
 .hm-h3 {
-  font-size: 19.5px;
-  color: #93c5fd;
+  font-family: var(--bs-heading-font);
+  font-size: var(--bs-heading-3-size);
+  font-weight: 700;
+  color: var(--bs-heading-3-color);
   margin: 16px 0 6px;
   letter-spacing: 0.08em;
   text-transform: uppercase;

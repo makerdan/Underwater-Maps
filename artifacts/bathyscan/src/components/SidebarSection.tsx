@@ -31,11 +31,11 @@ const SHELL: React.CSSProperties = {
 };
 
 export const SIDEBAR_HEADING: React.CSSProperties = {
-  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-  fontSize: "calc(15px * var(--bs-font-scale, 1))",
+  fontFamily: "var(--bs-heading-font)",
+  fontSize: "var(--bs-heading-3-size)",
   fontWeight: 700,
-  letterSpacing: "0.12em",
-  color: "#cbd5e1",
+  letterSpacing: "0.08em",
+  color: "var(--bs-heading-3-color)",
   textTransform: "uppercase",
 };
 

@@ -51,6 +51,13 @@
 
 :root, .dark {
   --bs-font-scale: 1;
+  --bs-heading-font: "Space Mono", monospace;
+  --bs-heading-1-size: calc(33px * var(--bs-font-scale, 1));
+  --bs-heading-2-size: calc(24px * var(--bs-font-scale, 1));
+  --bs-heading-3-size: calc(19.5px * var(--bs-font-scale, 1));
+  --bs-heading-1-color: #e2e8f0;
+  --bs-heading-2-color: #00e5ff;
+  --bs-heading-3-color: #93c5fd;
   --background: 221 60% 4%;
   --foreground: 210 30% 88%;
   --border: 221 30% 18%;
@@ -84,6 +91,25 @@
        default) by the user's chosen --bs-font-scale. At the default
        "medium" level the scale is 1 so this is a no-op. */
     font-size: calc(1rem * var(--bs-font-scale, 1));
+  }
+
+  /* Shared heading contract: every heading level keeps one typeface,
+     scale, weight, and semantic color across panels, dialogs, and help. */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--bs-heading-font);
+    font-weight: 700;
+  }
+  h1 {
+    font-size: var(--bs-heading-1-size);
+    color: var(--bs-heading-1-color);
+  }
+  h2 {
+    font-size: var(--bs-heading-2-size);
+    color: var(--bs-heading-2-color);
+  }
+  h3, h4, h5, h6 {
+    font-size: var(--bs-heading-3-size);
+    color: var(--bs-heading-3-color);
   }
 }
 
@@ -328,6 +354,13 @@ body.bs-daylight .bs-settings-page [data-nav-active="true"] {
 }
 .sidebar-section-item {
   padding: 8px 12px;
+}
+.sidebar-section-title {
+  font-family: var(--bs-heading-font) !important;
+  font-size: var(--bs-heading-3-size) !important;
+  font-weight: 700 !important;
+  color: var(--bs-heading-3-color) !important;
+  letter-spacing: 0.08em !important;
 }
 
 /* ---------------------------------------------------------------------------
