@@ -45,6 +45,7 @@ import { useLandTerrainStore } from "@/lib/landTerrainStore";
 import { useLandTerrain } from "@/hooks/useLandTerrain";
 import { useSatelliteTileStore } from "@/lib/satelliteTileStore";
 import { useSatelliteTile } from "@/hooks/useSatelliteTile";
+import { unionGeoBounds } from "@workspace/shared-types";
 import { TerrainContourLines } from "@/components/TerrainContourLines";
 import { TerrainNodataBoundary } from "@/components/TerrainNodataBoundary";
 import { useTemperatureProfile } from "@/hooks/useTemperatureProfile";
@@ -125,19 +126,18 @@ const MAX_LAND_HEIGHT_WORLD = MAX_DEPTH_WORLD * 0.4; // e.g. 20 world units
 // Exported for unit testing only (GPU-leak regression tests).
 export const LandTerrainMesh: React.FC = () => {
   const { terrain } = useAppState();
+  const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
   const landGrid = useLandTerrainStore((s) => s.landGrid);
   const tileUrl = useSatelliteTileStore((s) => s.tileUrl);
   const satelliteImagery = useSettingsStore((s) => s.satelliteImagery);
 
   const bbox = useMemo(() => {
     if (!terrain) return null;
-    return {
-      minLon: terrain.minLon,
-      maxLon: terrain.maxLon,
-      minLat: terrain.minLat,
-      maxLat: terrain.maxLat,
-    };
-  }, [terrain]);
+    return unionGeoBounds([
+      terrain,
+      ...visibleDatasets.map((entry) => entry.overviewGrid ?? entry.activeGrid),
+    ]);
+  }, [terrain, visibleDatasets]);
 
   useLandTerrain(bbox);
   useSatelliteTile(bbox);

@@ -106,6 +106,19 @@ export interface GeoCanvasPoint {
 
 const GEO_FULL_CIRCLE = 360;
 
+/** True when bounds can safely define a geographic projection frame. */
+export function isValidGeoBounds(
+  bounds: Pick<GeoBounds, "minLon" | "maxLon" | "minLat" | "maxLat"> | null | undefined,
+): bounds is GeoBounds {
+  if (!bounds) return false;
+  const values = [bounds.minLon, bounds.maxLon, bounds.minLat, bounds.maxLat];
+  return values.every(Number.isFinite) &&
+    bounds.minLat >= -90 &&
+    bounds.maxLat <= 90 &&
+    bounds.minLat <= bounds.maxLat &&
+    Math.abs(bounds.maxLon - bounds.minLon) <= GEO_FULL_CIRCLE;
+}
+
 /** Normalize a longitude into the half-open interval [-180, 180). */
 export function normalizeLongitude(lon: number): number {
   const wrapped = ((lon + 180) % GEO_FULL_CIRCLE + GEO_FULL_CIRCLE) % GEO_FULL_CIRCLE - 180;
@@ -165,7 +178,7 @@ function mergeCircularIntervals(
 export function unionGeoBounds(
   bounds: readonly (GeoBounds | null | undefined)[],
 ): GeoBounds | null {
-  const valid = bounds.filter((item): item is GeoBounds => Boolean(item));
+  const valid = bounds.filter(isValidGeoBounds);
   if (valid.length === 0) return null;
   const merged = mergeCircularIntervals(valid);
   const latMin = Math.min(...valid.map((item) => item.minLat));

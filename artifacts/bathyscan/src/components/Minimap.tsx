@@ -20,6 +20,7 @@ import {
   unionGeoBounds,
   unwrapLongitude,
   longitudeSpan,
+  isValidGeoBounds,
 } from "@workspace/shared-types";
 
 const W = 180;
@@ -566,7 +567,10 @@ export const Minimap: React.FC = () => {
     // Compute the union bbox from all visible datasets with loaded overview
     // grids, falling back to the primary terrain's bbox when no grid is ready.
     const unionBbox = computeMinimapUnionBbox(visibleDatasets, currentTerrain);
-    if (!unionBbox) return;
+    if (!unionBbox || !isValidGeoBounds(unionBbox)) {
+      unionBboxRef.current = null;
+      return;
+    }
     // Store for use in click/hover handlers (which are closures over the ref).
     unionBboxRef.current = unionBbox;
 
@@ -819,8 +823,10 @@ export const Minimap: React.FC = () => {
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!terrain) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const px = e.clientX - rect.left;
-    const py = e.clientY - rect.top;
+    const scaleX = W / rect.width;
+    const scaleY = H / rect.height;
+    const px = (e.clientX - rect.left) * scaleX;
+    const py = (e.clientY - rect.top) * scaleY;
 
     // Two-step conversion: canvas px/py → lon/lat via union bbox, then
     // lon/lat → world coords via the primary terrain bbox so teleport targets

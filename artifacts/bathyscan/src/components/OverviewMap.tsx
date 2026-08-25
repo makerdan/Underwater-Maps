@@ -52,6 +52,8 @@ import {
   normalizeLongitude,
   unionGeoBounds,
   unwrapLongitude,
+  geoBoundsCenter,
+  isValidGeoBounds,
 } from "@workspace/shared-types";
 import {
   puzzleLayoutToGeoCorrections,
@@ -756,8 +758,7 @@ export const OverviewMap: React.FC = () => {
         const entry = visibleDatasetsRef.current.find((v) => v.datasetId === datasetId);
         const bbox = entry?.overviewGrid ?? overviewGrid;
         if (!bbox) continue;
-        const centerLon = (bbox.minLon + bbox.maxLon) / 2;
-        const centerLat = (bbox.minLat + bbox.maxLat) / 2;
+        const { lon: centerLon, lat: centerLat } = geoBoundsCenter(bbox);
         const [tcx, tcy] = lonLatToCanvas(centerLon, centerLat, worldGrid, transform);
         // Canonical center and puzzle-offset center, both converted to lon/lat.
         const canonPt = canvasToLonLat(tcx, tcy, worldGrid, transform);
@@ -2199,7 +2200,7 @@ export const OverviewMap: React.FC = () => {
   // Rebuild no-data boundary segments for the primary dataset whenever its grid changes.
   // Secondary dataset segments are kept in sync inside the secondary-bitmaps effect below.
   useEffect(() => {
-    if (!overviewGrid) {
+    if (!overviewGrid || !isValidGeoBounds(overviewGrid)) {
       dirtyRef.current = true;
       return;
     }
@@ -2249,7 +2250,8 @@ export const OverviewMap: React.FC = () => {
   const paletteCustomStops = usePaletteStore((s) => s.customStops);
   const paletteBandBoundaries = usePaletteStore((s) => s.bandBoundaries);
   useEffect(() => {
-    if (!overviewGrid) {
+    const primaryGrid = overviewGrid ?? appTerrain;
+    if (!primaryGrid || !isValidGeoBounds(primaryGrid)) {
       // Clear the stale bitmap so a brief loading window after unload cannot
       // show a ghost of the previous dataset behind the "LOADING…" indicator.
       bitmapRef.current = null;
@@ -2257,10 +2259,10 @@ export const OverviewMap: React.FC = () => {
       dirtyRef.current = true;
       return;
     }
-    bitmapRef.current = buildHeatmapBitmap(overviewGrid, colormapTheme, overviewGrid.topography);
+    bitmapRef.current = buildHeatmapBitmap(primaryGrid, colormapTheme, primaryGrid.topography);
     invalidateUpscaleRef.current();
     dirtyRef.current = true;
-  }, [overviewGrid, colormapTheme, paletteShallow, paletteDeep, paletteBandColors, paletteCustomStops, paletteBandBoundaries]);
+  }, [appTerrain, overviewGrid, colormapTheme, paletteShallow, paletteDeep, paletteBandColors, paletteCustomStops, paletteBandBoundaries]);
 
   // Maintain secondary dataset bitmaps and the combined world-space bbox grid.
   // Runs whenever visibleDatasets changes OR palette/colormap changes so all
@@ -2440,9 +2442,10 @@ export const OverviewMap: React.FC = () => {
 
     const loop = () => {
       const ctx = canvas.getContext("2d");
-      // `grid` is the primary dataset's overview grid — used for per-dataset data
-      // (depth range for colormap legend, upscale request bbox, satellite tile).
-      const grid = overviewGrid;
+      // Use the primary bathymetry grid as a geographic fallback while its
+      // lower-resolution overview request is pending. Ready secondary overview
+      // tiles can then render in the same canonical frame.
+      const grid = overviewGrid ?? appTerrain;
       const bitmap = bitmapRef.current;
       let t = transformRef.current;
 
@@ -2492,7 +2495,16 @@ export const OverviewMap: React.FC = () => {
       // Clear the empty-state link rect once datasets are present.
       emptyStateLinkRectRef.current = null;
 
-      if (!grid || !bitmap || !t) {
+      const worldFrame = worldGridRef.current;
+      const hasReadySecondary = visibleNow.some((entry) => !!entry.overviewGrid);
+      if (
+        !grid ||
+        !isValidGeoBounds(grid) ||
+        !worldFrame ||
+        !isValidGeoBounds(worldFrame) ||
+        ((!bitmap || !isValidGeoBounds(grid)) && !hasReadySecondary) ||
+        !t
+      ) {
         // Case 2: Datasets are selected but their grids are still fetching.
         // Track how long we've been waiting; after 15 s assume the fetch failed
         // and show an error message instead of spinning forever.
@@ -2573,6 +2585,7 @@ export const OverviewMap: React.FC = () => {
       // All lon/lat → canvas projections use this so every dataset sits in a shared
       // coordinate frame.  Falls back to the primary grid when only one is loaded.
       const worldGrid = worldGridRef.current ?? grid;
+      const primaryBitmap = bitmap;
 
       // Skip the draw when nothing has changed. GPS pulsing and trail recording
       // require continuous animation; everything else can wait for a dirty mark.
@@ -2616,8 +2629,7 @@ export const OverviewMap: React.FC = () => {
           const dsEntry = visibleDatasetsRef.current.find((v) => v.datasetId === dsId);
           const dsBbox = dsEntry?.overviewGrid ?? grid;
           if (!dsBbox) continue;
-          const cLon = (dsBbox.minLon + dsBbox.maxLon) / 2;
-          const cLat = (dsBbox.minLat + dsBbox.maxLat) / 2;
+          const { lon: cLon, lat: cLat } = geoBoundsCenter(dsBbox);
           const [tcx, tcy] = lonLatToCanvas(cLon, cLat, worldGrid, t);
           const canonPt = canvasToLonLat(tcx, tcy, worldGrid, t);
           const offsetPt = canvasToLonLat(tcx + tx, tcy + ty, worldGrid, t);
@@ -2843,6 +2855,7 @@ export const OverviewMap: React.FC = () => {
         const sorted = sortByRecency(visibleNow);
         for (const v of sorted) {
           if (v.datasetId === primIdNow) {
+            if (!primaryBitmap) continue;
             // Primary heatmap — Topaz-upscaled when available, otherwise raw bitmap.
             const upscaled = upscaledBitmapRef.current;
             drawPuzzleTile(
@@ -2854,7 +2867,7 @@ export const OverviewMap: React.FC = () => {
                   ctx.drawImage(upscaled, px0, py0, px1 - px0, py1 - py0);
                   ctx.imageSmoothingEnabled = true;
                 } else {
-                  renderHeatmapAtBbox(ctx, bitmap, grid, worldGrid, t);
+                  renderHeatmapAtBbox(ctx, primaryBitmap, grid, worldGrid, t);
                 }
               },
               v.datasetId,
@@ -2872,6 +2885,10 @@ export const OverviewMap: React.FC = () => {
           }
         }
       } else {
+        if (!primaryBitmap) {
+          rafRef.current = requestAnimationFrame(loop);
+          return;
+        }
         // Primary heatmap — Topaz-upscaled when available, otherwise raw bitmap.
         const upscaled = upscaledBitmapRef.current;
         drawPuzzleTile(
@@ -2888,9 +2905,9 @@ export const OverviewMap: React.FC = () => {
               // (offsetX/offsetY) coordinates which equal lonLatToCanvas on the
               // primary grid.  For multi-dataset mode we position via bbox.
               if (worldGridRef.current) {
-                renderHeatmapAtBbox(ctx, bitmap, grid, worldGrid, t);
+                renderHeatmapAtBbox(ctx, primaryBitmap, grid, worldGrid, t);
               } else {
-                renderHeatmap(ctx, bitmap, grid, t);
+                renderHeatmap(ctx, primaryBitmap, grid, t);
               }
             }
           },
@@ -3316,7 +3333,9 @@ export const OverviewMap: React.FC = () => {
       // + in-flight guard) prevents duplicate network calls on every rAF tick.
       // We pass the offscreen heatmap bitmap (native grid resolution) so only
       // the depth data is sent to Topaz — not the overlays drawn above it.
-      void requestUpscaleIfNeededRef.current(bitmap, t, grid);
+      if (primaryBitmap) {
+        void requestUpscaleIfNeededRef.current(primaryBitmap, t, grid);
+      }
 
       rafRef.current = requestAnimationFrame(loop);
     };

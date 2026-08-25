@@ -3,6 +3,7 @@
  * background reference image placement + gap/overlap indicator raster.
  */
 import type { TerrainData } from "@workspace/api-client-react";
+import { unionGeoBounds } from "@workspace/shared-types";
 import { lonLatToCanvas, type OverviewTransform } from "./transforms";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -117,15 +118,10 @@ export function computeBgFallbackRect(
   t: OverviewTransform,
 ): { x: number; y: number; w: number; h: number } | null {
   if (bboxes.length === 0) return null;
-  let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
-  for (const b of bboxes) {
-    minLon = Math.min(minLon, b.minLon);
-    maxLon = Math.max(maxLon, b.maxLon);
-    minLat = Math.min(minLat, b.minLat);
-    maxLat = Math.max(maxLat, b.maxLat);
-  }
-  const [x0, y0] = lonLatToCanvas(minLon, maxLat, grid, t); // NW corner
-  const [x1, y1] = lonLatToCanvas(maxLon, minLat, grid, t); // SE corner
+  const frame = unionGeoBounds(bboxes);
+  if (!frame) return null;
+  const [x0, y0] = lonLatToCanvas(frame.minLon, frame.maxLat, grid, t); // NW corner
+  const [x1, y1] = lonLatToCanvas(frame.maxLon, frame.minLat, grid, t); // SE corner
   const w = x1 - x0;
   const h = y1 - y0;
   if (!(w > 0) || !(h > 0)) return null;
