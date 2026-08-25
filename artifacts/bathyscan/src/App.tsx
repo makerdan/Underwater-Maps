@@ -1534,37 +1534,67 @@ function Main() {
                   id="mapData"
                   title="Your Data"
                   headerAction={
-                    <ViewscreenTooltip label="Drop a file here or click to browse. Accepted formats: .csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .xml, .nmea, .gz, .pdf" side="right">
-                      <button
-                      type="button"
-                      data-testid="btn-header-upload-dataset"
-                      aria-label="Upload Dataset(s)"
-                        title="Upload your own dataset file"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                          setShowDatasetPanel(true);
-                        setPanelCollapsed("mapData", false);
-                        setPanelCollapsed("uploadTerrainAccordion", false);
-                          setUploadRequest((request) => request + 1);
-                      }}
-                      style={{
-                        alignSelf: "center",
-                        margin: "0 8px 0 4px",
-                        padding: "4px 6px",
-                        color: "#00e5ff",
-                        background: "transparent",
-                        border: "1px solid rgba(0,229,255,0.35)",
-                        borderRadius: 3,
-                        cursor: "pointer",
-                        fontFamily: "inherit",
-                        fontSize: "calc(12px * var(--bs-font-scale, 1))",
-                        letterSpacing: "0.06em",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      Upload Dataset(s)
-                      </button>
-                    </ViewscreenTooltip>
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      <ViewscreenTooltip label="Drop a file here or click to browse" side="right">
+                        <button
+                          type="button"
+                          data-testid="btn-header-upload-dataset"
+                          aria-label="Upload Dataset(s)"
+                          title="Upload your own dataset file"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setShowDatasetPanel(true);
+                            setPanelCollapsed("mapData", false);
+                            setPanelCollapsed("uploadTerrainAccordion", false);
+                            setUploadRequest((request) => request + 1);
+                          }}
+                          style={{
+                            alignSelf: "center",
+                            margin: "0 5px 0 4px",
+                            padding: "4px 6px",
+                            color: "#00e5ff",
+                            background: "transparent",
+                            border: "1px solid rgba(0,229,255,0.35)",
+                            borderRadius: 3,
+                            cursor: "pointer",
+                            fontFamily: "inherit",
+                            fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                            letterSpacing: "0.06em",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          Upload Dataset(s)
+                        </button>
+                      </ViewscreenTooltip>
+                      <ViewscreenTooltip
+                        label="Accepted formats: .csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .xml, .nmea, .gz, .pdf"
+                        side="right"
+                      >
+                        <button
+                          type="button"
+                          aria-label="Show accepted upload formats"
+                          data-testid="btn-upload-format-info"
+                          style={{
+                            width: 20,
+                            height: 20,
+                            padding: 0,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#7dd3fc",
+                            background: "rgba(0,229,255,0.08)",
+                            border: "1px solid rgba(0,229,255,0.3)",
+                            borderRadius: "50%",
+                            cursor: "help",
+                            fontFamily: "inherit",
+                            fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                            fontWeight: 700,
+                          }}
+                        >
+                          i
+                        </button>
+                      </ViewscreenTooltip>
+                    </div>
                   }
                 >
                   {(!terrain || showDatasetPanel) ? <DatasetPanel embedded uploadRequest={uploadRequest} /> : null}
