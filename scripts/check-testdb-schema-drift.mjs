@@ -269,12 +269,20 @@ function extractIndexTermModifiers(value) {
   };
   const chainCollation = source.match(/\.\s*collate\s*\(\s*["'`]([^"'`]+)["'`]\s*\)/i)?.[1];
   const sqlCollation = source.match(/\bcollate\s+(?:"([^"]+)"|'([^']+)'|([a-z_][\w.$]*))/i);
+  const chainOperatorClass = source.match(/\.\s*op\s*\(\s*["'`]([^"'`]+)["'`]\s*\)/i)?.[1];
+  // PostgreSQL's index grammar places the operator class after COLLATE and
+  // before ASC/DESC (or NULLS). Operator classes are identifiers ending in
+  // `_ops`, including schema-qualified and parameterized forms.
+  const ddlOperatorClass = source.match(
+    /(?:\bcollate\s+(?:"[^"]+"|'[^']+'|[a-z_][\w.$]*)\s+)?(?:"([^"]+_ops)"|'([^']+_ops)'|([a-z_][\w.$]*_ops))(?:\s*\([^)]*\))?(?=\s+(?:asc|desc|nulls)\b|$)/i,
+  );
   const ddlSort = source.match(/\b(asc|desc)\b(?:\s+nulls\s+(?:first|last)\b)?\s*$/i)?.[1]?.toLowerCase();
   const ddlNulls = source.match(/\bnulls\s+(first|last)\b/i)?.[1]?.toLowerCase();
   return {
     sort: chain.sort ?? ddlSort ?? null,
     nulls: chain.nulls ?? ddlNulls ?? null,
     collation: (chainCollation ?? sqlCollation?.[1] ?? sqlCollation?.[2] ?? sqlCollation?.[3] ?? null)?.toLowerCase() ?? null,
+    operatorClass: (chainOperatorClass ?? ddlOperatorClass?.[1] ?? ddlOperatorClass?.[2] ?? ddlOperatorClass?.[3] ?? null)?.toLowerCase() ?? null,
   };
 }
 
@@ -284,7 +292,9 @@ function normalizeIndexTerm(value) {
     value
       .replace(/\.\s*(?:asc|desc|nullsFirst|nullsLast)\s*\(\s*\)/gi, "")
       .replace(/\.\s*collate\s*\(\s*["'`][^"'`]+["'`]\s*\)/gi, "")
+      .replace(/\.\s*op\s*\(\s*["'`][^"'`]+["'`]\s*\)/gi, "")
       .replace(/\s+\bcollate\s+(?:"[^"]+"|'[^']+'|[a-z_][\w.$]*)/gi, "")
+      .replace(/\s+(?:"[^"]+"|'[^']+'|[a-z_][\w.$]*_ops)(?:\s*\([^)]*\))?(?=\s+(?:asc|desc|nulls)\b|$)/gi, "")
       .replace(/\s+\b(?:asc|desc)\b(?:\s+\bnulls\s+(?:first|last)\b)?\s*$/i, ""),
   );
   return { expression, modifiers };
@@ -386,22 +396,35 @@ export function compareUniqueIndexDefinitions(expected, actual, table, indexName
     sort: null,
     nulls: null,
     collation: null,
+    operatorClass: null,
   }));
   const actualModifiers = actual.modifiers ?? actual.columns.map(() => ({
     sort: null,
     nulls: null,
     collation: null,
+    operatorClass: null,
   }));
   for (let i = 0; i < Math.max(expectedModifiers.length, actualModifiers.length); i++) {
-    const e = expectedModifiers[i] ?? { sort: null, nulls: null, collation: null };
-    const a = actualModifiers[i] ?? { sort: null, nulls: null, collation: null };
+    const e = expectedModifiers[i] ?? {
+      sort: null,
+      nulls: null,
+      collation: null,
+      operatorClass: null,
+    };
+    const a = actualModifiers[i] ?? {
+      sort: null,
+      nulls: null,
+      collation: null,
+      operatorClass: null,
+    };
     const expression = expected.columns[i] ?? actual.columns[i] ?? `term ${i + 1}`;
     for (const [key, label] of [
       ["sort", "sort direction"],
       ["nulls", "NULL ordering"],
       ["collation", "collation"],
+      ["operatorClass", "operator class"],
     ]) {
-      if (e[key] !== a[key]) {
+      if ((e[key] ?? null) !== (a[key] ?? null)) {
         differences.push(
           `${table} uniqueIndex("${indexName}") ${label} for ${expression}: ` +
           `schema=${e[key] ?? "default"}, test-db.ts=${a[key] ?? "default"}`,

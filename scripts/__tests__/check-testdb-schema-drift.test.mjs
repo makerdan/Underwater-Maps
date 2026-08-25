@@ -445,6 +445,53 @@ describe("unique-index definition parity", () => {
     const result = runScript(repo);
     assert.equal(result.status, 0, `expected exit 0\nstderr: ${result.stderr}`);
   });
+
+  it("reports operator-class drift with table and index names", () => {
+    const repo = makeFakeRepo("unique-operator-class-drift");
+    writeSchema(
+      repo,
+      "folders.ts",
+      `
+      import { pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
+      export const folders = pgTable("folders", {
+        name: text("name").notNull(),
+      }, (table) => [
+        uniqueIndex("folders_name_uniq").on(table.name.op("text_pattern_ops")),
+      ]);
+      `,
+    );
+    writeTestDb(repo, `
+      CREATE TABLE folders (name text NOT NULL);
+      CREATE UNIQUE INDEX folders_name_uniq ON folders (name text_ops);
+    `);
+
+    const result = runScript(repo);
+    assert.equal(result.status, 1, `expected exit 1\nstderr: ${result.stderr}`);
+    assert.match(result.stderr, /folders uniqueIndex\("folders_name_uniq"\) operator class for name: schema=text_pattern_ops, test-db\.ts=text_ops/);
+  });
+
+  it("accepts matching Drizzle and PostgreSQL operator classes", () => {
+    const repo = makeFakeRepo("unique-operator-class-match");
+    writeSchema(
+      repo,
+      "folders.ts",
+      `
+      import { pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
+      export const folders = pgTable("folders", {
+        name: text("name").notNull(),
+      }, (table) => [
+        uniqueIndex("folders_name_uniq").on(table.name.op("text_pattern_ops")),
+      ]);
+      `,
+    );
+    writeTestDb(repo, `
+      CREATE TABLE folders (name text NOT NULL);
+      CREATE UNIQUE INDEX folders_name_uniq ON folders (name text_pattern_ops);
+    `);
+
+    const result = runScript(repo);
+    assert.equal(result.status, 0, `expected exit 0\nstderr: ${result.stderr}`);
+  });
 });
 
 describe("helper units", () => {
@@ -492,8 +539,8 @@ describe("helper units", () => {
     assert.deepEqual(indexes.get("folders_root"), {
       columns: ["user_id", "lower(name)"],
       modifiers: [
-        { sort: null, nulls: null, collation: null },
-        { sort: null, nulls: null, collation: null },
+        { sort: null, nulls: null, collation: null, operatorClass: null },
+        { sort: null, nulls: null, collation: null, operatorClass: null },
       ],
       where: "parent_id is null",
     });
