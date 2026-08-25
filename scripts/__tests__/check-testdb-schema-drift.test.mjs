@@ -8,7 +8,9 @@
  *   (b) index name appearing only in an unrelated table's DDL block → violation;
  *   (c) correctly placed CREATE UNIQUE INDEX clause → passes;
  *   (d) missing test-db.ts → exit 1 with a path-containing message;
- *   (e) unreadable schema file → warning emitted, scan continues.
+ *   (e) unreadable schema file → warning emitted, scan continues;
+ *   (f) missing or extra columns → named column diagnostics;
+ *   (g) matching columns → passes.
  */
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -20,6 +22,8 @@ import { tmpdir } from "node:os";
 import {
   stripComments,
   extractTableSlices,
+  extractDrizzleTableColumns,
+  extractDdlTableColumns,
   sliceHasUniqueClause,
 } from "../check-testdb-schema-drift.mjs";
 
@@ -81,6 +85,14 @@ export const markers = pgTable(
   { id: text("id").primaryKey(), label: text("label").notNull() },
   (table) => [uniqueIndex("markers_label_uniq").on(table.label)],
 );
+`;
+
+const SIMPLE_SCHEMA = `
+import { pgTable, text } from "drizzle-orm/pg-core";
+export const markers = pgTable("markers", {
+  id: text("id").primaryKey(),
+  label: text("label").notNull(),
+});
 `;
 
 describe("scoped index search", () => {
@@ -248,6 +260,45 @@ describe("I/O guards", () => {
   });
 });
 
+describe("column parity", () => {
+  it("(f) reports missing and extra DDL columns", () => {
+    const repo = makeFakeRepo("column-drift");
+    writeSchema(repo, "markers.ts", SIMPLE_SCHEMA);
+    writeTestDb(
+      repo,
+      `
+    CREATE TABLE markers (
+      id text PRIMARY KEY,
+      stale_column text
+    );
+    `,
+    );
+
+    const result = runScript(repo);
+    assert.equal(result.status, 1, `expected exit 1\nstderr: ${result.stderr}`);
+    assert.match(result.stderr, /markers: missing from test-db\.ts: label/);
+    assert.match(result.stderr, /markers: extra in test-db\.ts: stale_column/);
+  });
+
+  it("(g) accepts matching Drizzle and DDL columns", () => {
+    const repo = makeFakeRepo("column-match");
+    writeSchema(repo, "markers.ts", SIMPLE_SCHEMA);
+    writeTestDb(
+      repo,
+      `
+    CREATE TABLE markers (
+      id text PRIMARY KEY,
+      label text NOT NULL
+    );
+    `,
+    );
+
+    const result = runScript(repo);
+    assert.equal(result.status, 0, `expected exit 0\nstderr: ${result.stderr}`);
+    assert.match(result.stdout, /columns and/);
+  });
+});
+
 describe("helper units", () => {
   it("stripComments removes SQL line, block, and TS line comments", () => {
     const out = stripComments(
@@ -274,5 +325,14 @@ describe("helper units", () => {
     assert.ok(sliceHasUniqueClause("constraint foo_uniq unique (a)", "foo_uniq"));
     assert.ok(!sliceHasUniqueClause("create index foo_uniq on t (a);", "foo_uniq"));
     assert.ok(!sliceHasUniqueClause("mentions foo_uniq in passing", "foo_uniq"));
+  });
+
+  it("extracts Drizzle and DDL columns without table constraints", () => {
+    const drizzle = extractDrizzleTableColumns(SIMPLE_SCHEMA);
+    assert.deepEqual([...drizzle.get("markers")].sort(), ["id", "label"]);
+    const ddl = extractDdlTableColumns(
+      `CREATE TABLE markers (id text, label text, CONSTRAINT markers_pk PRIMARY KEY (id));`,
+    );
+    assert.deepEqual([...ddl].sort(), ["id", "label"]);
   });
 });

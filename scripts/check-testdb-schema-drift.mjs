@@ -2,15 +2,13 @@
 /**
  * check-testdb-schema-drift.mjs
  *
- * Verifies that every `uniqueIndex(...)` declared in lib/db/src/schema/*.ts
- * for a table that exists in lib/db/src/__tests__/test-db.ts is also
- * represented (by name) as a CREATE UNIQUE INDEX or UNIQUE CONSTRAINT clause
- * in that table's DDL block in test-db.ts.
+ * Verifies that every column declared in lib/db/src/schema/*.ts for a table
+ * that exists in lib/db/src/__tests__/test-db.ts is represented in that
+ * table's hand-written CREATE TABLE DDL, and that the DDL has no extra
+ * columns. It also checks uniqueIndex declarations against the DDL.
  *
- * This guards against the class of drift discovered when a new uniqueIndex is
- * added to a Drizzle schema file but the corresponding hand-written DDL in
- * test-db.ts is not updated — causing DB-level constraint tests to silently
- * pass against a weaker schema than production.
+ * This prevents constraint tests from silently using a different table shape
+ * than production when either side gains or loses a column.
  *
  * Hardening (vs the original global-substring version):
  *   - The index-name search is scoped to the DDL slice of the matching table
@@ -26,7 +24,8 @@
  * (via `CREATE TABLE <name>`) are checked. Tables that have no presence in
  * test-db.ts are intentionally skipped because they have no constraint tests.
  *
- * Exit 1 if any uniqueIndex names are missing from test-db.ts DDL; 0 otherwise.
+ * Exit 1 if any mirrored table has missing or extra columns, or if any
+ * uniqueIndex name is missing from its DDL; 0 otherwise.
  *
  * Usage:
  *   node scripts/check-testdb-schema-drift.mjs
@@ -81,6 +80,109 @@ export function extractTableSlices(content) {
 }
 
 /**
+ * Extract the database column names from pgTable declarations. This is a
+ * deliberately small parser rather than a TypeScript compiler dependency:
+ * column declarations have the stable form `property: builder("db_name")`.
+ */
+export function extractDrizzleTableColumns(content) {
+  content = stripComments(content);
+  const tables = new Map();
+  for (const match of content.matchAll(/pgTable\s*\(\s*["']([^"']+)["']/g)) {
+    const open = content.indexOf("{", match.index + match[0].length);
+    if (open < 0) continue;
+    let depth = 0;
+    let close = -1;
+    let quote = null;
+    for (let i = open; i < content.length; i++) {
+      const ch = content[i];
+      if (quote) {
+        if (ch === "\\") i++;
+        else if (ch === quote) quote = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'" || ch === "`") {
+        quote = ch;
+      } else if (ch === "{") {
+        depth++;
+      } else if (ch === "}" && --depth === 0) {
+        close = i;
+        break;
+      }
+    }
+    if (close < 0) continue;
+    const columns = new Set();
+    const body = stripComments(content.slice(open + 1, close));
+    for (const column of body.matchAll(/\b\w+\s*:\s*\w+\s*\(\s*["']([^"']+)["']/g)) {
+      columns.add(column[1].toLowerCase());
+    }
+    tables.set(match[1].toLowerCase(), columns);
+  }
+  return tables;
+}
+
+/**
+ * Extract only top-level column definitions from a CREATE TABLE statement.
+ * Constraints and table-level indexes are intentionally excluded.
+ */
+export function extractDdlTableColumns(slice) {
+  const open = slice.indexOf("(");
+  if (open < 0) return new Set();
+  let depth = 0;
+  let quote = null;
+  let close = -1;
+  for (let i = open; i < slice.length; i++) {
+    const ch = slice[i];
+    if (quote) {
+      if (ch === "\\") i++;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") quote = ch;
+    else if (ch === "(") depth++;
+    else if (ch === ")" && --depth === 0) {
+      close = i;
+      break;
+    }
+  }
+  if (close < 0) return new Set();
+  const columns = new Set();
+  let item = "";
+  depth = 0;
+  quote = null;
+  const body = slice.slice(open + 1, close);
+  const items = [];
+  for (const ch of body) {
+    if (quote) {
+      item += ch;
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") {
+      quote = ch;
+      item += ch;
+    } else if (ch === "(") {
+      depth++;
+      item += ch;
+    } else if (ch === ")") {
+      depth--;
+      item += ch;
+    } else if (ch === "," && depth === 0) {
+      items.push(item);
+      item = "";
+    } else {
+      item += ch;
+    }
+  }
+  items.push(item);
+  for (const entry of items) {
+    const first = entry.trim().match(/^(?:"([^"]+)"|`([^`]+)`|([a-z_]\w*))/i);
+    if (!first || /^(constraint|primary|unique|check|foreign)\b/i.test(entry.trim())) continue;
+    columns.add((first[1] ?? first[2] ?? first[3]).toLowerCase());
+  }
+  return columns;
+}
+
+/**
  * True when the (lowercased, comment-stripped) table slice contains a real
  * unique clause for the index name: `UNIQUE INDEX <name>` (covers
  * `CREATE UNIQUE INDEX`) or `CONSTRAINT <name> UNIQUE`.
@@ -123,7 +225,10 @@ const schemaFiles = readdirSync(schemaDir)
 
 /** @type {{ file: string; tables: string[]; indexName: string }[]} */
 const violations = [];
+/** @type {{ file: string; table: string; missing: string[]; extra: string[] }[]} */
+const columnViolations = [];
 let checkedCount = 0;
+let checkedColumnCount = 0;
 
 for (const file of schemaFiles) {
   const filePath = resolve(schemaDir, file);
@@ -138,6 +243,8 @@ for (const file of schemaFiles) {
     continue;
   }
 
+  const drizzleColumns = extractDrizzleTableColumns(content);
+
   // All pgTable("table_name", …) calls in this file, with their positions so
   // each uniqueIndex can be attributed to the nearest preceding table.
   const tableMatches = [...content.matchAll(/pgTable\s*\(\s*["']([^"']+)["']/g)];
@@ -146,11 +253,27 @@ for (const file of schemaFiles) {
   // All uniqueIndex("index_name") calls in this file, with positions.
   const indexMatches = [...content.matchAll(/uniqueIndex\s*\(\s*["']([^"']+)["']/g)];
 
-  if (indexMatches.length === 0) continue;
-
   // Only check tables that are mirrored in test-db.ts.
   const relevantTables = tableNames.filter((t) => testDbTableNames.has(t));
   if (relevantTables.length === 0) continue;
+
+  for (const table of relevantTables) {
+    const expected = drizzleColumns.get(table.toLowerCase()) ?? new Set();
+    const actual = extractDdlTableColumns(tableSlices.get(table.toLowerCase()) ?? "");
+    const missing = [...expected].filter((column) => !actual.has(column)).sort();
+    const extra = [...actual].filter((column) => !expected.has(column)).sort();
+    checkedColumnCount += expected.size;
+    if (missing.length > 0 || extra.length > 0) {
+      columnViolations.push({
+        file: `lib/db/src/schema/${file}`,
+        table,
+        missing,
+        extra,
+      });
+    }
+  }
+
+  if (indexMatches.length === 0) continue;
 
   for (const idx of indexMatches) {
     const indexName = idx[1];
@@ -186,11 +309,15 @@ for (const file of schemaFiles) {
 // Report
 // ---------------------------------------------------------------------------
 
-if (violations.length > 0) {
+if (columnViolations.length > 0 || violations.length > 0) {
   console.error(
-    "[check:testdb-schema-drift] FAIL — uniqueIndex declaration(s) in the Drizzle schema\n" +
-    "  are missing from the matching CREATE TABLE block in lib/db/src/__tests__/test-db.ts:\n",
+    "[check:testdb-schema-drift] FAIL — Drizzle schema and test-db.ts DDL differ:\n",
   );
+  for (const v of columnViolations) {
+    if (v.missing.length > 0) console.error(`  ${v.table}: missing from test-db.ts: ${v.missing.join(", ")}`);
+    if (v.extra.length > 0) console.error(`  ${v.table}: extra in test-db.ts: ${v.extra.join(", ")}`);
+    console.error(`    schema file : ${v.file}\n`);
+  }
   for (const v of violations) {
     console.error(`  uniqueIndex("${v.indexName}")`);
     console.error(`    schema file : ${v.file}`);
@@ -198,7 +325,7 @@ if (violations.length > 0) {
     console.error();
   }
   console.error(
-    "  Fix: add a matching CREATE UNIQUE INDEX <name> … or\n" +
+    "  Fix: make the table columns match, and add a matching CREATE UNIQUE INDEX <name> … or\n" +
     "  CONSTRAINT <name> UNIQUE (…) clause to the appropriate CREATE TABLE\n" +
     "  block in lib/db/src/__tests__/test-db.ts. The name must appear inside\n" +
     "  that table's DDL block (comments don't count).",
@@ -207,6 +334,6 @@ if (violations.length > 0) {
 }
 
 console.log(
-  `[check:testdb-schema-drift] OK — all ${checkedCount} uniqueIndex declaration(s) ` +
+  `[check:testdb-schema-drift] OK — ${checkedColumnCount} columns and ${checkedCount} uniqueIndex declaration(s) ` +
   `for test-db.ts tables are present in the hand-written DDL.`,
 );
