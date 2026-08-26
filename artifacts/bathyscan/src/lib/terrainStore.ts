@@ -123,6 +123,13 @@ interface TerrainStore {
   overviewGrid: TerrainData | null;
 
   /**
+   * Dataset requested by a collection load as the App state's next primary
+   * terrain. The always-mounted handoff clears this after its active grid
+   * arrives.
+   */
+  pendingPrimaryHandoffId: string | null;
+
+  /**
    * Set to the datasetId that was most recently evicted by a MANUAL action
    * (user-initiated add that pushes past the cap). Cleared after observers
    * have reacted (call clearEviction()). Used to fire toast notifications.
@@ -289,6 +296,9 @@ interface TerrainStore {
   /** Clear the autoEvictedId after proximity streaming has recorded the eviction. */
   clearAutoEviction: () => void;
 
+  /** Clear the collection-to-App primary terrain handoff request. */
+  clearPendingPrimaryHandoff: () => void;
+
   /**
    * Dataset IDs whose overview fetch has definitively failed (React Query
    * returned isError: true).  OverviewMap reads this to surface the error UI
@@ -302,6 +312,14 @@ interface TerrainStore {
    * isError: true (set hasError=true) or recovers / unmounts (hasError=false).
    */
   setOverviewFetchError: (datasetId: string, hasError: boolean) => void;
+
+  /**
+   * Dataset IDs whose terrain or overview fetch has definitively failed.
+   * Collection rows use this to replace their loading state with a retryable
+   * error while preserving the collection controls.
+   */
+  datasetFetchErrorIds: string[];
+  setDatasetFetchError: (datasetId: string, hasError: boolean) => void;
 }
 
 /**
@@ -334,10 +352,12 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
   overviewGrid: null,
   evictedId: null,
   autoEvictedId: null,
+  pendingPrimaryHandoffId: null,
   selectedIds: [],
   selectedSources: {},
   multiDatasetMode: false,
   overviewFetchErrorIds: [],
+  datasetFetchErrorIds: [],
 
   setGrids: ({ activeGrid, overviewGrid, source }) =>
     set((prev) => {
@@ -403,6 +423,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       return {
         ...prev,
         visibleDatasets: nextVisible,
+        pendingPrimaryHandoffId: null,
         ...syncPrimaryGrids(nextVisible),
         ...(evictedId !== null ? { evictedId } : {}),
       };
@@ -504,6 +525,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       return {
         ...prev,
         visibleDatasets: nextVisible,
+        pendingPrimaryHandoffId: null,
         ...syncPrimaryGrids(nextVisible),
         ...(evictedId !== null ? { evictedId } : {}),
       };
@@ -632,6 +654,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       return {
         ...prev,
         visibleDatasets,
+        pendingPrimaryHandoffId: unique[0]?.datasetId ?? null,
         selectedIds,
         selectedSources,
         multiDatasetMode: true,
@@ -780,6 +803,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       return {
         ...prev,
         visibleDatasets: nextVisible,
+        pendingPrimaryHandoffId: null,
         selectedIds: [],
         selectedSources: {},
         ...syncPrimaryGrids(nextVisible),
@@ -798,10 +822,12 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       overviewGrid: null,
       evictedId: null,
       autoEvictedId: null,
+      pendingPrimaryHandoffId: null,
       selectedIds: [],
       selectedSources: {},
       multiDatasetMode: false,
       overviewFetchErrorIds: [],
+      datasetFetchErrorIds: [],
     }),
 
   clearEviction: () =>
@@ -809,6 +835,13 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
 
   clearAutoEviction: () =>
     set((prev) => (prev.autoEvictedId === null ? prev : { ...prev, autoEvictedId: null })),
+
+  clearPendingPrimaryHandoff: () =>
+    set((prev) =>
+      prev.pendingPrimaryHandoffId === null
+        ? prev
+        : { ...prev, pendingPrimaryHandoffId: null },
+    ),
 
   setOverviewFetchError: (datasetId, hasError) =>
     set((prev) => {
@@ -819,6 +852,18 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         overviewFetchErrorIds: hasError
           ? [...prev.overviewFetchErrorIds, datasetId]
           : prev.overviewFetchErrorIds.filter((id) => id !== datasetId),
+      };
+    }),
+
+  setDatasetFetchError: (datasetId, hasError) =>
+    set((prev) => {
+      const had = prev.datasetFetchErrorIds.includes(datasetId);
+      if (hasError === had) return prev;
+      return {
+        ...prev,
+        datasetFetchErrorIds: hasError
+          ? [...prev.datasetFetchErrorIds, datasetId]
+          : prev.datasetFetchErrorIds.filter((id) => id !== datasetId),
       };
     }),
 }));

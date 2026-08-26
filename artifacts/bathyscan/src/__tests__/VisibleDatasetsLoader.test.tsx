@@ -8,9 +8,9 @@
  *    does not match the captured visible-entry ID must be rejected (the store entry
  *    must remain with null grids).
  */
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { act, render } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 
 // ---------------------------------------------------------------------------
 // Controlled mock for @workspace/api-client-react
@@ -52,22 +52,41 @@ let presetTerrainData: Record<string, unknown> | undefined = undefined;
 let presetOverviewData: Record<string, unknown> | undefined = undefined;
 let userTerrainData: Record<string, unknown> | undefined = undefined;
 let userOverviewData: Record<string, unknown> | undefined = undefined;
+let userTerrainById: Record<string, Record<string, unknown> | undefined> = {};
+let userOverviewById: Record<string, Record<string, unknown> | undefined> = {};
+let userTerrainRequests: string[] = [];
+let userOverviewRequests: string[] = [];
+let presetTerrainRequests: string[] = [];
+let presetOverviewRequests: string[] = [];
 
 vi.mock("@workspace/api-client-react", () =>
   makeApiClientMock({
-    useGetDatasetsIdTerrain: () => ({ data: presetTerrainData }),
-    useGetDatasetsIdOverview: () => ({ data: presetOverviewData }),
+    useGetDatasetsIdTerrain: (id: string) => {
+      presetTerrainRequests.push(id);
+      return { data: presetTerrainData };
+    },
+    useGetDatasetsIdOverview: (id: string) => {
+      presetOverviewRequests.push(id);
+      return { data: presetOverviewData };
+    },
     getGetDatasetsIdTerrainQueryKey: (id: string) => ["datasets", id, "terrain"],
     getGetDatasetsIdOverviewQueryKey: (id: string) => ["datasets", id, "overview"],
-    useGetUserDatasetsIdTerrain: () => ({ data: userTerrainData }),
-    useGetUserDatasetsIdOverview: () => ({ data: userOverviewData }),
+    useGetUserDatasetsIdTerrain: (id: string) => {
+      userTerrainRequests.push(id);
+      return { data: userTerrainById[id] ?? userTerrainData };
+    },
+    useGetUserDatasetsIdOverview: (id: string) => {
+      userOverviewRequests.push(id);
+      return { data: userOverviewById[id] ?? userOverviewData };
+    },
     getGetUserDatasetsIdTerrainQueryKey: (id: string) => ["user-datasets", id, "terrain"],
     getGetUserDatasetsIdOverviewQueryKey: (id: string) => ["user-datasets", id, "overview"],
   }),
 );
 
+import { AppProvider, useAppState } from "@/lib/context";
 import { useTerrainStore } from "@/lib/terrainStore";
-import { VisibleDatasetsLoader } from "@/lib/VisibleDatasetsLoader";
+import { CollectionPrimaryHandoff, VisibleDatasetsLoader } from "@/lib/VisibleDatasetsLoader";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -91,6 +110,12 @@ beforeEach(() => {
   presetOverviewData = undefined;
   userTerrainData = undefined;
   userOverviewData = undefined;
+  userTerrainById = {};
+  userOverviewById = {};
+  userTerrainRequests = [];
+  userOverviewRequests = [];
+  presetTerrainRequests = [];
+  presetOverviewRequests = [];
 });
 
 // ---------------------------------------------------------------------------
@@ -297,5 +322,122 @@ describe("VisibleDatasetsLoader — user-dataset ID mismatch guard (Bug 2)", () 
     );
     expect(entry?.activeGrid).toBeNull();
     expect(entry?.overviewGrid).toBeNull();
+  });
+});
+
+describe("VisibleDatasetsLoader — collection handoff", () => {
+  it("loads upload and materialized-save members through user endpoints", async () => {
+    useTerrainStore.getState().activateCollection([
+      { datasetId: "upload-1", source: "user" },
+      { datasetId: "materialized-save-1", source: "user" },
+    ]);
+    const view = render(<VisibleDatasetsLoader />);
+
+    await act(async () => {
+      userTerrainById = {
+        "upload-1": makeGrid("upload-1"),
+        "materialized-save-1": makeGrid("materialized-save-1"),
+      };
+      userOverviewById = {
+        "upload-1": makeGrid("upload-1"),
+        "materialized-save-1": makeGrid("materialized-save-1"),
+      };
+      view.rerender(<VisibleDatasetsLoader />);
+    });
+
+    const visible = useTerrainStore.getState().visibleDatasets;
+    expect(visible.map((entry) => entry.activeGrid?.datasetId)).toEqual([
+      "upload-1",
+      "materialized-save-1",
+    ]);
+    expect(userTerrainRequests).toEqual(expect.arrayContaining([
+      "upload-1",
+      "materialized-save-1",
+    ]));
+    expect(userOverviewRequests).toEqual(expect.arrayContaining([
+      "upload-1",
+      "materialized-save-1",
+    ]));
+    expect(presetTerrainRequests).not.toEqual(expect.arrayContaining([
+      "upload-1",
+      "materialized-save-1",
+    ]));
+    expect(presetOverviewRequests).not.toEqual(expect.arrayContaining([
+      "upload-1",
+      "materialized-save-1",
+    ]));
+  });
+
+  it("replaces stale App terrain with the loaded collection primary", async () => {
+    const AppTerrainProbe = () => {
+      const { terrain, datasetId } = useAppState();
+      return <output data-testid="app-terrain">{`${datasetId ?? "user"}:${terrain?.datasetId ?? "none"}`}</output>;
+    };
+
+    useTerrainStore.getState().activateCollection([
+      { datasetId: "upload-1", source: "user" },
+      { datasetId: "materialized-save-1", source: "user" },
+    ]);
+    useTerrainStore.getState().setDatasetGrids("upload-1", {
+      activeGrid: makeGrid("upload-1") as never,
+      overviewGrid: makeGrid("upload-1") as never,
+    });
+    useTerrainStore.getState().setDatasetGrids("materialized-save-1", {
+      activeGrid: makeGrid("materialized-save-1") as never,
+      overviewGrid: makeGrid("materialized-save-1") as never,
+    });
+
+    render(
+      <AppProvider>
+        <CollectionPrimaryHandoff />
+        <AppTerrainProbe />
+      </AppProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("app-terrain")).toHaveTextContent("user:upload-1");
+    });
+    expect(useTerrainStore.getState().pendingPrimaryHandoffId).toBeNull();
+    expect(useTerrainStore.getState().visibleDatasets[1]?.activeGrid?.datasetId)
+      .toBe("materialized-save-1");
+  });
+
+  it("does not overwrite a newer preset selection when the old collection grid arrives", async () => {
+    const AppTerrainProbe = () => {
+      const { terrain, datasetId } = useAppState();
+      return <output data-testid="app-terrain">{`${datasetId ?? "user"}:${terrain?.datasetId ?? "none"}`}</output>;
+    };
+    const PresetSelectionThenHandoff = () => {
+      const [ready, setReady] = useState(false);
+      const { setDatasetId, setTerrain } = useAppState();
+      useEffect(() => {
+        setDatasetId("new-preset");
+        setTerrain(makeGrid("new-preset") as never);
+        useTerrainStore.getState().setPrimary("new-preset", "preset");
+        useTerrainStore.getState().setDatasetGrids("upload-1", {
+          activeGrid: makeGrid("upload-1") as never,
+          overviewGrid: makeGrid("upload-1") as never,
+        });
+        setReady(true);
+      }, [setDatasetId, setTerrain]);
+      return ready ? <CollectionPrimaryHandoff /> : null;
+    };
+
+    useTerrainStore.getState().activateCollection([
+      { datasetId: "upload-1", source: "user" },
+      { datasetId: "materialized-save-1", source: "user" },
+    ]);
+
+    render(
+      <AppProvider>
+        <PresetSelectionThenHandoff />
+        <AppTerrainProbe />
+      </AppProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("app-terrain")).toHaveTextContent("new-preset:new-preset");
+    });
+    expect(useTerrainStore.getState().pendingPrimaryHandoffId).toBeNull();
   });
 });

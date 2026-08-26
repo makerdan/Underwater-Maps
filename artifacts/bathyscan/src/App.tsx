@@ -84,7 +84,7 @@ import {
 } from "@/lib/offlineFlush";
 import { useWaterTypeSideEffects } from "@/lib/useWaterTypeSideEffects";
 import { useActiveDatasetSync } from "@/lib/useActiveDatasetSync";
-import { VisibleDatasetsLoader } from "@/lib/VisibleDatasetsLoader";
+import { CollectionPrimaryHandoff, VisibleDatasetsLoader } from "@/lib/VisibleDatasetsLoader";
 import { waterLabels } from "@/lib/waterLabels";
 import { useServerSettingsSync, requestSettingsSync } from "@/hooks/useServerSettingsSync";
 import { useCrossTabSync } from "@/hooks/useCrossTabSync";
@@ -1225,6 +1225,7 @@ function Main() {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#040810] flex flex-col">
+      <CollectionPrimaryHandoff />
       <VisibleDatasetsLoader />
 
       {/* Offline banner — device has no internet connection. Clears automatically

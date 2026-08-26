@@ -510,12 +510,15 @@ export const CollectionsSection: React.FC = () => {
   const [settingsForId, setSettingsForId] = useState<string | null>(null);
   const [activatingId, setActivatingId] = useState<string | null>(null);
   const activatingRef = useRef<string | null>(null);
+  const pendingPrimaryLoadRef = useRef<{ collectionId: string; datasetId: string } | null>(null);
   const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
   // Freshly-created collection kept as a fallback so the settings sheet can
   // open immediately, before the collections query refetch lands.
   const [createdFallback, setCreatedFallback] = useState<DatasetCollection | null>(null);
   const collectionLoadNotice = useUiStore((s) => s.collectionLoadNotice);
   const setCollectionLoadNotice = useUiStore((s) => s.setCollectionLoadNotice);
+  const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
+  const datasetFetchErrorIds = useTerrainStore((s) => s.datasetFetchErrorIds);
 
   useEffect(() => { if (creating) createInputRef.current?.focus(); }, [creating]);
 
@@ -614,9 +617,9 @@ export const CollectionsSection: React.FC = () => {
         if (!datasetId) return [];
         return [{
           datasetId,
-          // Uploaded collection members are served by /user/datasets, while
-          // materialized catalog saves use the catalogue/preset endpoints.
-          source: m.kind === "dataset" ? "user" as const : "preset" as const,
+          // Catalog-save refs resolve to their materialized custom_datasets
+          // UUIDs, so both member kinds are fetched through /user/datasets.
+          source: "user" as const,
         }];
       });
       terrain.activateCollection(entries);
@@ -656,28 +659,59 @@ export const CollectionsSection: React.FC = () => {
         if (!datasetId) return [];
         return [{
           datasetId,
-          source: m.kind === "dataset" ? "user" as const : "preset" as const,
+          source: "user" as const,
         }];
       });
       if (entries.length === 0) {
         throw new Error("No collection members are available to load yet.");
       }
-      useTerrainStore.getState().activateCollection(entries);
+      const terrainStore = useTerrainStore.getState();
+      entries.forEach((entry) => terrainStore.setDatasetFetchError(entry.datasetId, false));
+      pendingPrimaryLoadRef.current = {
+        collectionId: c.id,
+        datasetId: entries[0]!.datasetId,
+      };
+      terrainStore.activateCollection(entries);
       // A normal collection load replaces any puzzle overlay/layout and must
       // not leave the user in the Overview-only presentation.
       useSpecialCollectionStore.getState().deactivate();
       useUiStore.getState().setOverviewOpen(false);
       useUiStore.getState().setSidebarMode("explore");
     } catch (err) {
+      pendingPrimaryLoadRef.current = null;
       setLoadErrors((errors) => ({
         ...errors,
         [c.id]: err instanceof Error ? err.message : "Could not load this collection. Try again.",
       }));
-    } finally {
       activatingRef.current = null;
       setActivatingId(null);
     }
   }, [memberDatasetId, setCollectionLoadNotice]);
+
+  // Finish an ordinary collection load only when its first member can become
+  // the visible 3D scene primary. The loader also reports a definitive terrain
+  // or overview failure through the terrain store, allowing this row to recover
+  // instead of leaving the control in a perpetual loading state.
+  useEffect(() => {
+    const pending = pendingPrimaryLoadRef.current;
+    if (!pending || activatingId !== pending.collectionId) return;
+    const primary = visibleDatasets.find((entry) => entry.datasetId === pending.datasetId);
+    if (datasetFetchErrorIds.includes(pending.datasetId)) {
+      pendingPrimaryLoadRef.current = null;
+      useTerrainStore.getState().clearPendingPrimaryHandoff();
+      activatingRef.current = null;
+      setActivatingId(null);
+      setLoadErrors((errors) => ({
+        ...errors,
+        [pending.collectionId]: "Could not load the primary dataset into 3D Explore. Try again.",
+      }));
+      return;
+    }
+    if (!primary?.activeGrid) return;
+    pendingPrimaryLoadRef.current = null;
+    activatingRef.current = null;
+    setActivatingId(null);
+  }, [activatingId, visibleDatasets, datasetFetchErrorIds]);
 
   const handleRetry = useCallback(async (c: DatasetCollection) => {
     if (activatingRef.current) return;
@@ -694,7 +728,7 @@ export const CollectionsSection: React.FC = () => {
       const entries = c.members.flatMap((m) => {
         const datasetId = resolveMember(m);
         return datasetId
-          ? [{ datasetId, source: m.kind === "dataset" ? "user" as const : "preset" as const }]
+          ? [{ datasetId, source: "user" as const }]
           : [];
       });
       const unresolvedMemberNames = c.members

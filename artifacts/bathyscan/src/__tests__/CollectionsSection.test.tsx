@@ -19,7 +19,7 @@
  *      call per target; create-new-name path creates first, then adds.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, screen, fireEvent, waitFor } from "@testing-library/react";
 import React from "react";
 import { renderWithProviders } from "./setup";
 import { CollectionsSection, AddToCollectionDialog } from "@/components/CollectionsSection";
@@ -225,6 +225,16 @@ const COLLECTION_SPECIAL = {
   updatedAt: "2024-01-01T00:00:00Z",
 };
 
+function makeGrid(datasetId: string) {
+  return {
+    datasetId,
+    minLat: 0, maxLat: 1, minLon: 0, maxLon: 1,
+    minDepth: 0, maxDepth: 10,
+    width: 2, height: 2, resolution: 2,
+    depths: [0, 5, 5, 10],
+  };
+}
+
 class FakeApiError extends Error {
   data: unknown;
   status: number;
@@ -256,6 +266,7 @@ beforeEach(() => {
   mocks.invalidateQueries.mockReset().mockResolvedValue(undefined);
   mocks.setQueryData.mockReset();
   mocks.getQueryData.mockReset().mockReturnValue(undefined);
+  act(() => useTerrainStore.getState().clear());
   useSpecialCollectionStore.setState({ active: null, pendingRestore: null, pendingPuzzleOn: 0, geoLayout: null, unresolvedMemberNames: [] });
   useUiStore.getState().setOverviewOpen(false);
   useUiStore.getState().setCollectionLoadNotice(null);
@@ -325,11 +336,12 @@ describe("CollectionsSection", () => {
     fireEvent.click(screen.getByTestId("btn-load-collection-col-trip"));
     await waitFor(() => expect(activateCollection).toHaveBeenCalledWith([
       { datasetId: "ds-1", source: "user" },
-      { datasetId: "catalog-1", source: "preset" },
+      { datasetId: "catalog-1", source: "user" },
     ]));
     expect(useUiStore.getState().overviewOpen).toBe(false);
     expect(useUiStore.getState().sidebarMode).toBe("explore");
-    expect(screen.getByTestId("btn-load-collection-col-trip")).toBeEnabled();
+    expect(screen.getByTestId("btn-load-collection-col-trip")).toBeDisabled();
+    expect(screen.getByTestId("btn-load-collection-col-trip")).toHaveTextContent("Loading…");
     useTerrainStore.setState({ activateCollection: original });
   });
 
@@ -354,11 +366,39 @@ describe("CollectionsSection", () => {
     useTerrainStore.setState({ activateCollection: original });
   });
 
-  it("retries unavailable catalog saves additively without entering Puzzle mode", async () => {
+  it("shows a retryable row error when the primary collection dataset fails to load", async () => {
     const activateCollection = vi.fn();
+    const original = useTerrainStore.getState().activateCollection;
+    useTerrainStore.setState({ activateCollection });
+    currentCollections = [COLLECTION_TRIP];
+    currentSaves = [{ id: "save-1", datasetId: "catalog-1" }];
+    renderWithProviders(<CollectionsSection />);
+
+    fireEvent.click(screen.getByTestId("btn-load-collection-col-trip"));
+    await waitFor(() => expect(activateCollection).toHaveBeenCalled());
+    act(() => useTerrainStore.setState({ datasetFetchErrorIds: ["ds-1"] }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("collection-load-error-col-trip"))
+        .toHaveTextContent("Could not load the primary dataset into 3D Explore");
+    });
+    expect(screen.getByTestId("btn-load-collection-col-trip")).toBeEnabled();
+    useTerrainStore.setState({ activateCollection: original });
+  });
+
+  it("retries unavailable catalog saves additively without entering Puzzle mode", async () => {
     const addCollectionMembers = vi.fn();
     const originalActivate = useTerrainStore.getState().activateCollection;
     const originalAdd = useTerrainStore.getState().addCollectionMembers;
+    const activateCollection = vi.fn((entries: Parameters<typeof originalActivate>[0]) => {
+      originalActivate(entries);
+      const primary = entries[0];
+      if (!primary) return;
+      useTerrainStore.getState().setDatasetGrids(primary.datasetId, {
+        activeGrid: makeGrid(primary.datasetId) as never,
+        overviewGrid: makeGrid(primary.datasetId) as never,
+      });
+    });
     useTerrainStore.setState({ activateCollection, addCollectionMembers });
     const incompleteCollection = {
       ...COLLECTION_TRIP,
@@ -382,7 +422,7 @@ describe("CollectionsSection", () => {
     fireEvent.click(screen.getByTestId("btn-retry-collection-col-trip"));
     await waitFor(() => expect(addCollectionMembers).toHaveBeenCalledWith([
       { datasetId: "ds-1", source: "user" },
-      { datasetId: "catalog-later", source: "preset" },
+      { datasetId: "catalog-later", source: "user" },
     ]));
     expect(useUiStore.getState().overviewOpen).toBe(false);
     expect(screen.queryByTestId("collection-load-warning-col-trip")).not.toBeInTheDocument();
@@ -689,7 +729,7 @@ describe("CollectionsSection — special collections", () => {
       await waitFor(() => expect(activateCollection).toHaveBeenCalled());
       expect(activateCollection).toHaveBeenCalledWith([
         { datasetId: "upload-1", source: "user" },
-        { datasetId: "catalog-1", source: "preset" },
+        { datasetId: "catalog-1", source: "user" },
         { datasetId: "upload-2", source: "user" },
       ]);
       expect(screen.getByTestId("collection-load-warning-col-sp")).toHaveTextContent(

@@ -106,6 +106,33 @@ describe("terrainStore multi-dataset", () => {
     expect(state.selectedSources).toMatchObject({ alpha: "user", beta: "preset" });
   });
 
+  it("records the first collection member for the App primary-terrain handoff", () => {
+    useTerrainStore.getState().setSinglePrimary("stale-preset", "preset");
+    useTerrainStore.getState().activateCollection([
+      { datasetId: "upload-1", source: "user" },
+      { datasetId: "materialized-save-1", source: "user" },
+    ]);
+
+    const state = useTerrainStore.getState();
+    expect(state.visibleDatasets.map((entry) => entry.datasetId)).toEqual([
+      "upload-1",
+      "materialized-save-1",
+    ]);
+    expect(state.primaryDatasetId).toBe("upload-1");
+    expect(state.pendingPrimaryHandoffId).toBe("upload-1");
+  });
+
+  it("cancels a collection handoff when a newer primary is selected", () => {
+    useTerrainStore.getState().activateCollection([
+      { datasetId: "upload-1", source: "user" },
+      { datasetId: "materialized-save-1", source: "user" },
+    ]);
+    useTerrainStore.getState().setPrimary("new-preset", "preset");
+
+    expect(useTerrainStore.getState().pendingPrimaryHandoffId).toBeNull();
+    expect(useTerrainStore.getState().primaryDatasetId).toBe("new-preset");
+  });
+
   it("toggleVisible queues datasets beyond MAX_ACTIVE_DATASETS in selectedIds", () => {
     // With the streaming model, toggleVisible activates immediately only while
     // visibleDatasets.length < MAX_ACTIVE_DATASETS (3). Beyond that, datasets are
