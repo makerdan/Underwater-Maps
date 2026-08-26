@@ -669,21 +669,6 @@ export const OverviewMap: React.FC = () => {
   // A persisted transform set may have been created at a different viewport
   // size. Apply its density once the initial canvas transform is available.
   const hydratedPuzzlePixelDensityRef = useRef<number | null>(null);
-  const rebasePuzzleTransformsForViewChange = useCallback((nextTransform: OverviewTransform) => {
-    const nextDensity = nextTransform.pxPerDeg * nextTransform.scale;
-    const previousDensity = puzzlePixelDensityRef.current;
-    puzzlePixelDensityRef.current = nextDensity;
-    if (previousDensity === null || puzzleTransformsRef.current.size === 0 ||
-        Math.abs(previousDensity - nextDensity) < 1e-9) return;
-    const rebased = rebasePuzzleTransformsForView(
-      puzzleTransformsRef.current,
-      previousDensity,
-      nextDensity,
-    );
-    puzzleTransformsRef.current = rebased;
-    setPuzzleTransforms(rebased);
-    dirtyRef.current = true;
-  }, []);
   useEffect(() => {
     puzzleTransformsRef.current = puzzleTransforms;
     dirtyRef.current = true;
@@ -764,7 +749,9 @@ export const OverviewMap: React.FC = () => {
         const canonPt = canvasToLonLat(tcx, tcy, worldGrid, transform);
         const offsetPt = canvasToLonLat(tcx + tx, tcy + ty, worldGrid, transform);
         geoMap.set(datasetId, {
-          dLon: offsetPt.lon - canonPt.lon,
+          // Keep the delta on the shortest longitude interval so a tile
+          // crossing ±180° does not appear to jump nearly a full globe.
+          dLon: normalizeLongitude(offsetPt.lon - canonPt.lon),
           dLat: offsetPt.lat - canonPt.lat,
           angleDeg,
         });
@@ -2575,11 +2562,6 @@ export const OverviewMap: React.FC = () => {
         t = transformRef.current;
       }
 
-      // Keep persisted pixel offsets proportional to the current geographic
-      // scale. This runs after every animation frame, including interrupted
-      // and repeated fit/zoom transitions.
-      rebasePuzzleTransformsForViewChange(t);
-
       // When multiple datasets are visible, `worldGrid` is a synthetic TerrainData
       // whose bbox spans the combined extent of all loaded overview grids.
       // All lon/lat → canvas projections use this so every dataset sits in a shared
@@ -2634,7 +2616,7 @@ export const OverviewMap: React.FC = () => {
           const canonPt = canvasToLonLat(tcx, tcy, worldGrid, t);
           const offsetPt = canvasToLonLat(tcx + tx, tcy + ty, worldGrid, t);
           geoMapRaf.set(dsId, {
-            dLon: offsetPt.lon - canonPt.lon,
+            dLon: normalizeLongitude(offsetPt.lon - canonPt.lon),
             dLat: offsetPt.lat - canonPt.lat,
             angleDeg,
           });
@@ -3353,7 +3335,7 @@ export const OverviewMap: React.FC = () => {
       // re-run because their own deps did not change. The unmount cleanup
       // below is the sole place that clears the store.
     };
-  }, [appTerrain, overviewGrid, rebasePuzzleTransformsForViewChange]);
+  }, [appTerrain, overviewGrid]);
 
   // Clear puzzleStore only on component unmount so 3D markers revert to their
   // original positions when the panel is closed, but NOT on intermediate
@@ -3886,7 +3868,6 @@ export const OverviewMap: React.FC = () => {
         canvas.width,
         canvas.height,
       );
-      rebasePuzzleTransformsForViewChange(transformRef.current);
       dirtyRef.current = true;
     };
 
@@ -3994,7 +3975,6 @@ export const OverviewMap: React.FC = () => {
         canvas.width,
         canvas.height,
       );
-      rebasePuzzleTransformsForViewChange(transformRef.current);
       dirtyRef.current = true;
     };
 
@@ -4580,7 +4560,6 @@ export const OverviewMap: React.FC = () => {
           canvas.width,
           canvas.height,
         );
-        rebasePuzzleTransformsForViewChange(transformRef.current);
         dirtyRef.current = true;
         return;
       }
@@ -4636,7 +4615,6 @@ export const OverviewMap: React.FC = () => {
     setPuzzleSelectedIds,
     setOverviewOpen,
     setPendingDropIn,
-    rebasePuzzleTransformsForViewChange,
   ]);
 
   // ---------------------------------------------------------------------------
