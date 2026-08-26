@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useUser } from "@/lib/clerkCompat";
 import {
   flushServerSync,
@@ -6,6 +6,8 @@ import {
   hasUnackedSettingsEdits,
   subscribeSettingsSyncStatus,
 } from "@/hooks/useServerSettingsSync";
+
+const ACKNOWLEDGEMENT_VISIBLE_MS = 2_000;
 
 /**
  * App-shell status for settings writes. This intentionally lives outside the
@@ -19,14 +21,32 @@ export function SettingsSyncIndicator() {
     getSettingsSyncStatus,
   );
 
-  if (!isSignedIn) return null;
+  const [showAcknowledgement, setShowAcknowledgement] = useState(true);
 
   const hasPendingEdits =
     syncStatus.syncing ||
     syncStatus.lastSyncFailed ||
     hasUnackedSettingsEdits();
 
+  useEffect(() => {
+    if (!isSignedIn || hasPendingEdits) {
+      setShowAcknowledgement(false);
+      return;
+    }
+
+    setShowAcknowledgement(true);
+    const timeoutId = setTimeout(() => {
+      setShowAcknowledgement(false);
+    }, ACKNOWLEDGEMENT_VISIBLE_MS);
+
+    return () => clearTimeout(timeoutId);
+  }, [hasPendingEdits, isSignedIn]);
+
+  if (!isSignedIn) return null;
+
   if (!hasPendingEdits) {
+    if (!showAcknowledgement) return null;
+
     return (
       <div
         data-testid="global-settings-sync-status"

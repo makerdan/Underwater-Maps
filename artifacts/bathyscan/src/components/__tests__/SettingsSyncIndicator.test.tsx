@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 
 const syncControl = vi.hoisted(() => {
@@ -33,14 +33,20 @@ import { SettingsSyncIndicator } from "@/components/SettingsSyncIndicator";
 import { GlobalResetFooter } from "@/pages/settings/components/GlobalResetFooter";
 
 beforeEach(() => {
+  vi.useFakeTimers();
   authState.isSignedIn = true;
   unackedState.value = false;
   syncControl.state.snapshot = { syncing: false, lastSyncFailed: false };
   syncControl.flushServerSync.mockClear();
 });
 
+afterEach(() => {
+  vi.clearAllTimers();
+  vi.useRealTimers();
+});
+
 describe("SettingsSyncIndicator", () => {
-  it("distinguishes acknowledged settings from locally pending settings", () => {
+  it("shows an acknowledgement immediately, then hides it after two seconds", () => {
     render(<SettingsSyncIndicator />);
     const status = screen.getByTestId("global-settings-sync-status");
     expect(status).toHaveAttribute(
@@ -49,6 +55,20 @@ describe("SettingsSyncIndicator", () => {
     );
     expect(status).toHaveClass("pointer-events-none");
 
+    act(() => vi.advanceTimersByTime(1_999));
+    expect(screen.getByTestId("global-settings-sync-status")).toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.queryByTestId("global-settings-sync-status")).toBeNull();
+  });
+
+  it("distinguishes acknowledged settings from locally pending settings", () => {
+    render(<SettingsSyncIndicator />);
+    expect(screen.getByTestId("global-settings-sync-status")).toHaveAttribute(
+      "data-sync-state",
+      "acknowledged",
+    );
+
     unackedState.value = true;
     act(() => syncControl.setStatus({ syncing: true, lastSyncFailed: false }));
     expect(screen.getByTestId("global-settings-sync-status")).toHaveAttribute(
@@ -56,6 +76,32 @@ describe("SettingsSyncIndicator", () => {
       "pending",
     );
     expect(screen.getByText("Settings pending sync")).toBeInTheDocument();
+  });
+
+  it("shows a fresh acknowledgement after later pending work completes", () => {
+    render(<SettingsSyncIndicator />);
+
+    act(() => vi.advanceTimersByTime(1_000));
+
+    unackedState.value = true;
+    act(() => syncControl.setStatus({ syncing: true, lastSyncFailed: false }));
+    expect(screen.getByText("Settings pending sync")).toBeInTheDocument();
+
+    // Let the original acknowledgement timer reach its deadline while the
+    // actionable pending state is displayed.
+    act(() => vi.advanceTimersByTime(1_000));
+
+    unackedState.value = false;
+    act(() => syncControl.setStatus({ syncing: false, lastSyncFailed: false }));
+    expect(screen.getByTestId("global-settings-sync-status")).toHaveAttribute(
+      "data-sync-state",
+      "acknowledged",
+    );
+
+    act(() => vi.advanceTimersByTime(1_999));
+    expect(screen.getByText("Settings synced")).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.queryByTestId("global-settings-sync-status")).toBeNull();
   });
 
   it("does not block global reset confirmation while settings are acknowledged", () => {
