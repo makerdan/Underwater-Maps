@@ -26,8 +26,10 @@ import {
   usePostUserCollectionsIdMembers,
   useDeleteUserCollectionsIdMembersMemberId,
   useGetDatasetsMySaves,
+  useGetUserDatasets,
   getGetUserCollectionsQueryKey,
   getGetDatasetsMySavesQueryKey,
+  getGetUserDatasetsQueryKey,
   type DatasetCollection,
   type DatasetCollectionMember,
   type UserCatalogSave,
@@ -71,6 +73,22 @@ const MEMBER_KIND_ICONS: Record<string, string> = {
   catalogSave: "💾",
 };
 
+interface RecoveryCandidate {
+  key: string;
+  datasetId: string;
+  sourceId: string;
+  source: "uploaded" | "catalogSave";
+  name: string;
+}
+
+type RecoveryCandidatesByName = Record<string, RecoveryCandidate[]>;
+
+class CollectionVerificationError extends Error {}
+
+function catalogSaveDisplayName(save: UserCatalogSave): string {
+  return save.displayLabel ?? save.catalog?.name ?? save.catalogId;
+}
+
 // ---------------------------------------------------------------------------
 // AddToCollectionDialog
 // ---------------------------------------------------------------------------
@@ -109,8 +127,6 @@ export const AddToCollectionDialog: React.FC<{
   useEffect(() => {
     openerRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    // Always move keyboard focus inside the dialog. Empty accounts have no
-    // listbox to focus, so the dialog itself is the safe fallback.
     (listRef.current ?? dialogRef.current)?.focus();
     return () => {
       if (openerRef.current && document.contains(openerRef.current)) {
@@ -151,6 +167,7 @@ export const AddToCollectionDialog: React.FC<{
     if (e.key === "Escape") { e.preventDefault(); if (!pending) onClose(); }
     else if (e.key === "Enter") { e.preventDefault(); void handleConfirm(); }
   };
+
   const onDialogKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape" && !pending) {
       e.preventDefault();
@@ -160,13 +177,13 @@ export const AddToCollectionDialog: React.FC<{
 
   return (
     <div
-      role="dialog" aria-modal="true" aria-label={`Add "${label}" to a collection`}
       ref={dialogRef}
+      role="dialog" aria-modal="true" aria-label={`Add "${label}" to a collection`}
       data-testid="add-to-collection-dialog"
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000 }}
-      onClick={pending ? undefined : onClose}
       onKeyDown={onDialogKeyDown}
       tabIndex={-1}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000 }}
+      onClick={pending ? undefined : onClose}
       aria-busy={pending || undefined}
     >
       {/* width caps at 90vw so the dialog stays usable at phone widths */}
@@ -249,6 +266,16 @@ const CollectionRow: React.FC<{
   activating?: boolean;
   /** Names of saved members that were unavailable during the last activation. */
   unavailableMemberNames?: string[];
+  /** Exact-name My Library candidates for unavailable members. */
+  recoveryCandidates?: RecoveryCandidatesByName;
+  /** Candidate key selected for each unavailable member name. */
+  selectedRecoveryCandidates?: Record<string, string>;
+  /** Select a candidate without applying it to the current scene. */
+  onSelectRecoveryCandidate?: (memberName: string, candidateKey: string) => void;
+  /** Apply explicitly selected candidates by re-running the activation. */
+  onApplyRecoveryCandidates?: () => void;
+  /** Verification/loading failure; unlike an unavailable warning, no scene was changed. */
+  verificationError?: string | null;
   /** Actionable error from the most recent ordinary collection load. */
   loadError?: string | null;
   /**
@@ -257,7 +284,7 @@ const CollectionRow: React.FC<{
    * edited after applying. Null/undefined hides the badge.
    */
   geoBadge?: "applied" | "outdated" | null;
-}> = ({ collection, expanded, onToggle, onRename, onDelete, onRemoveMember, removingMemberIds, memberRemovalErrors, onDownloadOffline, offlineRollup = "none", onOpenSettings, onActivate, onLoad, onRetry, activating = false, unavailableMemberNames = [], loadError = null, geoBadge = null }) => {
+}> = ({ collection, expanded, onToggle, onRename, onDelete, onRemoveMember, removingMemberIds, memberRemovalErrors, onDownloadOffline, offlineRollup = "none", onOpenSettings, onActivate, onLoad, onRetry, activating = false, unavailableMemberNames = [], recoveryCandidates = {}, selectedRecoveryCandidates = {}, onSelectRecoveryCandidate, onApplyRecoveryCandidates, verificationError = null, loadError = null, geoBadge = null }) => {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -410,10 +437,39 @@ const CollectionRow: React.FC<{
           </>
         )}
       </div>
+      {activating && (
+        <div
+          data-testid={`collection-verifying-${collection.id}`}
+          role="status"
+          style={{ padding: "3px 26px 5px", color: "#67e8f9", fontSize: "calc(12px * var(--bs-font-scale, 1))" }}
+        >
+          Verifying saved datasets and My Library…
+        </div>
+      )}
       {renameError && (
         <ErrorMessage data-testid="collection-rename-error" message={renameError} style={{ padding: "0 26px 4px", color: "#fca5a5", fontSize: "calc(12px * var(--bs-font-scale, 1))" }} />
       )}
-      {unavailableMemberNames.length > 0 && (
+      {verificationError && (
+        <div style={{ padding: "3px 26px 5px" }}>
+          <ErrorMessage
+            data-testid={`collection-verification-error-${collection.id}`}
+            role="alert"
+            message={verificationError}
+            style={{ color: "#fca5a5", fontSize: "calc(12px * var(--bs-font-scale, 1))" }}
+          />
+          {onRetry && (
+            <button
+              data-testid={`btn-retry-collection-verification-${collection.id}`}
+              onClick={onRetry}
+              disabled={activating}
+              style={{ marginTop: 5, background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.4)", borderRadius: 3, color: "#fca5a5", cursor: activating ? "wait" : "pointer", fontSize: "calc(11px * var(--bs-font-scale, 1))", padding: "1px 6px", whiteSpace: "nowrap" }}
+            >
+              {activating ? "Retrying…" : "Try again"}
+            </button>
+          )}
+        </div>
+      )}
+      {!verificationError && unavailableMemberNames.length > 0 && (
         <div
           data-testid={`collection-load-warning-${collection.id}`}
           role="status"
@@ -430,6 +486,47 @@ const CollectionRow: React.FC<{
                 style={{ marginLeft: 8, background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.4)", borderRadius: 3, color: "#fbbf24", cursor: activating ? "wait" : "pointer", fontSize: "calc(11px * var(--bs-font-scale, 1))", padding: "1px 6px", whiteSpace: "nowrap" }}
               >
                 {activating ? "Retrying…" : "Retry now"}
+              </button>
+            )}
+            {Object.entries(recoveryCandidates).map(([memberName, candidates]) => (
+              <div
+                key={memberName}
+                data-testid={`collection-recovery-${collection.id}-${memberName}`}
+                style={{ marginTop: 6, color: "#cbd5e1" }}
+              >
+                <div style={{ marginBottom: 3 }}>
+                  Find an exact-name match in My Library for <strong>{memberName}</strong>:
+                </div>
+                {candidates.length === 0 ? (
+                  <div style={{ color: "#94a3b8", fontStyle: "italic" }}>No exact-name candidates found.</div>
+                ) : (
+                  candidates.map((candidate) => (
+                    <label
+                      key={candidate.key}
+                      data-testid={`collection-recovery-candidate-${collection.id}-${candidate.key}`}
+                      style={{ display: "block", padding: "2px 0", color: "#cbd5e1", cursor: "pointer" }}
+                    >
+                      <input
+                        type="radio"
+                        name={`collection-recovery-${collection.id}-${memberName}`}
+                        checked={selectedRecoveryCandidates[memberName] === candidate.key}
+                        onChange={() => onSelectRecoveryCandidate?.(memberName, candidate.key)}
+                        disabled={activating}
+                      />{" "}
+                      {candidate.name} · {candidate.source === "uploaded" ? "Uploaded dataset" : "Ready catalog save"} · {candidate.sourceId} · dataset {candidate.datasetId}
+                    </label>
+                  ))
+                )}
+              </div>
+            ))}
+            {onApplyRecoveryCandidates && Object.keys(selectedRecoveryCandidates).length > 0 && (
+              <button
+                data-testid={`btn-apply-collection-recovery-${collection.id}`}
+                onClick={onApplyRecoveryCandidates}
+                disabled={activating}
+                style={{ marginTop: 7, background: "rgba(0,229,255,0.08)", border: "1px solid rgba(0,229,255,0.4)", borderRadius: 3, color: "#67e8f9", cursor: activating ? "wait" : "pointer", fontSize: "calc(11px * var(--bs-font-scale, 1))", padding: "2px 7px", whiteSpace: "nowrap" }}
+              >
+                {activating ? "Applying…" : "Use selected replacements"}
               </button>
             )}
         </div>
@@ -507,8 +604,17 @@ export const CollectionsSection: React.FC = () => {
 
   // Saves list (unfiltered) so catalogSave members can be mapped to their
   // materialized dataset ids for offline-status rollups.
-  const { data: allSaves = [] } = useGetDatasetsMySaves(undefined, {
+  const {
+    data: allSaves = [],
+    refetch: refetchSaves,
+  } = useGetDatasetsMySaves(undefined, {
     query: { queryKey: getGetDatasetsMySavesQueryKey(), enabled: isLoaded && isSignedIn === true },
+  });
+  const {
+    data: userDatasets = [],
+    refetch: refetchUserDatasets,
+  } = useGetUserDatasets({
+    query: { queryKey: getGetUserDatasetsQueryKey(), enabled: isLoaded && isSignedIn === true },
   });
   const packStatuses = useOfflinePackStatuses();
 
@@ -559,6 +665,9 @@ export const CollectionsSection: React.FC = () => {
   const activatingRef = useRef<string | null>(null);
   const pendingPrimaryLoadRef = useRef<{ collectionId: string; datasetId: string } | null>(null);
   const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
+  const [verificationErrors, setVerificationErrors] = useState<Record<string, string>>({});
+  const [recoveryCandidates, setRecoveryCandidates] = useState<Record<string, RecoveryCandidatesByName>>({});
+  const [selectedRecoveryCandidates, setSelectedRecoveryCandidates] = useState<Record<string, Record<string, string>>>({});
   // Freshly-created collection kept as a fallback so the settings sheet can
   // open immediately, before the collections query refetch lands.
   const [createdFallback, setCreatedFallback] = useState<DatasetCollection | null>(null);
@@ -629,18 +738,16 @@ export const CollectionsSection: React.FC = () => {
   }, [confirmDelete, deletePending, deleteMutation, invalidate]);
 
   const handleRemoveMember = useCallback(async (collectionId: string, memberId: string) => {
+    setRemovingMemberIds((s) => new Set(s).add(memberId));
     setMemberRemovalErrors((errors) => {
       const next = { ...errors };
       delete next[memberId];
       return next;
     });
-    setRemovingMemberIds((s) => new Set(s).add(memberId));
     try {
       await removeMemberMutation.mutateAsync({ id: collectionId, memberId });
       await invalidate();
     } catch (err) {
-      // Keep the row in place on failure. The server did not confirm removal,
-      // so a refetch here would hide the actionable error behind stale data.
       setMemberRemovalErrors((errors) => ({
         ...errors,
         [memberId]: friendlyError(err, "Could not remove this member. It is still in the collection."),
@@ -651,39 +758,154 @@ export const CollectionsSection: React.FC = () => {
   }, [removeMemberMutation, invalidate]);
 
   /**
+   * Resolve collection members from a fresh, unfiltered My Saves response.
+   * The render-time query data is intentionally not trusted for activation:
+   * it may still be the empty result from the first render or an older cache
+   * entry while server-side catalog materialization has already completed.
+   *
+   * When members are unresolved, refresh My Library too so recovery choices
+   * are based on the current uploaded and ready catalog datasets.
+   */
+  const resolveCollectionMembers = useCallback(async (
+    c: DatasetCollection,
+    replacements: Record<string, string> = {},
+  ): Promise<{
+    entries: Array<{ datasetId: string; source: "user" }>;
+    unresolvedMemberNames: string[];
+    candidates: RecoveryCandidatesByName;
+  }> => {
+    let saves = allSaves;
+    if (c.members.some((m) => m.kind === "catalogSave")) {
+      let result: Awaited<ReturnType<typeof refetchSaves>>;
+      try {
+        result = await refetchSaves();
+      } catch {
+        throw new CollectionVerificationError("Could not verify your saved datasets. Try again.");
+      }
+      if (result.isError || !Array.isArray(result.data)) {
+        throw new CollectionVerificationError("Could not verify your saved datasets. Try again.");
+      }
+      saves = result.data;
+    }
+
+    const savesById = new Map(saves.map((save) => [save.id, save]));
+    const nativeDatasetId = (member: DatasetCollectionMember): string | null =>
+      member.kind === "dataset" ? member.refId : savesById.get(member.refId)?.datasetId ?? null;
+    const unresolvedBeforeRecovery = c.members
+      .filter((member) => !nativeDatasetId(member))
+      .map((member) => member.name);
+
+    let libraryUploads = userDatasets;
+    const candidates: RecoveryCandidatesByName = {};
+    if (unresolvedBeforeRecovery.length > 0 || Object.keys(replacements).length > 0) {
+      let result: Awaited<ReturnType<typeof refetchUserDatasets>>;
+      try {
+        result = await refetchUserDatasets();
+      } catch {
+        throw new CollectionVerificationError("Could not verify My Library for recovery matches. Try again.");
+      }
+      if (result.isError || !Array.isArray(result.data)) {
+        throw new CollectionVerificationError("Could not verify My Library for recovery matches. Try again.");
+      }
+      libraryUploads = result.data;
+
+      const wantedNames = new Set(unresolvedBeforeRecovery);
+      for (const name of wantedNames) {
+        candidates[name] = [];
+      }
+      for (const dataset of libraryUploads) {
+        if (!wantedNames.has(dataset.name)) continue;
+        candidates[dataset.name]!.push({
+          key: `uploaded:${dataset.id}`,
+          datasetId: dataset.id,
+          sourceId: dataset.id,
+          source: "uploaded",
+          name: dataset.name,
+        });
+      }
+      for (const save of saves) {
+        if (save.status !== "ready" || !save.datasetId) continue;
+        const name = catalogSaveDisplayName(save);
+        if (!wantedNames.has(name)) continue;
+        candidates[name]!.push({
+          key: `catalogSave:${save.id}:${save.datasetId}`,
+          datasetId: save.datasetId,
+          sourceId: save.id,
+          source: "catalogSave",
+          name,
+        });
+      }
+    }
+
+    const entries: Array<{ datasetId: string; source: "user" }> = [];
+    const unresolvedMemberNames: string[] = [];
+    for (const member of c.members) {
+      const resolvedId = nativeDatasetId(member);
+      if (resolvedId) {
+        entries.push({ datasetId: resolvedId, source: "user" });
+        continue;
+      }
+      const selectedKey = replacements[member.name];
+      if (selectedKey) {
+        const candidate = candidates[member.name]?.find((item) => item.key === selectedKey);
+        if (!candidate) {
+          throw new CollectionVerificationError(
+            `The selected replacement for "${member.name}" is no longer in My Library. Try again.`,
+          );
+        }
+        entries.push({ datasetId: candidate.datasetId, source: "user" });
+      } else {
+        unresolvedMemberNames.push(member.name);
+      }
+    }
+
+    return { entries, unresolvedMemberNames, candidates };
+  }, [allSaves, refetchSaves, refetchUserDatasets, userDatasets]);
+
+  /**
    * "Activate for Puzzle": load all member datasets into the Overview pool,
    * enter puzzle mode, restore the active layout revision from the server,
    * and enable the background reference overlay.
    */
-  const handleActivate = useCallback(async (c: DatasetCollection) => {
+  const handleActivate = useCallback(async (
+    c: DatasetCollection,
+    replacements: Record<string, string> = {},
+  ) => {
     if (activatingRef.current) return;
     activatingRef.current = c.id;
     setActivatingId(c.id);
+    setVerificationErrors((errors) => {
+      const next = { ...errors };
+      delete next[c.id];
+      return next;
+    });
+    setCollectionLoadNotice(null);
     try {
+      const resolved = await resolveCollectionMembers(c, replacements);
+      if (resolved.entries.length === 0) {
+        throw new Error("No collection members are available to load yet.");
+      }
       const terrain = useTerrainStore.getState();
-      const unresolvedMemberNames = c.members
-        .filter((m) => !memberDatasetId(m))
-        .map((m) => m.name);
       setCollectionLoadNotice(
-        unresolvedMemberNames.length > 0
-          ? { collectionId: c.id, memberNames: unresolvedMemberNames }
+        resolved.unresolvedMemberNames.length > 0
+          ? { collectionId: c.id, memberNames: resolved.unresolvedMemberNames }
           : null,
       );
-      const entries = c.members.flatMap((m) => {
-        const datasetId = memberDatasetId(m);
-        if (!datasetId) return [];
-        return [{
-          datasetId,
-          // Catalog-save refs resolve to their materialized custom_datasets
-          // UUIDs, so both member kinds are fetched through /user/datasets.
-          source: "user" as const,
-        }];
-      });
-      terrain.setCollectionScope(c.id, entries.map((entry) => entry.datasetId));
-      terrain.activateCollection(entries);
-      await useSpecialCollectionStore.getState().activateForPuzzle(c, unresolvedMemberNames);
+      setRecoveryCandidates((current) => ({ ...current, [c.id]: resolved.candidates }));
+      setSelectedRecoveryCandidates((current) => ({ ...current, [c.id]: {} }));
+      terrain.setCollectionScope(c.id, resolved.entries.map((entry) => entry.datasetId));
+      terrain.activateCollection(resolved.entries);
+      await useSpecialCollectionStore.getState().activateForPuzzle(c, resolved.unresolvedMemberNames);
       if (useTerrainStore.getState().collectionScopeId === c.id) {
         useUiStore.getState().setOverviewOpen(true);
+      }
+    } catch (err) {
+      setCollectionLoadNotice(null);
+      if (err instanceof CollectionVerificationError) {
+        setVerificationErrors((errors) => ({
+          ...errors,
+          [c.id]: err.message,
+        }));
       }
     } finally {
       if (activatingRef.current === c.id) {
@@ -691,14 +913,17 @@ export const CollectionsSection: React.FC = () => {
         setActivatingId(null);
       }
     }
-  }, [memberDatasetId, setCollectionLoadNotice]);
+  }, [resolveCollectionMembers, setCollectionLoadNotice]);
 
   /**
    * Load a collection into the normal multi-dataset 3D view. This deliberately
    * shares member resolution with Puzzle activation, but never opens Overview
    * or restores puzzle state.
    */
-  const handleLoad = useCallback(async (c: DatasetCollection) => {
+  const handleLoad = useCallback(async (
+    c: DatasetCollection,
+    replacements: Record<string, string> = {},
+  ) => {
     if (activatingRef.current || c.members.length === 0) return;
     activatingRef.current = c.id;
     setActivatingId(c.id);
@@ -707,23 +932,22 @@ export const CollectionsSection: React.FC = () => {
       delete next[c.id];
       return next;
     });
+    setVerificationErrors((errors) => {
+      const next = { ...errors };
+      delete next[c.id];
+      return next;
+    });
+    setCollectionLoadNotice(null);
     try {
-      const unresolvedMemberNames = c.members
-        .filter((m) => !memberDatasetId(m))
-        .map((m) => m.name);
+      const resolved = await resolveCollectionMembers(c, replacements);
+      const { entries, unresolvedMemberNames } = resolved;
       setCollectionLoadNotice(
         unresolvedMemberNames.length > 0
           ? { collectionId: c.id, memberNames: unresolvedMemberNames }
           : null,
       );
-      const entries = c.members.flatMap((m) => {
-        const datasetId = memberDatasetId(m);
-        if (!datasetId) return [];
-        return [{
-          datasetId,
-          source: "user" as const,
-        }];
-      });
+      setRecoveryCandidates((current) => ({ ...current, [c.id]: resolved.candidates }));
+      setSelectedRecoveryCandidates((current) => ({ ...current, [c.id]: {} }));
       if (entries.length === 0) {
         throw new Error("No collection members are available to load yet.");
       }
@@ -742,16 +966,20 @@ export const CollectionsSection: React.FC = () => {
       useUiStore.getState().setSidebarMode("explore");
     } catch (err) {
       pendingPrimaryLoadRef.current = null;
-      setLoadErrors((errors) => ({
-        ...errors,
-        [c.id]: err instanceof Error ? err.message : "Could not load this collection. Try again.",
-      }));
+      if (err instanceof CollectionVerificationError) {
+        setVerificationErrors((errors) => ({ ...errors, [c.id]: err.message }));
+      } else {
+        setLoadErrors((errors) => ({
+          ...errors,
+          [c.id]: err instanceof Error ? err.message : "Could not load this collection. Try again.",
+        }));
+      }
       if (activatingRef.current === c.id) {
         activatingRef.current = null;
         setActivatingId(null);
       }
     }
-  }, [memberDatasetId, setCollectionLoadNotice]);
+  }, [resolveCollectionMembers, setCollectionLoadNotice]);
 
   // Finish an ordinary collection load only when its first member can become
   // the visible 3D scene primary. The loader also reports a definitive terrain
@@ -780,31 +1008,37 @@ export const CollectionsSection: React.FC = () => {
 
   const handleRetry = useCallback(async (c: DatasetCollection) => {
     if (activatingRef.current) return;
+    if (c.collectionKind === "special") {
+      await handleActivate(c);
+      return;
+    }
+    // A verification failure happens before the initial load establishes this
+    // collection's scope. In that state a retry must repeat the initial load,
+    // not take the additive member path that intentionally ignores inactive
+    // collections.
+    if (verificationErrors[c.id]) {
+      await handleLoad(c);
+      return;
+    }
     activatingRef.current = c.id;
     setActivatingId(c.id);
+    setVerificationErrors((errors) => {
+      const next = { ...errors };
+      delete next[c.id];
+      return next;
+    });
+    setCollectionLoadNotice(null);
     try {
-      // Force the saves query to resolve again: catalog-save materialization may
-      // have completed since the original collection load.
-      await qc.invalidateQueries({ queryKey: getGetDatasetsMySavesQueryKey() });
-      const freshSaves = qc.getQueryData<UserCatalogSave[]>(getGetDatasetsMySavesQueryKey()) ?? allSaves;
-      const freshSavesById = new Map(freshSaves.map((save) => [save.id, save]));
-      const resolveMember = (m: DatasetCollectionMember): string | null =>
-        m.kind === "dataset" ? m.refId : freshSavesById.get(m.refId)?.datasetId ?? null;
-      const entries = c.members.flatMap((m) => {
-        const datasetId = resolveMember(m);
-        return datasetId
-          ? [{ datasetId, source: "user" as const }]
-          : [];
-      });
-      const unresolvedMemberNames = c.members
-        .filter((m) => !resolveMember(m))
-        .map((m) => m.name);
+      const resolved = await resolveCollectionMembers(c);
+      const { entries, unresolvedMemberNames } = resolved;
       if (useTerrainStore.getState().collectionScopeId !== c.id) return;
       setCollectionLoadNotice(
         unresolvedMemberNames.length > 0
           ? { collectionId: c.id, memberNames: unresolvedMemberNames }
           : null,
       );
+      setRecoveryCandidates((current) => ({ ...current, [c.id]: resolved.candidates }));
+      setSelectedRecoveryCandidates((current) => ({ ...current, [c.id]: {} }));
       if (entries.length === 0) {
         throw new Error("No collection members are available to load yet.");
       }
@@ -819,17 +1053,41 @@ export const CollectionsSection: React.FC = () => {
       // the refetch, do not resurrect this collection's old members.
       useTerrainStore.getState().addCollectionMembers(entries);
     } catch (err) {
-      setLoadErrors((errors) => ({
-        ...errors,
-        [c.id]: err instanceof Error ? err.message : "Could not retry this collection. Try again.",
-      }));
+      if (err instanceof CollectionVerificationError) {
+        setVerificationErrors((errors) => ({ ...errors, [c.id]: err.message }));
+      } else {
+        setLoadErrors((errors) => ({
+          ...errors,
+          [c.id]: err instanceof Error ? err.message : "Could not retry this collection. Try again.",
+        }));
+      }
     } finally {
       if (activatingRef.current === c.id) {
         activatingRef.current = null;
         setActivatingId(null);
       }
     }
-  }, [allSaves, qc, setCollectionLoadNotice]);
+  }, [handleActivate, handleLoad, resolveCollectionMembers, setCollectionLoadNotice, verificationErrors]);
+
+  const selectRecoveryCandidate = useCallback((collectionId: string, memberName: string, candidateKey: string) => {
+    setSelectedRecoveryCandidates((current) => ({
+      ...current,
+      [collectionId]: {
+        ...(current[collectionId] ?? {}),
+        [memberName]: candidateKey,
+      },
+    }));
+  }, []);
+
+  const applyRecoveryCandidates = useCallback((c: DatasetCollection) => {
+    const replacements = selectedRecoveryCandidates[c.id];
+    if (!replacements || Object.keys(replacements).length === 0) return;
+    if (c.collectionKind === "special") {
+      void handleActivate(c, replacements);
+    } else {
+      void handleLoad(c, replacements);
+    }
+  }, [handleActivate, handleLoad, selectedRecoveryCandidates]);
 
   // A collection retry/activation can await server state while the user begins
   // another exploration selection. Release the old row's loading state as soon
@@ -989,11 +1247,18 @@ export const CollectionsSection: React.FC = () => {
               } : undefined}
               onActivate={c.collectionKind === "special" ? () => void handleActivate(c) : undefined}
               onLoad={() => void handleLoad(c)}
-              onRetry={c.collectionKind === "special" ? undefined : () => void handleRetry(c)}
+               onRetry={() => void handleRetry(c)}
               activating={activatingId === c.id}
               unavailableMemberNames={
                 collectionLoadNotice?.collectionId === c.id ? collectionLoadNotice.memberNames : []
               }
+               recoveryCandidates={recoveryCandidates[c.id]}
+               selectedRecoveryCandidates={selectedRecoveryCandidates[c.id]}
+               onSelectRecoveryCandidate={(memberName, candidateKey) =>
+                 selectRecoveryCandidate(c.id, memberName, candidateKey)
+               }
+               onApplyRecoveryCandidates={() => applyRecoveryCandidates(c)}
+               verificationError={verificationErrors[c.id] ?? null}
               loadError={loadErrors[c.id] ?? null}
               geoBadge={geoLayout?.collectionId === c.id ? geoLayout.status : null}
             />
@@ -1011,10 +1276,8 @@ export const CollectionsSection: React.FC = () => {
 
       {confirmDelete && (
         <div
-          role="dialog" aria-modal="true" aria-label={`Delete collection "${confirmDelete.name}"`}
           ref={deleteDialogRef}
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000 }}
-          onClick={deletePending ? undefined : () => setConfirmDelete(null)}
+          role="dialog" aria-modal="true" aria-label={`Delete collection "${confirmDelete.name}"`}
           onKeyDown={(e) => {
             if (e.key === "Escape" && !deletePending) {
               e.preventDefault();
@@ -1023,6 +1286,8 @@ export const CollectionsSection: React.FC = () => {
           }}
           tabIndex={-1}
           aria-busy={deletePending || undefined}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000 }}
+          onClick={deletePending ? undefined : () => setConfirmDelete(null)}
         >
           <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(0,10,20,0.95)", border: "1px solid rgba(0,229,255,0.35)", borderRadius: 6, padding: 18, width: 340, maxWidth: "90vw", color: "#cbd5e1", fontFamily: "'JetBrains Mono', 'Fira Code', monospace", fontSize: "calc(14px * var(--bs-font-scale, 1))" }}>
             <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", fontWeight: 700, marginBottom: 10, letterSpacing: "0.05em" }}>

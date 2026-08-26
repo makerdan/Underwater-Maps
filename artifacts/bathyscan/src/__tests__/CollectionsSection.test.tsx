@@ -45,6 +45,8 @@ const mocks = vi.hoisted(() => ({
   invalidateQueries: vi.fn(),
   setQueryData: vi.fn(),
   getQueryData: vi.fn(),
+  refetchSaves: vi.fn(),
+  refetchUserDatasets: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -92,6 +94,7 @@ const makeApiClientMock = vi.hoisted(() => {
 let currentIsSignedIn = true;
 let currentCollections: unknown[] = [];
 let currentSaves: unknown[] = [];
+let currentUploads: unknown[] = [];
 
 vi.mock(
   "@workspace/api-client-react",
@@ -106,6 +109,15 @@ vi.mock(
       }),
       useGetDatasetsMySaves: () => ({
         data: currentSaves,
+        refetch: mocks.refetchSaves,
+        isFetching: false,
+        isLoading: false,
+        isPending: false,
+        isError: false,
+      }),
+      useGetUserDatasets: () => ({
+        data: currentUploads,
+        refetch: mocks.refetchUserDatasets,
         isFetching: false,
         isLoading: false,
         isPending: false,
@@ -253,6 +265,7 @@ beforeEach(() => {
   currentIsSignedIn = true;
   currentCollections = [];
   currentSaves = [];
+  currentUploads = [];
   mocks.createMutateAsync.mockReset().mockResolvedValue({ id: "col-new", name: "New", members: [] });
   mocks.renameMutateAsync.mockReset().mockResolvedValue({});
   mocks.deleteMutateAsync.mockReset().mockResolvedValue(undefined);
@@ -272,6 +285,14 @@ beforeEach(() => {
   mocks.invalidateQueries.mockReset().mockResolvedValue(undefined);
   mocks.setQueryData.mockReset();
   mocks.getQueryData.mockReset().mockReturnValue(undefined);
+  mocks.refetchSaves.mockReset().mockImplementation(async () => ({
+    data: currentSaves,
+    isError: false,
+  }));
+  mocks.refetchUserDatasets.mockReset().mockImplementation(async () => ({
+    data: currentUploads,
+    isError: false,
+  }));
   act(() => useTerrainStore.getState().clear());
   useSpecialCollectionStore.setState({ active: null, pendingRestore: null, pendingPuzzleOn: 0, geoLayout: null, unresolvedMemberNames: [] });
   useUiStore.getState().setOverviewOpen(false);
@@ -372,6 +393,137 @@ describe("CollectionsSection", () => {
     useTerrainStore.setState({ activateCollection: original });
   });
 
+  it("offers only exact-name My Library candidates and waits for explicit confirmation before replacing a missing member", async () => {
+    const original = useTerrainStore.getState().activateCollection;
+    const activateCollection = vi.fn((entries: Parameters<typeof original>[0]) => {
+      original(entries);
+      const primary = entries[0];
+      if (!primary) return;
+      useTerrainStore.getState().setDatasetGrids(primary.datasetId, {
+        activeGrid: makeGrid(primary.datasetId) as never,
+        overviewGrid: makeGrid(primary.datasetId) as never,
+      });
+    });
+    useTerrainStore.setState({ activateCollection });
+    currentCollections = [{
+      ...COLLECTION_TRIP,
+      members: [
+        COLLECTION_TRIP.members[0],
+        { id: "mem-missing", kind: "catalogSave", refId: "missing-save", name: "Exact Match", createdAt: "2024-01-03T00:00:00Z" },
+      ],
+    }];
+    currentUploads = [
+      { id: "upload-one", name: "Exact Match" },
+      { id: "upload-two", name: "Exact Match" },
+      { id: "upload-substring", name: "Exact Match Extended" },
+      { id: "upload-case", name: "exact match" },
+    ];
+    mocks.refetchSaves.mockResolvedValue({
+      data: [
+        { id: "missing-save", status: "failed", catalogId: "old-save" },
+        { id: "ready-save", status: "ready", datasetId: "catalog-replacement", catalogId: "replacement", displayLabel: "Exact Match" },
+      ],
+      isError: false,
+    });
+    renderWithProviders(<CollectionsSection />);
+
+    fireEvent.click(screen.getByTestId("btn-load-collection-col-trip"));
+    await waitFor(() => expect(activateCollection).toHaveBeenCalledWith([
+      { datasetId: "ds-1", source: "user" },
+    ]));
+    expect(screen.getAllByTestId(/^collection-recovery-candidate-col-trip-/)).toHaveLength(3);
+    expect(screen.getByTestId("collection-recovery-candidate-col-trip-uploaded:upload-one"))
+      .toHaveTextContent("Uploaded dataset · upload-one · dataset upload-one");
+    expect(screen.getByTestId("collection-recovery-candidate-col-trip-catalogSave:ready-save:catalog-replacement"))
+      .toHaveTextContent("Ready catalog save · ready-save · dataset catalog-replacement");
+    expect(screen.queryByText(/Exact Match Extended/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/exact match/)).not.toBeInTheDocument();
+
+    await waitFor(() => expect(screen.getByTestId("btn-load-collection-col-trip")).toBeEnabled());
+    fireEvent.click(screen.getByTestId("collection-recovery-candidate-col-trip-uploaded:upload-one"));
+    expect(activateCollection).toHaveBeenCalledTimes(1);
+    expect(mocks.addMemberMutateAsync).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("btn-apply-collection-recovery-col-trip"));
+    await waitFor(() => expect(activateCollection).toHaveBeenLastCalledWith([
+      { datasetId: "ds-1", source: "user" },
+      { datasetId: "upload-one", source: "user" },
+    ]));
+    expect(mocks.addMemberMutateAsync).not.toHaveBeenCalled();
+    useTerrainStore.setState({ activateCollection: original });
+  });
+
+  it("shows a retryable verification error without activating a partial collection when My Saves cannot be verified", async () => {
+    const activateCollection = vi.fn();
+    const original = useTerrainStore.getState().activateCollection;
+    useTerrainStore.setState({ activateCollection });
+    currentCollections = [COLLECTION_TRIP];
+    mocks.refetchSaves.mockResolvedValue({ data: undefined, isError: true });
+    renderWithProviders(<CollectionsSection />);
+
+    fireEvent.click(screen.getByTestId("btn-load-collection-col-trip"));
+    await waitFor(() => {
+      expect(screen.getByTestId("collection-verification-error-col-trip"))
+        .toHaveTextContent("Could not verify your saved datasets. Try again.");
+    });
+    expect(screen.getByTestId("btn-retry-collection-verification-col-trip")).toBeEnabled();
+    expect(activateCollection).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("collection-load-warning-col-trip")).not.toBeInTheDocument();
+    expect(useTerrainStore.getState().collectionScopeId).toBeNull();
+
+    mocks.refetchSaves.mockResolvedValue({
+      data: [
+        { id: "save-1", status: "ready", datasetId: "catalog-1", catalogId: "catalog-1" },
+      ],
+      isError: false,
+    });
+    fireEvent.click(screen.getByTestId("btn-retry-collection-verification-col-trip"));
+    await waitFor(() => expect(activateCollection).toHaveBeenCalledWith([
+      { datasetId: "ds-1", source: "user" },
+      { datasetId: "catalog-1", source: "user" },
+    ]));
+    useTerrainStore.setState({ activateCollection: original });
+  });
+
+  it("does not misreport confirmed missing members when My Library recovery lookup fails", async () => {
+    const activateCollection = vi.fn();
+    const original = useTerrainStore.getState().activateCollection;
+    useTerrainStore.setState({ activateCollection });
+    currentCollections = [{
+      ...COLLECTION_TRIP,
+      members: [
+        COLLECTION_TRIP.members[0],
+        { id: "mem-missing", kind: "catalogSave", refId: "missing-save", name: "Needs Lookup", createdAt: "2024-01-03T00:00:00Z" },
+      ],
+    }];
+    mocks.refetchSaves.mockResolvedValue({
+      data: [{ id: "missing-save", status: "failed", catalogId: "old-save" }],
+      isError: false,
+    });
+    mocks.refetchUserDatasets.mockResolvedValue({ data: undefined, isError: true });
+    renderWithProviders(<CollectionsSection />);
+
+    fireEvent.click(screen.getByTestId("btn-load-collection-col-trip"));
+    await waitFor(() => {
+      expect(screen.getByTestId("collection-verification-error-col-trip"))
+        .toHaveTextContent("Could not verify My Library for recovery matches. Try again.");
+    });
+    expect(activateCollection).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("collection-load-warning-col-trip")).not.toBeInTheDocument();
+
+    mocks.refetchUserDatasets.mockResolvedValue({
+      data: [{ id: "recovery-upload", name: "Needs Lookup" }],
+      isError: false,
+    });
+    fireEvent.click(screen.getByTestId("btn-retry-collection-verification-col-trip"));
+    await waitFor(() => expect(activateCollection).toHaveBeenCalledWith([
+      { datasetId: "ds-1", source: "user" },
+    ]));
+    expect(screen.getByTestId("collection-recovery-candidate-col-trip-uploaded:recovery-upload"))
+      .toHaveTextContent("Needs Lookup");
+    useTerrainStore.setState({ activateCollection: original });
+  });
+
   it("shows a retryable row error when the primary collection dataset fails to load", async () => {
     const activateCollection = vi.fn();
     const original = useTerrainStore.getState().activateCollection;
@@ -421,10 +573,10 @@ describe("CollectionsSection", () => {
     await waitFor(() => expect(activateCollection).toHaveBeenCalledWith([
       { datasetId: "ds-1", source: "user" },
     ]));
-    expect(screen.getByTestId("btn-retry-collection-col-trip")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("btn-retry-collection-col-trip")).toBeEnabled());
 
     const freshSave = { id: "save-later", datasetId: "catalog-later" };
-    mocks.getQueryData.mockReturnValue([freshSave]);
+    mocks.refetchSaves.mockResolvedValueOnce({ data: [freshSave], isError: false });
     fireEvent.click(screen.getByTestId("btn-retry-collection-col-trip"));
     await waitFor(() => expect(addCollectionMembers).toHaveBeenCalledWith([
       { datasetId: "ds-1", source: "user" },
@@ -888,6 +1040,33 @@ describe("CollectionsSection — special collections", () => {
         "Unavailable puzzle piece: Missing",
       );
       expect(useSpecialCollectionStore.getState().unresolvedMemberNames).toEqual(["Missing"]);
+    });
+
+    it("refreshes stale My Saves before activating a special collection, avoiding a false unavailable-piece warning", async () => {
+      const activateCollection = vi.fn();
+      useTerrainStore.setState({ activateCollection });
+      currentCollections = [{
+        ...COLLECTION_SPECIAL,
+        members: [
+          { id: "mem-upload", kind: "dataset", refId: "ds-1", name: "Survey A", createdAt: "2024-01-02T00:00:00Z" },
+          { id: "mem-save", kind: "catalogSave", refId: "save-fresh", name: "Fresh Catalog", createdAt: "2024-01-03T00:00:00Z" },
+        ],
+      }];
+      currentSaves = []; // Render-time cache is stale/empty.
+      mocks.refetchSaves.mockResolvedValue({
+        data: [{ id: "save-fresh", status: "ready", datasetId: "catalog-fresh", catalogId: "fresh" }],
+        isError: false,
+      });
+      renderWithProviders(<CollectionsSection />);
+
+      fireEvent.click(screen.getByTestId("btn-activate-collection-col-sp"));
+      await waitFor(() => expect(activateCollection).toHaveBeenCalledWith([
+        { datasetId: "ds-1", source: "user" },
+        { datasetId: "catalog-fresh", source: "user" },
+      ]));
+      expect(mocks.refetchSaves).toHaveBeenCalled();
+      expect(screen.queryByTestId("collection-load-warning-col-sp")).not.toBeInTheDocument();
+      expect(useSpecialCollectionStore.getState().unresolvedMemberNames).toEqual([]);
     });
 
     it("clears the unavailable-member notice on the next complete activation", async () => {
