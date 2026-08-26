@@ -585,21 +585,26 @@ const VisibleDatasetRows: React.FC<{
 
             {/* Depth-scale adjustment badge */}
             {showDepthScaleBadge && (
-              <span
-                data-testid={`depth-scale-badge-${vd.datasetId}`}
-                title="This dataset's depth range exceeds the primary's — Y-axis is compressed to fit"
-                style={{
-                  flexShrink: 0,
-                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
-                  letterSpacing: "0.04em",
-                  color: "#f59e0b",
-                  padding: "1px 4px",
-                  border: "1px solid rgba(245,158,11,0.4)",
-                  borderRadius: 2,
-                }}
+              <ViewscreenTooltip
+                label="This secondary dataset's depth range exceeds the primary's, so its Y-axis scale is compressed to fit the shared 3D view."
+                side="top"
               >
-                ⚠ Scale
-              </span>
+                <span
+                  data-testid={`depth-scale-badge-${vd.datasetId}`}
+                  title="This secondary dataset's depth range exceeds the primary's, so its Y-axis scale is compressed to fit the shared 3D view."
+                  style={{
+                    flexShrink: 0,
+                    fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                    letterSpacing: "0.04em",
+                    color: "#f59e0b",
+                    padding: "1px 4px",
+                    border: "1px solid rgba(245,158,11,0.4)",
+                    borderRadius: 2,
+                  }}
+                >
+                  ⚠ Scale
+                </span>
+              </ViewscreenTooltip>
             )}
 
             <ViewscreenTooltip label="Remove from view" side="right">

@@ -542,4 +542,42 @@ describe("DatasetPanel — collapsible streaming queue", () => {
     // Must mention: what the feature is, what nearby/auto-load means
     expect(tooltip.toLowerCase()).toMatch(/proximit|stream|auto|load|nearby/);
   });
+
+  it("(h) explains the compressed Y-axis when a secondary range exceeds the primary", () => {
+    terrainState.activeGrid = { minDepth: 0, maxDepth: 100 };
+    terrainState.visibleDatasets = [
+      { datasetId: "primary-ds", activeGrid: { minDepth: 0, maxDepth: 100 }, source: "preset" },
+      { datasetId: "secondary-ds", activeGrid: { minDepth: 0, maxDepth: 250 }, source: "preset" },
+    ];
+    terrainState.selectedIds = ["primary-ds", "secondary-ds"];
+    terrainState.selectedSources = { "primary-ds": "preset", "secondary-ds": "preset" };
+    terrainState.primaryDatasetId = "primary-ds";
+
+    render(<DatasetPanel />);
+
+    const badge = screen.getByTestId("depth-scale-badge-secondary-ds");
+    expect(badge).toHaveTextContent("⚠ Scale");
+    expect(badge.getAttribute("data-tooltip")?.toLowerCase()).toMatch(
+      /secondary.*depth.*range.*primary.*y-axis.*compressed.*shared.*3d.*view/,
+    );
+    expect(badge).toHaveAttribute(
+      "title",
+      "This secondary dataset's depth range exceeds the primary's, so its Y-axis scale is compressed to fit the shared 3D view.",
+    );
+  });
+
+  it("(i) does not show the scale warning when the secondary range fits the primary", () => {
+    terrainState.activeGrid = { minDepth: 0, maxDepth: 100 };
+    terrainState.visibleDatasets = [
+      { datasetId: "primary-ds", activeGrid: { minDepth: 0, maxDepth: 100 }, source: "preset" },
+      { datasetId: "secondary-ds", activeGrid: { minDepth: 0, maxDepth: 100 }, source: "preset" },
+    ];
+    terrainState.selectedIds = ["primary-ds", "secondary-ds"];
+    terrainState.selectedSources = { "primary-ds": "preset", "secondary-ds": "preset" };
+    terrainState.primaryDatasetId = "primary-ds";
+
+    render(<DatasetPanel />);
+
+    expect(screen.queryByTestId("depth-scale-badge-secondary-ds")).not.toBeInTheDocument();
+  });
 });
