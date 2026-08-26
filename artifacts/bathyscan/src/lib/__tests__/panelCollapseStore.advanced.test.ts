@@ -2,11 +2,11 @@
  * panelCollapseStore — Advanced section key unit tests.
  *
  * Covers:
- *   - All five Advanced keys default to true (collapsed)
+ *   - All Advanced keys, including Depth Palette, default to true (collapsed)
  *   - setCollapsed round-trip for Advanced keys
- *   - toggle flips an Advanced key and does not touch the parent key
+ *   - toggle flips a sub-section key and does not touch the parent key
  *   - Concurrent multi-panel states are independent
- *   - Resetting to DEFAULTS restores all Advanced keys to true
+ *   - Resetting to DEFAULTS restores all sub-section keys to true
  *   - Parent panel toggle does not bleed into the Advanced sub-key
  */
 import { describe, it, expect, beforeEach } from "vitest";
@@ -18,6 +18,7 @@ const ADVANCED_IDS: PanelId[] = [
   "currentsPanelAdvanced",
   "habitatAdvanced",
   "seafloorAdvanced",
+  "depthPalette",
 ];
 
 function resetStore() {
@@ -28,14 +29,14 @@ function resetStore() {
 describe("panelCollapseStore — Advanced section keys", () => {
   beforeEach(() => resetStore());
 
-  it("all five Advanced section keys default to true (collapsed)", () => {
+  it("all sub-section keys default to true (collapsed)", () => {
     const { collapsed } = usePanelCollapseStore.getState();
     for (const id of ADVANCED_IDS) {
       expect(collapsed[id], `${id} should default to collapsed`).toBe(true);
     }
   });
 
-  it("DEFAULTS object has all five Advanced keys set to true", () => {
+  it("DEFAULTS object has all sub-section keys set to true", () => {
     for (const id of ADVANCED_IDS) {
       expect(DEFAULTS[id], `DEFAULTS.${id}`).toBe(true);
     }

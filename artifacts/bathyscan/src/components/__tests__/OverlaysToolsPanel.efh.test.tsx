@@ -86,10 +86,23 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
 vi.mock("@/lib/panelCollapseStore", () => ({
   usePanelCollapseStore: (
     sel: (s: {
-      collapsed: { overlaysTools: boolean };
-      toggle: () => void;
+      collapsed: { overlaysTools: boolean; depthPalette: boolean };
+      toggle: (id: string) => void;
     }) => unknown,
-  ) => sel({ collapsed: { overlaysTools: false }, toggle: vi.fn() }),
+  ) => {
+    const [collapsed, setCollapsed] = React.useState({
+      overlaysTools: false,
+      depthPalette: true,
+    });
+    return sel({
+      collapsed,
+      toggle: (id) => setCollapsed((state) => (
+        id === "depthPalette"
+          ? { ...state, depthPalette: !state.depthPalette }
+          : state
+      )),
+    });
+  },
 }));
 
 // ── Configurable dataset / EFH API mocks ─────────────────────────────────────
@@ -362,10 +375,24 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
 });
 
 describe("OverlaysToolsPanel — depth palette", () => {
-  it("renders the current palette preview, presets, and colormap selector", () => {
+  function expandPalette() {
+    fireEvent.click(screen.getByTestId("advanced-toggle-depthPalette"));
+  }
+
+  it("starts collapsed with an accessible toggle and keeps the active palette summary visible", () => {
     render(<OverlaysToolsPanel />);
 
     expect(screen.getByTestId("viewscreen-depth-palette")).toBeInTheDocument();
+    expect(screen.getByTestId("advanced-toggle-depthPalette")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByTestId("viewscreen-depth-palette-active")).toHaveTextContent("Custom");
+    expect(screen.getByTestId("viewscreen-depth-palette-preview").parentElement?.parentElement)
+      .toHaveStyle({ opacity: "0", pointerEvents: "none" });
+  });
+
+  it("reveals the current palette preview, presets, and colormap selector after expansion", () => {
+    render(<OverlaysToolsPanel />);
+    expandPalette();
+
     expect(screen.getByTestId("viewscreen-depth-palette-preview")).toBeInTheDocument();
     expect(screen.getByTestId("viewscreen-palette-preset-pastel")).toBeInTheDocument();
     expect(screen.getByTestId("viewscreen-depth-colormap-select")).toHaveValue("ocean");
@@ -373,6 +400,7 @@ describe("OverlaysToolsPanel — depth palette", () => {
 
   it("applies a preset through the shared palette store and flushes server sync", () => {
     render(<OverlaysToolsPanel />);
+    expandPalette();
 
     fireEvent.click(screen.getByTestId("viewscreen-palette-preset-pastel"));
 
@@ -382,6 +410,7 @@ describe("OverlaysToolsPanel — depth palette", () => {
 
   it("routes colormap changes through the shared settings mutation and flushes", () => {
     render(<OverlaysToolsPanel />);
+    expandPalette();
 
     fireEvent.change(screen.getByTestId("viewscreen-depth-colormap-select"), {
       target: { value: "thermal" },
@@ -408,6 +437,7 @@ describe("OverlaysToolsPanel — depth palette", () => {
     const theme = usePaletteStore.getState().savedDepthThemes[0]!;
 
     render(<OverlaysToolsPanel />);
+    expandPalette();
     fireEvent.click(screen.getByTestId(`viewscreen-saved-theme-${theme.id}`));
 
     expect(usePaletteStore.getState().bandColors).toEqual(["#112233", "#445566"]);
@@ -421,6 +451,7 @@ describe("OverlaysToolsPanel — depth palette", () => {
     expect(screen.queryByTestId("viewscreen-saved-themes")).not.toBeInTheDocument();
 
     act(() => usePaletteStore.getState().saveCurrentTheme("Before rename"));
+    expandPalette();
     const theme = usePaletteStore.getState().savedDepthThemes[0]!;
     expect(screen.getByTestId(`viewscreen-saved-theme-${theme.id}`)).toHaveTextContent("Before rename");
 
@@ -437,6 +468,7 @@ describe("OverlaysToolsPanel — depth palette", () => {
       usePaletteStore.getState().saveCurrentTheme("Two");
     });
     render(<OverlaysToolsPanel />);
+    expandPalette();
 
     const list = screen.getByTestId("viewscreen-saved-themes");
     expect(list).toHaveStyle({ maxHeight: "132px", overflowY: "auto" });

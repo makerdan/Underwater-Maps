@@ -22,6 +22,8 @@ const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 interface AdvancedSectionProps {
   panelId: PanelId;
   children: React.ReactNode;
+  label?: React.ReactNode;
+  summary?: React.ReactNode;
   /** When true and the section is collapsed, renders a cyan dot to hint that notable content is ready inside. */
   indicator?: boolean;
 }
@@ -29,6 +31,8 @@ interface AdvancedSectionProps {
 export const AdvancedSection: React.FC<AdvancedSectionProps> = ({
   panelId,
   children,
+  label = "Advanced",
+  summary,
   indicator = false,
 }) => {
   const collapsed = usePanelCollapseStore((s) => s.collapsed[panelId]);
@@ -73,7 +77,8 @@ export const AdvancedSection: React.FC<AdvancedSectionProps> = ({
         >
           ▸
         </span>
-        <span>Advanced</span>
+        <span>{label}</span>
+        {summary}
         {indicator && collapsed && (
           <span
             aria-label="zones ready"
@@ -94,10 +99,13 @@ export const AdvancedSection: React.FC<AdvancedSectionProps> = ({
 
       {/* Always-mounted children clipped via max-height for smooth animation */}
       <div
+        aria-hidden={collapsed}
+        inert={collapsed || undefined}
         style={{
           maxHeight: collapsed ? 0 : 1200,
           overflow: "hidden",
           opacity: collapsed ? 0 : 1,
+          pointerEvents: collapsed ? "none" : "auto",
           transition: collapsed
             ? "max-height 0.2s ease, opacity 0.15s ease"
             : "max-height 0.25s ease, opacity 0.2s ease 0.05s",

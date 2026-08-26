@@ -49,7 +49,6 @@ import {
   usePaletteStore,
 } from "@/lib/paletteStore";
 import { flushServerSync } from "@/hooks/useServerSettingsSync";
-import { SIDEBAR_HEADING } from "@/components/SidebarSection";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(2,8,18,0.94)",
@@ -256,48 +255,39 @@ const ViewscreenDepthPalette: React.FC = () => {
         background: "rgba(0,10,20,0.38)",
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 6,
-          marginBottom: 6,
-        }}
+      <AdvancedSection
+        panelId="depthPalette"
+        label="Depth Palette"
+        summary={
+          <span
+            data-testid="viewscreen-depth-palette-active"
+            style={{
+              marginLeft: "auto",
+              color: "#67e8f9",
+              fontSize: "calc(12px * var(--bs-font-scale, 1))",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            {activePresetId
+              ? PALETTE_PRESETS.find((preset) => preset.id === activePresetId)?.label
+              : "Custom"}
+          </span>
+        }
       >
-        <span
-           style={SIDEBAR_HEADING}
-        >
-          Depth Palette
-        </span>
-        <span
-          data-testid="viewscreen-depth-palette-active"
+        <div
+          data-testid="viewscreen-depth-palette-preview"
+          aria-label={`Current depth palette${blendBands ? ", blended" : ", discrete bands"}`}
           style={{
-            color: "#67e8f9",
-            fontSize: "calc(12px * var(--bs-font-scale, 1))",
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
+            height: 12,
+            marginBottom: 7,
+            border: "1px solid rgba(0,229,255,0.24)",
+            borderRadius: 2,
+            background: gradient,
           }}
-        >
-          {activePresetId
-            ? PALETTE_PRESETS.find((preset) => preset.id === activePresetId)?.label
-            : "Custom"}
-        </span>
-      </div>
+        />
 
-      <div
-        data-testid="viewscreen-depth-palette-preview"
-        aria-label={`Current depth palette${blendBands ? ", blended" : ", discrete bands"}`}
-        style={{
-          height: 12,
-          marginBottom: 7,
-          border: "1px solid rgba(0,229,255,0.24)",
-          borderRadius: 2,
-          background: gradient,
-        }}
-      />
-
-      <label
+        <label
         style={{
           display: "flex",
           alignItems: "center",
@@ -333,9 +323,9 @@ const ViewscreenDepthPalette: React.FC = () => {
           <option value="viridis">Viridis</option>
           <option value="custom">Custom</option>
         </select>
-      </label>
+        </label>
 
-      <div
+        <div
         data-testid="viewscreen-depth-palette-presets"
         style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 7 }}
       >
@@ -385,9 +375,9 @@ const ViewscreenDepthPalette: React.FC = () => {
             </button>
           );
         })}
-      </div>
+        </div>
 
-      {savedDepthThemes.length > 0 && (
+        {savedDepthThemes.length > 0 && (
         <div style={{ marginTop: 8 }}>
           <div
             style={{
@@ -466,7 +456,8 @@ const ViewscreenDepthPalette: React.FC = () => {
             })}
           </div>
         </div>
-      )}
+        )}
+      </AdvancedSection>
     </section>
   );
 };
