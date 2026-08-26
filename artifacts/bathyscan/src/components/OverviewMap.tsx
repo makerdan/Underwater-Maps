@@ -1769,7 +1769,11 @@ export const OverviewMap: React.FC = () => {
         const folder = openFolder;
         setOpenFolder(null);
         setToolsPopoverOpen(false);
-        folderButtonRef(folder)?.focus();
+        // A pointer down can focus the tapped element after this handler
+        // returns. Restore focus after the full tap sequence completes.
+        window.requestAnimationFrame(() => {
+          folderButtonRef(folder)?.focus();
+        });
       }
     };
     document.addEventListener("mousedown", onDown, true);

@@ -29,16 +29,26 @@ async function ensureSignedInOrSkip(page: Page): Promise<boolean> {
 async function openOverview(page: Page): Promise<void> {
   // Prefer the dev-only test helper if available — robust to focus loss after
   // navigation. Falls back to the visible ▲ OVERVIEW button.
-  const opened = await page
-    .evaluate(() => {
-      const api = (window as unknown as { __bathyTest?: { setOverviewOpen?: (b: boolean) => void } }).__bathyTest;
-      if (api?.setOverviewOpen) {
-        api.setOverviewOpen(true);
-        return true;
-      }
-      return false;
-    })
+  const bridgeReady = await page
+    .waitForFunction(
+      () => typeof window.__bathyTest?.setOverviewOpen === "function",
+      null,
+      { timeout: 10_000 },
+    )
+    .then(() => true)
     .catch(() => false);
+  const opened =
+    bridgeReady &&
+    (await page
+      .evaluate(() => {
+        const api = (window as unknown as { __bathyTest?: { setOverviewOpen?: (b: boolean) => void } }).__bathyTest;
+        if (api?.setOverviewOpen) {
+          api.setOverviewOpen(true);
+          return true;
+        }
+        return false;
+      })
+      .catch(() => false));
 
   if (!opened) {
     const btn = page.getByRole("button", { name: /▲\s*OVERVIEW/ });
@@ -292,6 +302,118 @@ test.describe("BathyScan — Overview Map", () => {
 
       await expect(page.locator(OVERLAY_HEADER)).toHaveCount(0, { timeout: 5_000 });
     });
+  });
+
+  test.describe("signed-in mobile folder reachability", () => {
+    for (const width of [375, 390]) {
+      test.describe(`${width}px viewport`, () => {
+        test.use({ viewport: { width, height: 844 } });
+
+        test.beforeEach(async ({ page }) => {
+          // Phones intentionally render MobileChartShell instead of the desktop
+          // scene. Keep the signed-in desktop shell selected while the CSS
+          // viewport remains narrow, so this exercises OverviewMap's responsive
+          // controls rather than a different mobile surface.
+          await page.addInitScript(() => {
+            const nativeMatchMedia = window.matchMedia.bind(window);
+            window.matchMedia = (query: string): MediaQueryList => {
+              const mediaQuery = nativeMatchMedia(query);
+              if (query !== "(max-width: 767px)") return mediaQuery;
+              return {
+                get matches() {
+                  return false;
+                },
+                get media() {
+                  return mediaQuery.media;
+                },
+                get onchange() {
+                  return mediaQuery.onchange;
+                },
+                set onchange(listener) {
+                  mediaQuery.onchange = listener;
+                },
+                addListener: mediaQuery.addListener.bind(mediaQuery),
+                removeListener: mediaQuery.removeListener.bind(mediaQuery),
+                addEventListener: mediaQuery.addEventListener.bind(mediaQuery),
+                removeEventListener: mediaQuery.removeEventListener.bind(mediaQuery),
+                dispatchEvent: mediaQuery.dispatchEvent.bind(mediaQuery),
+              };
+            };
+          });
+          await page.reload({ waitUntil: "domcontentloaded" });
+          await page.waitForFunction(() => Boolean(window.__bathyTest?.setOverviewOpen), null, {
+            timeout: 10_000,
+          });
+          await page.evaluate(() => window.__bathyTest?.seedTerrain?.());
+          await page.waitForFunction(() => Boolean(window.__bathyTest?.getTerrainSummary?.()), null, {
+            timeout: 5_000,
+          });
+        });
+
+        test("opens every folder within the viewport and restores focus after dismissal", async ({ page }) => {
+          if (!(await ensureSignedInOrSkip(page))) return;
+
+          await openOverview(page);
+
+          const folders = [
+            { trigger: "overview-map-folder-view", panel: "overview-view-menu" },
+            { trigger: "overview-map-folder-gps", panel: "overview-gps-menu" },
+            { trigger: "overview-map-folder-puzzle", panel: "overview-puzzle-menu" },
+            { trigger: "overview-tools-toggle", panel: "overview-tools-popover" },
+          ] as const;
+          const close = page.getByTestId("overview-close");
+
+          await expect(close).toBeVisible();
+          await expect(close).toBeEnabled();
+
+          for (const { trigger, panel } of folders) {
+            const triggerButton = page.getByTestId(trigger);
+            const folderPanel = page.getByTestId(panel);
+
+            await triggerButton.click();
+            await expect(triggerButton).toHaveAttribute("aria-expanded", "true");
+            await expect(folderPanel).toBeVisible();
+
+            const viewport = page.viewportSize();
+            const [panelBox, closeBox] = await Promise.all([
+              folderPanel.boundingBox(),
+              close.boundingBox(),
+            ]);
+            expect(viewport).not.toBeNull();
+            expect(panelBox).not.toBeNull();
+            expect(closeBox).not.toBeNull();
+            expect(panelBox!.x).toBeGreaterThanOrEqual(0);
+            expect(panelBox!.y).toBeGreaterThanOrEqual(0);
+            expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(viewport!.width);
+            expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(viewport!.height);
+            expect(closeBox!.x).toBeGreaterThanOrEqual(0);
+            expect(closeBox!.y).toBeGreaterThanOrEqual(0);
+            expect(closeBox!.x + closeBox!.width).toBeLessThanOrEqual(viewport!.width);
+            expect(closeBox!.y + closeBox!.height).toBeLessThanOrEqual(viewport!.height);
+
+            await page.keyboard.press("Escape");
+            await expect(folderPanel).toBeHidden();
+            await expect(triggerButton).toHaveAttribute("aria-expanded", "false");
+            await expect(triggerButton).toBeFocused();
+
+            await triggerButton.click();
+            await expect(folderPanel).toBeVisible();
+            // Blank header space is outside the controls boundary without
+            // becoming a canvas tap, which would correctly dismiss the whole
+            // Overview map after the folder closes.
+            await page.mouse.click(2, 2);
+            await expect(folderPanel).toBeHidden();
+            await expect(triggerButton).toHaveAttribute("aria-expanded", "false");
+            await expect(triggerButton).toBeFocused();
+          }
+
+          await page.getByTestId("overview-map-folder-view").click();
+          await expect(page.getByTestId("overview-view-menu")).toBeVisible();
+          await close.click();
+          await expect(page.locator(OVERLAY_HEADER)).toHaveCount(0, { timeout: 5_000 });
+        });
+      });
+    }
   });
 
   // ---------------------------------------------------------------------------
