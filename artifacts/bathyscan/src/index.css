@@ -271,6 +271,133 @@ body.bs-daylight .overview-map-header [role="button"]:focus-visible {
   box-shadow: 0 0 0 2px #ffffff !important;
 }
 
+/* ---------------------------------------------------------------------------
+   Overview header folders
+   The Overview surface needs title/help text, menu triggers, and a permanent
+   Close action without allowing dense puzzle controls to push the Close action
+   outside a narrow viewport. Menu panels use viewport positioning so they are
+   never clipped by the header or its responsive layout.
+   --------------------------------------------------------------------------- */
+.overview-map-header {
+  isolation: isolate;
+}
+
+.overview-map-header-controls,
+.overview-folder-triggers {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.overview-folder-triggers {
+  min-width: 0;
+}
+
+.overview-folder-trigger,
+.overview-folder-action {
+  min-height: 28px;
+  border: 1px solid rgba(0, 229, 255, 0.24);
+  border-radius: 3px;
+  background: rgba(0, 10, 20, 0.78);
+  color: #94a3b8;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-family: "JetBrains Mono", monospace;
+  font-size: calc(12px * var(--bs-font-scale, 1));
+  letter-spacing: 0.1em;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.overview-folder-trigger[aria-expanded="true"] {
+  border-color: rgba(0, 229, 255, 0.65);
+  background: rgba(0, 229, 255, 0.12);
+  color: #7dd3fc;
+}
+
+.overview-folder-trigger-wrap {
+  position: relative;
+  display: flex;
+}
+
+.overview-folder-panel {
+  position: fixed;
+  top: 42px;
+  right: 8px;
+  z-index: 1000;
+  box-sizing: border-box;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: min(360px, calc(100vw - 16px));
+  max-height: min(72vh, calc(100dvh - 54px));
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid rgba(0, 229, 255, 0.32);
+  border-radius: 6px;
+  background: rgba(2, 8, 24, 0.98);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.58);
+  backdrop-filter: blur(10px);
+  animation: overview-folder-slide-in 140ms ease-out;
+}
+
+.overview-folder-panel > * {
+  flex: 0 0 auto;
+}
+
+.overview-folder-panel-puzzle {
+  width: min(440px, calc(100vw - 16px));
+}
+
+.overview-folder-panel-tools {
+  width: min(280px, calc(100vw - 16px));
+}
+
+.overview-folder-status {
+  padding: 4px 6px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: calc(12px * var(--bs-font-scale, 1));
+}
+
+.overview-folder-status-error {
+  color: #f87171;
+}
+
+.overview-folder-action-dive {
+  align-self: flex-start;
+  color: #60a5fa;
+  border-color: rgba(59, 130, 246, 0.55);
+  background: rgba(59, 130, 246, 0.15);
+}
+
+body.bs-daylight .overview-folder-panel {
+  background: rgba(248, 250, 252, 0.98) !important;
+  border-color: rgba(29, 78, 216, 0.42) !important;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.22);
+}
+
+body.bs-daylight .overview-folder-trigger,
+body.bs-daylight .overview-folder-action {
+  border-color: rgba(29, 78, 216, 0.34);
+  background: rgba(255, 255, 255, 0.92);
+  color: #1e3a8a;
+}
+
+body.bs-daylight .overview-folder-trigger[aria-expanded="true"] {
+  border-color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.12);
+  color: #1e40af;
+}
+
+body.bs-daylight .overview-folder-status-error {
+  color: #b91c1c;
+}
+
+@keyframes overview-folder-slide-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ── Cobalt borders inside all daylight panels — overrides inline cyan rgba ── */
 body.bs-daylight .habitat-panel *,
 body.bs-daylight .dataset-panel *,
@@ -446,13 +573,15 @@ body.bs-daylight .bs-settings-page [data-nav-active="true"] {
     font-size: calc(19.5px * var(--bs-font-scale, 1)) !important;
   }
 
-  /* Overview map: fill screen, allow scrolling header */
+  /* Overview map: title/help wrap while the folder row and Close button remain
+     independently reachable. Panels are fixed, never header-scrolled. */
   .overview-map-header {
     flex-wrap: wrap;
     height: auto !important;
-    padding: 8px 120px 8px 12px !important;
+    padding: 8px 104px 8px 12px !important;
     gap: 6px;
     align-content: flex-start;
+    overflow: visible !important;
   }
 
   .overview-map-header > span:first-child {
@@ -469,17 +598,30 @@ body.bs-daylight .bs-settings-page [data-nav-active="true"] {
   .overview-map-header-controls {
     flex: 1 1 100%;
     min-width: 0;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: flex-start;
     gap: 6px !important;
   }
 
-  .overview-map-header-controls > * {
+  .overview-folder-triggers {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .overview-folder-trigger {
+    min-height: 44px;
     flex: 0 0 auto;
   }
 
-  .overview-map-header-controls > *:last-child {
-    margin-left: auto;
+  .overview-folder-panel {
+    top: max(92px, calc(env(safe-area-inset-top) + 76px));
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-height: calc(100dvh - max(104px, env(safe-area-inset-top) + 88px));
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
   }
 
   /* Query panel: full width keyboard-friendly */

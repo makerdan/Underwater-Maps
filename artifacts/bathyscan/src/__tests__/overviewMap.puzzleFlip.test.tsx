@@ -617,14 +617,18 @@ describe("OverviewMap — flipped tile draw transform", () => {
     expect(scaleCalls.some(([x, y]) => x === -1 && y === -1)).toBe(true);
   });
 
-  it("exposes one horizontally scrollable, accessible overview control row", async () => {
+  it("exposes accessible folder triggers with a permanently reachable Close action", async () => {
     await renderAndCapture();
 
     const scrollHeader = screen.getByTestId("overview-map-header-scroll");
     const controls = screen.getByTestId("overview-map-header-controls");
-    expect(scrollHeader).toHaveStyle({ overflowX: "auto", overflowY: "hidden" });
+    expect(scrollHeader).toHaveStyle({ overflow: "visible" });
     expect(controls).toHaveAttribute("role", "toolbar");
     expect(controls).toHaveAccessibleName("Overview map controls");
-    expect(controls).toHaveStyle({ flexShrink: "0", minWidth: "max-content" });
+    expect(controls).toHaveStyle({ flexShrink: "0", minWidth: "0" });
+    expect(screen.getByTestId("overview-map-folder-view")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByTestId("overview-map-folder-puzzle")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByTestId("overview-tools-toggle")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByTestId("overview-close")).toBeVisible();
   });
 });

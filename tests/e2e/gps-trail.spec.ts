@@ -18,6 +18,15 @@ import { test, expect } from "./fixtures";
 const MOCK_LAT = 11.3733; // Mariana Trench area — within default dataset bounds
 const MOCK_LON = 142.1951;
 
+async function openGpsFolder(page: import("@playwright/test").Page): Promise<void> {
+  const folder = page.getByTestId("overview-map-folder-gps");
+  await expect(folder).toBeVisible({ timeout: 5_000 });
+  if ((await folder.getAttribute("aria-expanded")) !== "true") {
+    await folder.click();
+  }
+  await expect(page.getByTestId("overview-gps-menu")).toBeVisible({ timeout: 2_000 });
+}
+
 test.describe("BathyScan — GPS activation", () => {
   test.beforeEach(async ({ page, context }) => {
     await context.grantPermissions(["geolocation"]).catch(() => {});
@@ -57,6 +66,7 @@ test.describe("BathyScan — GPS activation", () => {
     await page.waitForFunction(() => Boolean(window.__bathyTest?.setOverviewOpen), null, { timeout: 10_000 }).catch(() => {});
     await page.evaluate(() => window.__bathyTest?.setOverviewOpen?.(true)).catch(() => {});
     await page.waitForTimeout(400);
+    await openGpsFolder(page);
 
     const gpsBtn = page.locator("[data-testid='gps-activate-btn']");
     const btnVisible = await gpsBtn.isVisible({ timeout: 8_000 }).catch(() => false);
@@ -84,6 +94,7 @@ test.describe("BathyScan — GPS activation", () => {
     await page.waitForFunction(() => Boolean(window.__bathyTest?.setOverviewOpen), null, { timeout: 10_000 }).catch(() => {});
     await page.evaluate(() => window.__bathyTest?.setOverviewOpen?.(true)).catch(() => {});
     await page.waitForTimeout(400);
+    await openGpsFolder(page);
 
     const gpsBtn = page.locator("[data-testid='gps-activate-btn']");
     const btnVisible = await gpsBtn.isVisible({ timeout: 8_000 }).catch(() => false);
@@ -143,6 +154,7 @@ test.describe("BathyScan — trail recording flow", () => {
     await page.waitForFunction(() => Boolean(window.__bathyTest?.setOverviewOpen), null, { timeout: 10_000 }).catch(() => {});
     await page.evaluate(() => window.__bathyTest?.setOverviewOpen?.(true)).catch(() => {});
     await page.waitForTimeout(400);
+    await openGpsFolder(page);
 
     const gpsBtn = page.locator("[data-testid='gps-activate-btn']");
     const btnVisible = await gpsBtn.isVisible({ timeout: 8_000 }).catch(() => false);
@@ -203,6 +215,7 @@ test.describe("BathyScan — trail recording flow", () => {
     await page.waitForFunction(() => Boolean(window.__bathyTest?.setOverviewOpen), null, { timeout: 10_000 }).catch(() => {});
     await page.evaluate(() => window.__bathyTest?.setOverviewOpen?.(true)).catch(() => {});
     await page.waitForTimeout(400);
+    await openGpsFolder(page);
 
     const gpsBtn = page.locator("[data-testid='gps-activate-btn']");
     const btnVisible = await gpsBtn.isVisible({ timeout: 8_000 }).catch(() => false);

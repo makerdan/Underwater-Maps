@@ -301,6 +301,11 @@ async function runEfhCase(page: Page, plan: CasePlan): Promise<void> {
   await expect(page.locator(".overview-map-header")).toBeVisible({
     timeout: 10_000,
   });
+  const viewFolder = page.getByTestId("overview-map-folder-view");
+  await expect(viewFolder).toBeVisible({ timeout: 5_000 });
+  if ((await viewFolder.getAttribute("aria-expanded")) !== "true") {
+    await viewFolder.click();
+  }
 
   // The 🐟 EFH toggle button in the Overview Map header is only rendered
   // when the active dataset's `hasEfh` flag is true — so finding it at all

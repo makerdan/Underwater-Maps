@@ -230,19 +230,23 @@ test.describe("BathyScan — Overview Map", () => {
   test.describe("narrow screens", () => {
     test.use({ viewport: { width: 800, height: 812 } });
 
-    test("keeps the Overview header centered and horizontally scrollable", async ({ page }) => {
+    test("keeps Close and folder panels reachable without a scrolling toolbar", async ({ page }) => {
       if (!(await ensureSignedInOrSkip(page))) return;
       await openOverview(page);
 
       const header = page.getByTestId("overview-map-header-scroll");
       const title = header.locator(":scope > span").first();
       const instructions = header.locator(":scope > span").nth(1);
-      const controls = page.getByTestId("overview-map-header-controls");
+        const controls = page.getByTestId("overview-map-header-controls");
+        const close = page.getByTestId("overview-close");
+        const puzzleFolder = page.getByTestId("overview-map-folder-puzzle");
 
       await expect(header).toBeVisible();
       await expect(title).toContainText("OVERVIEW MAP");
       await expect(instructions).toContainText("SCROLL TO ZOOM");
       await expect(controls).toBeVisible();
+        await expect(close).toBeVisible();
+        await expect(puzzleFolder).toBeVisible();
 
       const layout = await header.evaluate((element) => {
         const style = getComputedStyle(element);
@@ -252,8 +256,6 @@ test.describe("BathyScan — Overview Map", () => {
         return {
           alignItems: style.alignItems,
           overflowX: style.overflowX,
-          clientWidth: element.clientWidth,
-          scrollWidth: element.scrollWidth,
           headerTop: headerBox.top,
           headerBottom: headerBox.bottom,
           titleCenter: titleBox ? (titleBox.top + titleBox.bottom) / 2 : null,
@@ -262,19 +264,21 @@ test.describe("BathyScan — Overview Map", () => {
       });
 
       expect(layout.alignItems).toBe("center");
-      expect(layout.overflowX).toBe("auto");
-      expect(layout.scrollWidth).toBeGreaterThan(layout.clientWidth);
+        expect(layout.overflowX).toBe("visible");
       expect(layout.titleCenter).toBeGreaterThanOrEqual(layout.headerTop);
       expect(layout.titleCenter).toBeLessThanOrEqual(layout.headerBottom);
       expect(layout.controlsCenter).toBeGreaterThanOrEqual(layout.headerTop);
       expect(layout.controlsCenter).toBeLessThanOrEqual(layout.headerBottom);
 
-      await header.evaluate((element) => {
-        element.scrollLeft = element.scrollWidth;
-      });
-      await expect
-        .poll(() => header.evaluate((element) => element.scrollLeft))
-        .toBeGreaterThan(0);
+       await puzzleFolder.click();
+       const menu = page.getByTestId("overview-puzzle-menu");
+       await expect(menu).toBeVisible();
+       const [menuBox, closeBox] = await Promise.all([menu.boundingBox(), close.boundingBox()]);
+       expect(menuBox).not.toBeNull();
+       expect(closeBox).not.toBeNull();
+       expect(menuBox!.x).toBeGreaterThanOrEqual(0);
+       expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(800);
+       expect(closeBox!.x + closeBox!.width).toBeLessThanOrEqual(800);
     });
 
     test("Close overview map button dismisses the overlay", async ({ page }) => {

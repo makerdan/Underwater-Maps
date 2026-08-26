@@ -57,6 +57,12 @@ async function openOverview(page: Page): Promise<void> {
 }
 
 async function enterPuzzleMode(page: Page): Promise<boolean> {
+  const folder = page.getByTestId("overview-map-folder-puzzle");
+  const folderFound = await folder.isVisible({ timeout: 5_000 }).catch(() => false);
+  if (!folderFound) return false;
+  if ((await folder.getAttribute("aria-expanded")) !== "true") {
+    await folder.click();
+  }
   const toggleBtn = page.getByTestId("overview-puzzle-toggle");
   const found = await toggleBtn.isVisible({ timeout: 5_000 }).catch(() => false);
   if (!found) return false;

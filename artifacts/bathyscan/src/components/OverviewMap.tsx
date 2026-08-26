@@ -542,6 +542,19 @@ export const OverviewMap: React.FC = () => {
   // Controls the compact "Tools" popover that houses box-select and download.
   const [toolsPopoverOpen, setToolsPopoverOpen] = useState(false);
   const toolsWrapperRef = useRef<HTMLDivElement>(null);
+  type OverviewFolder = "view" | "gps" | "puzzle" | "tools";
+  const [openFolder, setOpenFolder] = useState<OverviewFolder | null>(null);
+  const viewFolderRef = useRef<HTMLButtonElement>(null);
+  const gpsFolderRef = useRef<HTMLButtonElement>(null);
+  const puzzleFolderRef = useRef<HTMLButtonElement>(null);
+  const headerControlsRef = useRef<HTMLDivElement>(null);
+
+  const folderButtonRef = useCallback((folder: OverviewFolder) => {
+    if (folder === "view") return viewFolderRef.current;
+    if (folder === "gps") return gpsFolderRef.current;
+    if (folder === "puzzle") return puzzleFolderRef.current;
+    return toolsOpenerRef.current;
+  }, []);
 
   // --- Georef pick mode ---------------------------------------------------
   // When DatasetPanel's PDF georef dialog triggers "Pick on map", this mode
@@ -1730,10 +1743,12 @@ export const OverviewMap: React.FC = () => {
         trailPanelOpenerRef.current?.focus();
         return;
       }
-      if (toolsPopoverOpen) {
+      if (openFolder) {
         e.stopPropagation();
+        const folder = openFolder;
+        setOpenFolder(null);
         setToolsPopoverOpen(false);
-        toolsOpenerRef.current?.focus();
+        folderButtonRef(folder)?.focus();
       }
     };
     window.addEventListener("keydown", onKey, true);
@@ -1741,20 +1756,25 @@ export const OverviewMap: React.FC = () => {
   }, [
     selectedBbox, bboxResults, downloadBbox, clearBbox, selectedWeatherStation,
     selectedRawsDatasetId, selectedHotspot, showWaypointPanel, showTrailList,
-    toolsPopoverOpen,
+    toolsPopoverOpen, openFolder, folderButtonRef,
   ]);
 
-  // Close the Tools popover when clicking outside its wrapper.
+  // Close the active header folder when clicking outside the controls. The
+  // panels are fixed-position descendants, so they remain inside this boundary
+  // even when they visually escape the scrolling header.
   useEffect(() => {
-    if (!toolsPopoverOpen) return;
+    if (!openFolder) return;
     const onDown = (e: MouseEvent) => {
-      if (toolsWrapperRef.current && !toolsWrapperRef.current.contains(e.target as Node)) {
+      if (headerControlsRef.current && !headerControlsRef.current.contains(e.target as Node)) {
+        const folder = openFolder;
+        setOpenFolder(null);
         setToolsPopoverOpen(false);
+        folderButtonRef(folder)?.focus();
       }
     };
     document.addEventListener("mousedown", onDown, true);
     return () => document.removeEventListener("mousedown", onDown, true);
-  }, [toolsPopoverOpen]);
+  }, [openFolder, folderButtonRef]);
 
   // GPS & trail state (read directly from stores in rAF — no React re-render)
 
@@ -5400,10 +5420,9 @@ export const OverviewMap: React.FC = () => {
           alignItems: "center",
           justifyContent: "flex-start",
           gap: 16,
-          padding: "0 2in 0 12px",
+           padding: "0 104px 0 12px",
           boxSizing: "border-box",
-          overflowX: "auto",
-          overflowY: "hidden",
+           overflow: "visible",
           background: "rgba(2,8,24,0.75)",
           backdropFilter: "blur(6px)",
           borderBottom: "1px solid rgba(0,229,255,0.1)",
@@ -5442,71 +5461,52 @@ export const OverviewMap: React.FC = () => {
         <div
           className="overview-map-header-controls"
           data-testid="overview-map-header-controls"
+           ref={headerControlsRef}
           role="toolbar"
           aria-label="Overview map controls"
-          style={{ display: "flex", flexShrink: 0, gap: 6, alignItems: "center", minWidth: "max-content" }}
+           style={{ display: "flex", flexShrink: 0, gap: 6, alignItems: "center", minWidth: 0 }}
         >
-          {gpsError && (
-            <span style={{ color: "#ef4444", fontSize: "calc(12px * var(--bs-font-scale, 1))", fontFamily: "'JetBrains Mono', monospace", maxWidth: 180 }}>
-              ⚠ {gpsError}
-            </span>
-          )}
+           <div className="overview-folder-triggers" data-testid="overview-map-folder-triggers">
+             {([
+               ["view", "◉ VIEW", "Map framing, titles, and overlays", "overview-map-folder-view", viewFolderRef],
+               ["gps", "⌁ GPS", "GPS position, waypoints, and trails", "overview-map-folder-gps", gpsFolderRef],
+               ["puzzle", "⧉ PUZZLE", "Puzzle editing and saved layouts", "overview-map-folder-puzzle", puzzleFolderRef],
+             ] as const).map(([folder, label, description, testId, ref]) => {
+               const isOpen = openFolder === folder;
+               return (
+                 <button
+                   key={folder}
+                   ref={ref}
+                   type="button"
+                   className="overview-folder-trigger"
+                   data-testid={testId}
+                   aria-label={description}
+                   aria-expanded={isOpen}
+                   aria-haspopup="true"
+                   aria-controls={`overview-${folder}-menu`}
+                   onClick={() => {
+                     setOpenFolder(isOpen ? null : folder);
+                     setToolsPopoverOpen(false);
+                   }}
+                 >
+                   {label} <span aria-hidden="true">{isOpen ? "▴" : "▾"}</span>
+                 </button>
+               );
+             })}
+           </div>
 
-          {gpsActive && gpsPosition && overviewGrid && (() => {
-            const gpsGrids = visibleDatasets
-              .map((dataset) => dataset.overviewGrid)
-              .filter((grid): grid is NonNullable<typeof grid> => !!grid);
-            const inBounds = gpsGrids.length > 0
-              ? gpsGrids.some((grid) =>
-                  geoBoundsContains(grid, {
-                    lon: gpsPosition.longitude,
-                    lat: gpsPosition.latitude,
-                  }),
-                )
-              : geoBoundsContains(overviewGrid, {
-                  lon: gpsPosition.longitude,
-                  lat: gpsPosition.latitude,
-                });
-            // A secondary-only fix is visible on the overview, but cannot be
-            // projected safely into the primary 3D mesh for DIVE HERE.
-            const inPrimaryBounds = geoBoundsContains(overviewGrid, {
-              lon: gpsPosition.longitude,
-              lat: gpsPosition.latitude,
-            });
-            if (!inBounds || !inPrimaryBounds) return null;
-            return (
-              <ViewscreenTooltip label="Dive in at your GPS position" side="bottom">
-              <button
-                onClick={() => {
-                  const { x: worldX, z: worldZ } = lonLatToWorldXZ(
-                    gpsPosition.longitude,
-                    gpsPosition.latitude,
-                    overviewGrid,
-                  );
-                  setPendingDropIn({ worldX, worldZ });
-                  setOverviewOpen(false);
-                }}
-                style={{
-                  background: "rgba(59,130,246,0.15)",
-                  border: "1px solid rgba(59,130,246,0.5)",
-                  borderRadius: 3,
-                  color: "#60a5fa",
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
-                  padding: "2px 8px",
-                  cursor: "pointer",
-                  letterSpacing: "0.1em",
-                  lineHeight: "18px",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                ↓ DIVE HERE
-              </button>
-              </ViewscreenTooltip>
-            );
-          })()}
+           {/* View folder — fixed outside the header overflow boundary so its
+               options remain reachable on narrow screens. */}
+           <div
+             id="overview-view-menu"
+             className="overview-folder-panel overview-folder-panel-view"
+             data-testid="overview-view-menu"
+             role="group"
+             aria-label="Map view options"
+             style={{ display: openFolder === "view" ? "flex" : "none", position: "fixed" }}
+           >
 
-          {/* Fit to Data — zoom and pan to frame all loaded datasets */}
+           {/* Fit to Data — zoom and pan to frame all loaded datasets */}
           <ViewscreenTooltip label="Zoom and pan to fit all loaded datasets in view" side="bottom">
             <button
               data-testid="overview-fit-to-data"
@@ -5565,8 +5565,17 @@ export const OverviewMap: React.FC = () => {
               TITLES
             </button>
           </ViewscreenTooltip>
+           </div>
 
           {/* Puzzle mode — drag and rotate individual dataset tiles */}
+           <div
+             id="overview-puzzle-menu"
+             className="overview-folder-panel overview-folder-panel-puzzle"
+             data-testid="overview-puzzle-menu"
+             role="group"
+             aria-label="Puzzle and layout options"
+             style={{ display: openFolder === "puzzle" ? "flex" : "none", position: "fixed" }}
+           >
           <ViewscreenTooltip label="Puzzle mode: drag and rotate dataset tiles to align surveys" side="bottom">
             <button
               data-testid="overview-puzzle-toggle"
@@ -6343,17 +6352,24 @@ export const OverviewMap: React.FC = () => {
             );
           })()}
 
+           </div>
+
           {/* Tools popover — collapses box-select and download into one button */}
-          <div ref={toolsWrapperRef} style={{ position: "relative" }}>
+           <div ref={toolsWrapperRef} className="overview-folder-trigger-wrap">
             <ViewscreenTooltip label="Area tools: box-select or export terrain" side="bottom">
               <button
                 data-testid="overview-tools-toggle"
+                 type="button"
+                 className="overview-folder-trigger"
                 aria-label="Open map tools"
                 aria-expanded={toolsPopoverOpen}
-                aria-haspopup="true"
+                 aria-haspopup="menu"
+                 aria-controls="overview-tools-popover"
                 onClick={(e) => {
                   toolsOpenerRef.current = e.currentTarget;
-                  setToolsPopoverOpen((v) => !v);
+                   const next = !toolsPopoverOpen;
+                   setToolsPopoverOpen(next);
+                   setOpenFolder(next ? "tools" : null);
                 }}
                 style={{
                   background: (selectMode || downloadMode || waypointMode)
@@ -6385,6 +6401,8 @@ export const OverviewMap: React.FC = () => {
 
             <div
               data-testid="overview-tools-popover"
+                 id="overview-tools-popover"
+                 className="overview-folder-panel overview-folder-panel-tools"
               role="menu"
               style={{
                 display: toolsPopoverOpen ? "block" : "none",
@@ -6429,6 +6447,7 @@ export const OverviewMap: React.FC = () => {
                     if (next) { setDownloadMode(false); setWaypointMode(false); setDownloadBbox(null); }
                     if (!next) clearBbox();
                     setToolsPopoverOpen(false);
+                    setOpenFolder(null);
                   }}
                   style={{
                     display: "flex",
@@ -6466,6 +6485,7 @@ export const OverviewMap: React.FC = () => {
                     if (next) { setSelectMode(false); setWaypointMode(false); clearBbox(); }
                     if (!next) { setDownloadBbox(null); dragRectRef.current = null; }
                     setToolsPopoverOpen(false);
+                    setOpenFolder(null);
                   }}
                   style={{
                     display: "flex",
@@ -6502,6 +6522,7 @@ export const OverviewMap: React.FC = () => {
                     setWaypointMode(next);
                     if (next) { setSelectMode(false); setDownloadMode(false); clearBbox(); setDownloadBbox(null); dragRectRef.current = null; }
                     setToolsPopoverOpen(false);
+                    setOpenFolder(null);
                     if (next) setShowWaypointPanel(true);
                   }}
                   style={{
@@ -6530,7 +6551,62 @@ export const OverviewMap: React.FC = () => {
               </div>
           </div>
 
-          {/* EFH overlay toggle — shown for preset datasets (hasEfh) and user-saved EFH datasets (embeddedEfhPolygons) */}
+           {/* GPS folder — location, overlays, waypoints, and trails. */}
+           <div
+             id="overview-gps-menu"
+             className="overview-folder-panel overview-folder-panel-gps"
+             data-testid="overview-gps-menu"
+             role="group"
+             aria-label="GPS, overlay, waypoint, and trail options"
+             style={{ display: openFolder === "gps" ? "flex" : "none", position: "fixed" }}
+           >
+           {gpsError && (
+             <span className="overview-folder-status overview-folder-status-error">
+               ⚠ {gpsError}
+             </span>
+           )}
+
+           {gpsActive && gpsPosition && overviewGrid && (() => {
+             const gpsGrids = visibleDatasets
+               .map((dataset) => dataset.overviewGrid)
+               .filter((grid): grid is NonNullable<typeof grid> => !!grid);
+             const inBounds = gpsGrids.length > 0
+               ? gpsGrids.some((grid) =>
+                   geoBoundsContains(grid, {
+                     lon: gpsPosition.longitude,
+                     lat: gpsPosition.latitude,
+                   }),
+                 )
+               : geoBoundsContains(overviewGrid, {
+                   lon: gpsPosition.longitude,
+                   lat: gpsPosition.latitude,
+                 });
+             const inPrimaryBounds = geoBoundsContains(overviewGrid, {
+               lon: gpsPosition.longitude,
+               lat: gpsPosition.latitude,
+             });
+             if (!inBounds || !inPrimaryBounds) return null;
+             return (
+               <button
+                 type="button"
+                 className="overview-folder-action overview-folder-action-dive"
+                 aria-label="Dive in at your GPS position"
+                 onClick={() => {
+                   const { x: worldX, z: worldZ } = lonLatToWorldXZ(
+                     gpsPosition.longitude,
+                     gpsPosition.latitude,
+                     overviewGrid,
+                   );
+                   setPendingDropIn({ worldX, worldZ });
+                   setOverviewOpen(false);
+                 }}
+               >
+                 ↓ DIVE HERE
+               </button>
+             );
+           })()}
+
+           {/* EFH overlay toggle — shown for preset datasets (hasEfh) and user-saved EFH datasets (embeddedEfhPolygons) */}
           {(hasEfh || !!embeddedEfhPolygons) && (
             <ViewscreenTooltip label="Toggle Essential Fish Habitat zones" side="bottom">
             <button
@@ -6642,6 +6718,8 @@ export const OverviewMap: React.FC = () => {
             {gpsActive ? "📍 GPS ACTIVE" : "📍 MY LOCATION"}
           </button>
           </ViewscreenTooltip>
+
+           </div>
 
           <ViewscreenTooltip label="Close the overview map (O)" side="bottom">
           <button

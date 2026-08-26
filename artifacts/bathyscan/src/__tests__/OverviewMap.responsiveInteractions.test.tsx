@@ -103,6 +103,7 @@ describe("OverviewMap responsive interactions", () => {
 
   it("clearly identifies the inactive GPS action as starting live GPS", () => {
     renderOverview();
+    fireEvent.click(screen.getByTestId("overview-map-folder-gps"));
     const gps = screen.getByTestId("gps-activate-btn");
 
     expect(gps).toHaveTextContent("📍 MY LOCATION");
@@ -115,6 +116,7 @@ describe("OverviewMap responsive interactions", () => {
       JSON.stringify([["responsive-ds", { tx: 12, ty: 8, angleDeg: 0 }]]),
     );
     renderOverview();
+    fireEvent.click(screen.getByTestId("overview-map-folder-puzzle"));
 
     const saveSession = screen.getByTestId("overview-puzzle-save");
     const saveLayout = screen.getByTestId("overview-puzzle-save-layout");
