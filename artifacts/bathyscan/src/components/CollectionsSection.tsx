@@ -103,8 +103,21 @@ export const AddToCollectionDialog: React.FC<{
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
 
-  useEffect(() => { listRef.current?.focus(); }, []);
+  useEffect(() => {
+    openerRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    // Always move keyboard focus inside the dialog. Empty accounts have no
+    // listbox to focus, so the dialog itself is the safe fallback.
+    (listRef.current ?? dialogRef.current)?.focus();
+    return () => {
+      if (openerRef.current && document.contains(openerRef.current)) {
+        openerRef.current.focus();
+      }
+    };
+  }, []);
 
   const handleConfirm = useCallback(async () => {
     if (pending) return;
@@ -138,13 +151,22 @@ export const AddToCollectionDialog: React.FC<{
     if (e.key === "Escape") { e.preventDefault(); if (!pending) onClose(); }
     else if (e.key === "Enter") { e.preventDefault(); void handleConfirm(); }
   };
+  const onDialogKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape" && !pending) {
+      e.preventDefault();
+      onClose();
+    }
+  };
 
   return (
     <div
       role="dialog" aria-modal="true" aria-label={`Add "${label}" to a collection`}
+      ref={dialogRef}
       data-testid="add-to-collection-dialog"
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000 }}
       onClick={pending ? undefined : onClose}
+      onKeyDown={onDialogKeyDown}
+      tabIndex={-1}
       aria-busy={pending || undefined}
     >
       {/* width caps at 90vw so the dialog stays usable at phone widths */}
@@ -210,6 +232,7 @@ const CollectionRow: React.FC<{
   onDelete: (collection: DatasetCollection) => void;
   onRemoveMember: (collectionId: string, memberId: string) => void;
   removingMemberIds: Set<string>;
+  memberRemovalErrors: Record<string, string>;
   /** Download this collection's datasets for offline use. */
   onDownloadOffline?: () => void;
   /** Rollup offline status across the collection's members ("none" hides the badge). */
@@ -234,7 +257,7 @@ const CollectionRow: React.FC<{
    * edited after applying. Null/undefined hides the badge.
    */
   geoBadge?: "applied" | "outdated" | null;
-}> = ({ collection, expanded, onToggle, onRename, onDelete, onRemoveMember, removingMemberIds, onDownloadOffline, offlineRollup = "none", onOpenSettings, onActivate, onLoad, onRetry, activating = false, unavailableMemberNames = [], loadError = null, geoBadge = null }) => {
+}> = ({ collection, expanded, onToggle, onRename, onDelete, onRemoveMember, removingMemberIds, memberRemovalErrors, onDownloadOffline, offlineRollup = "none", onOpenSettings, onActivate, onLoad, onRetry, activating = false, unavailableMemberNames = [], loadError = null, geoBadge = null }) => {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -427,21 +450,40 @@ const CollectionRow: React.FC<{
             </div>
           ) : (
             collection.members.map((m) => (
-              <div key={m.id} data-testid={`collection-member-${m.id}`} className="flex items-center gap-1" style={{ padding: "1px 4px" }}>
-                <span style={{ flexShrink: 0, fontSize: "calc(11px * var(--bs-font-scale, 1))" }} title={m.kind === "dataset" ? "Uploaded dataset" : "Saved catalog entry"}>
-                  {MEMBER_KIND_ICONS[m.kind] ?? "•"}
-                </span>
-                <span style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere", color: "#94a3b8", fontSize: "calc(12.5px * var(--bs-font-scale, 1))" }}>
-                  {m.name}
-                </span>
-                <button
-                  data-testid={`btn-remove-member-${m.id}`}
-                  aria-label={`Remove "${m.name}" from collection`}
-                  title="Remove from collection (does not delete the dataset)"
-                  disabled={removingMemberIds.has(m.id)}
-                  onClick={() => onRemoveMember(collection.id, m.id)}
-                  style={{ background: "transparent", border: "none", color: "#475569", cursor: removingMemberIds.has(m.id) ? "wait" : "pointer", fontSize: "calc(11px * var(--bs-font-scale, 1))", padding: "1px 4px", flexShrink: 0, opacity: removingMemberIds.has(m.id) ? 0.5 : 1 }}
-                >✕</button>
+              <div key={m.id} data-testid={`collection-member-${m.id}`} style={{ padding: "1px 4px" }}>
+                <div className="flex items-center gap-1">
+                  <span style={{ flexShrink: 0, fontSize: "calc(11px * var(--bs-font-scale, 1))" }} title={m.kind === "dataset" ? "Uploaded dataset" : "Saved catalog entry"}>
+                    {MEMBER_KIND_ICONS[m.kind] ?? "•"}
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere", color: "#94a3b8", fontSize: "calc(12.5px * var(--bs-font-scale, 1))" }}>
+                    {m.name}
+                  </span>
+                  <button
+                    data-testid={`btn-remove-member-${m.id}`}
+                    aria-label={`Remove "${m.name}" from collection`}
+                    title="Remove from collection (does not delete the dataset)"
+                    disabled={removingMemberIds.has(m.id)}
+                    onClick={() => onRemoveMember(collection.id, m.id)}
+                    style={{ background: "transparent", border: "none", color: "#475569", cursor: removingMemberIds.has(m.id) ? "wait" : "pointer", fontSize: "calc(11px * var(--bs-font-scale, 1))", padding: "1px 4px", flexShrink: 0, opacity: removingMemberIds.has(m.id) ? 0.5 : 1 }}
+                  >✕</button>
+                </div>
+                {memberRemovalErrors[m.id] && (
+                  <div
+                    data-testid={`collection-member-remove-error-${m.id}`}
+                    role="alert"
+                    style={{ padding: "2px 0 3px 18px", color: "#fca5a5", fontSize: "calc(11.5px * var(--bs-font-scale, 1))", lineHeight: 1.35 }}
+                  >
+                    {memberRemovalErrors[m.id]}
+                    <button
+                      data-testid={`btn-retry-remove-member-${m.id}`}
+                      onClick={() => onRemoveMember(collection.id, m.id)}
+                      disabled={removingMemberIds.has(m.id)}
+                      style={{ marginLeft: 7, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.35)", borderRadius: 3, color: "#fca5a5", cursor: removingMemberIds.has(m.id) ? "wait" : "pointer", fontSize: "calc(10.5px * var(--bs-font-scale, 1))", padding: "1px 6px", whiteSpace: "nowrap" }}
+                    >
+                      {removingMemberIds.has(m.id) ? "Retrying…" : "Retry"}
+                    </button>
+                  </div>
+                )}
               </div>
             ))
           )}
@@ -504,7 +546,12 @@ export const CollectionsSection: React.FC = () => {
   const [deletePending, setDeletePending] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [removingMemberIds, setRemovingMemberIds] = useState<Set<string>>(() => new Set());
+  const [memberRemovalErrors, setMemberRemovalErrors] = useState<Record<string, string>>({});
   const createInputRef = useRef<HTMLInputElement | null>(null);
+  const newCollectionButtonRef = useRef<HTMLButtonElement | null>(null);
+  const deleteOpenerRef = useRef<HTMLElement | null>(null);
+  const deleteDialogRef = useRef<HTMLDivElement | null>(null);
+  const settingsOpenerRef = useRef<HTMLElement | null>(null);
   // Special-collection UI state.
   const [createSpecial, setCreateSpecial] = useState(false);
   const [settingsForId, setSettingsForId] = useState<string | null>(null);
@@ -582,13 +629,22 @@ export const CollectionsSection: React.FC = () => {
   }, [confirmDelete, deletePending, deleteMutation, invalidate]);
 
   const handleRemoveMember = useCallback(async (collectionId: string, memberId: string) => {
+    setMemberRemovalErrors((errors) => {
+      const next = { ...errors };
+      delete next[memberId];
+      return next;
+    });
     setRemovingMemberIds((s) => new Set(s).add(memberId));
     try {
       await removeMemberMutation.mutateAsync({ id: collectionId, memberId });
       await invalidate();
-    } catch {
-      // Refetch resolves any stale view (e.g. member already removed elsewhere).
-      await invalidate();
+    } catch (err) {
+      // Keep the row in place on failure. The server did not confirm removal,
+      // so a refetch here would hide the actionable error behind stale data.
+      setMemberRemovalErrors((errors) => ({
+        ...errors,
+        [memberId]: friendlyError(err, "Could not remove this member. It is still in the collection."),
+      }));
     } finally {
       setRemovingMemberIds((s) => { const n = new Set(s); n.delete(memberId); return n; });
     }
@@ -807,6 +863,15 @@ export const CollectionsSection: React.FC = () => {
       (createdFallback?.id === settingsForId ? createdFallback : null)
     : null;
 
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const opener = deleteOpenerRef.current;
+    deleteDialogRef.current?.focus();
+    return () => {
+      if (opener && document.contains(opener)) opener.focus();
+    };
+  }, [confirmDelete]);
+
   // Hidden entirely for signed-out users — collections are per-account state.
   if (!isLoaded || !isSignedIn) return null;
 
@@ -829,8 +894,14 @@ export const CollectionsSection: React.FC = () => {
           {open ? "▼" : "▶"} DATASET COLLECTIONS {sorted.length > 0 ? `(${sorted.length})` : ""}
         </button>
         <button
+          ref={newCollectionButtonRef}
           data-testid="btn-new-collection"
-          onClick={() => { setOpen(true); setCreating(true); setCreateError(null); }}
+          onClick={() => {
+            settingsOpenerRef.current = newCollectionButtonRef.current;
+            setOpen(true);
+            setCreating(true);
+            setCreateError(null);
+          }}
           title="New collection"
           style={{ background: "transparent", border: "1px solid rgba(0,229,255,0.3)", color: "#00e5ff", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "0 6px", borderRadius: 2, cursor: "pointer", lineHeight: 1.6 }}
         >+ new</button>
@@ -900,12 +971,22 @@ export const CollectionsSection: React.FC = () => {
               expanded={expandedIds.has(c.id)}
               onToggle={() => setExpandedIds((s) => { const n = new Set(s); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n; })}
               onRename={handleRename}
-              onDelete={setConfirmDelete}
+              onDelete={(collection) => {
+                deleteOpenerRef.current =
+                  document.activeElement instanceof HTMLElement ? document.activeElement : null;
+                setDeleteError(null);
+                setConfirmDelete(collection);
+              }}
               onRemoveMember={(collectionId, memberId) => void handleRemoveMember(collectionId, memberId)}
               removingMemberIds={removingMemberIds}
+              memberRemovalErrors={memberRemovalErrors}
               onDownloadOffline={() => useOfflineScopeStore.getState().requestScopeDownload({ kind: "collection", collectionId: c.id })}
               offlineRollup={collectionRollup(c)}
-              onOpenSettings={c.collectionKind === "special" ? () => setSettingsForId(c.id) : undefined}
+              onOpenSettings={c.collectionKind === "special" ? () => {
+                settingsOpenerRef.current =
+                  document.activeElement instanceof HTMLElement ? document.activeElement : null;
+                setSettingsForId(c.id);
+              } : undefined}
               onActivate={c.collectionKind === "special" ? () => void handleActivate(c) : undefined}
               onLoad={() => void handleLoad(c)}
               onRetry={c.collectionKind === "special" ? undefined : () => void handleRetry(c)}
@@ -924,14 +1005,24 @@ export const CollectionsSection: React.FC = () => {
         <CollectionSettingsSheet
           collection={settingsCollection}
           onClose={() => setSettingsForId(null)}
+          returnFocusTarget={settingsOpenerRef.current}
         />
       )}
 
       {confirmDelete && (
         <div
           role="dialog" aria-modal="true" aria-label={`Delete collection "${confirmDelete.name}"`}
+          ref={deleteDialogRef}
           style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000 }}
           onClick={deletePending ? undefined : () => setConfirmDelete(null)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape" && !deletePending) {
+              e.preventDefault();
+              setConfirmDelete(null);
+            }
+          }}
+          tabIndex={-1}
+          aria-busy={deletePending || undefined}
         >
           <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(0,10,20,0.95)", border: "1px solid rgba(0,229,255,0.35)", borderRadius: 6, padding: 18, width: 340, maxWidth: "90vw", color: "#cbd5e1", fontFamily: "'JetBrains Mono', 'Fira Code', monospace", fontSize: "calc(14px * var(--bs-font-scale, 1))" }}>
             <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", fontWeight: 700, marginBottom: 10, letterSpacing: "0.05em" }}>

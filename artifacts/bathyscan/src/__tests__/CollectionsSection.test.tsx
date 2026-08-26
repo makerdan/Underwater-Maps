@@ -40,6 +40,8 @@ const mocks = vi.hoisted(() => ({
   deleteDatasetMutateAsync: vi.fn(),
   patchCollectionMeta: vi.fn(),
   getCollectionBackground: vi.fn(),
+  postCollectionBackground: vi.fn(),
+  deleteLayoutRevision: vi.fn(),
   invalidateQueries: vi.fn(),
   setQueryData: vi.fn(),
   getQueryData: vi.fn(),
@@ -154,6 +156,8 @@ vi.mock(
       }),
       patchUserCollectionsIdMeta: mocks.patchCollectionMeta,
       getUserCollectionsIdBackground: mocks.getCollectionBackground,
+      postUserCollectionsIdBackground: mocks.postCollectionBackground,
+      deleteUserCollectionsIdLayoutRevisionId: mocks.deleteLayoutRevision,
     }),
 );
 
@@ -263,6 +267,8 @@ beforeEach(() => {
       }),
   );
   mocks.getCollectionBackground.mockReset().mockResolvedValue(new Blob(["reference"], { type: "image/png" }));
+  mocks.postCollectionBackground.mockReset().mockResolvedValue(undefined);
+  mocks.deleteLayoutRevision.mockReset().mockResolvedValue(undefined);
   mocks.invalidateQueries.mockReset().mockResolvedValue(undefined);
   mocks.setQueryData.mockReset();
   mocks.getQueryData.mockReset().mockReturnValue(undefined);
@@ -512,6 +518,35 @@ describe("CollectionsSection", () => {
     });
     expect(mocks.deleteDatasetMutateAsync).not.toHaveBeenCalled();
   });
+
+  it("keeps a member visible with a retryable error when removal fails", async () => {
+    currentCollections = [COLLECTION_TRIP];
+    mocks.removeMemberMutateAsync.mockRejectedValueOnce(new Error("Network unavailable"));
+    renderWithProviders(<CollectionsSection />);
+    fireEvent.click(screen.getByTestId("btn-expand-collection-col-trip"));
+    fireEvent.click(screen.getByTestId("btn-remove-member-mem-1"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("collection-member-remove-error-mem-1")).toHaveTextContent(/network unavailable/i);
+    });
+    expect(screen.getByTestId("collection-member-mem-1")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("btn-retry-remove-member-mem-1"));
+    await waitFor(() => expect(mocks.removeMemberMutateAsync).toHaveBeenCalledTimes(2));
+  });
+
+  it("closes collection deletion with Escape and returns focus to its trigger", async () => {
+    currentCollections = [COLLECTION_TRIP];
+    renderWithProviders(<CollectionsSection />);
+    const trigger = screen.getByTestId("btn-delete-collection-col-trip");
+    trigger.focus();
+    fireEvent.click(trigger);
+    expect(document.activeElement).toBe(screen.getByRole("dialog", { name: /delete collection/i }));
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+
+    await waitFor(() => expect(screen.queryByTestId("btn-confirm-delete-collection")).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -558,17 +593,134 @@ describe("CollectionsSection — special collections", () => {
     });
   });
 
-  it("settings sheet opens from the gear button and closes again", async () => {
+  it("settings sheet closes with Escape and restores focus to its gear trigger", async () => {
     currentCollections = [COLLECTION_SPECIAL];
     renderWithProviders(<CollectionsSection />);
-    fireEvent.click(screen.getByTestId("btn-collection-settings-col-sp"));
+    const trigger = screen.getByTestId("btn-collection-settings-col-sp");
+    trigger.focus();
+    fireEvent.click(trigger);
     expect(screen.getByTestId("collection-settings-sheet-col-sp")).toBeInTheDocument();
     // The saved revision is listed with Restore/Delete actions.
     expect(screen.getByTestId("collection-revision-row-rev-1")).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId("btn-close-collection-settings-col-sp"));
+    expect(document.activeElement).toHaveAttribute("tabindex", "-1");
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     await waitFor(() => {
       expect(screen.queryByTestId("collection-settings-sheet-col-sp")).not.toBeInTheDocument();
     });
+    expect(trigger).toHaveFocus();
+  });
+
+  it("rejects unsupported and oversized reference images before uploading", async () => {
+    currentCollections = [COLLECTION_SPECIAL];
+    renderWithProviders(<CollectionsSection />);
+    fireEvent.click(screen.getByTestId("btn-collection-settings-col-sp"));
+    const input = screen.getByTestId("input-collection-bg-file-col-sp");
+
+    fireEvent.change(input, {
+      target: { files: [new File(["gif"], "reference.gif", { type: "image/gif" })] },
+    });
+    expect(screen.getByTestId("collection-settings-error")).toHaveTextContent(/jpeg, png, or webp/i);
+    expect(mocks.postCollectionBackground).not.toHaveBeenCalled();
+
+    fireEvent.change(input, {
+      target: { files: [new File([new Uint8Array(10 * 1024 * 1024 + 1)], "large.png", { type: "image/png" })] },
+    });
+    expect(screen.getByTestId("collection-settings-error")).toHaveTextContent(/10 mb or smaller/i);
+    expect(mocks.postCollectionBackground).not.toHaveBeenCalled();
+  });
+
+  it("distinguishes an unavailable configured reference image from no image", async () => {
+    currentCollections = [{
+      ...COLLECTION_SPECIAL,
+      specialMeta: { ...COLLECTION_SPECIAL.specialMeta, bgImageKey: "collection-bg/missing.png" },
+    }];
+    mocks.getCollectionBackground.mockRejectedValueOnce(new Error("Not found"));
+    renderWithProviders(<CollectionsSection />);
+    fireEvent.click(screen.getByTestId("btn-collection-settings-col-sp"));
+    expect(await screen.findByTestId("collection-bg-load-error-col-sp")).toHaveTextContent(/configured reference image/i);
+  });
+
+  it("flushes the latest opacity choice on close and makes unsaved changes retryable", async () => {
+    currentCollections = [COLLECTION_SPECIAL];
+    renderWithProviders(<CollectionsSection />);
+    fireEvent.click(screen.getByTestId("btn-collection-settings-col-sp"));
+    fireEvent.change(screen.getByTestId("input-collection-bg-opacity-col-sp"), { target: { value: "42" } });
+    fireEvent.change(screen.getByTestId("input-collection-bg-opacity-col-sp"), { target: { value: "63" } });
+    fireEvent.click(screen.getByTestId("btn-close-collection-settings-col-sp"));
+
+    await waitFor(() => {
+      expect(mocks.patchCollectionMeta).toHaveBeenCalledWith("col-sp", { bgOpacity: 0.63 });
+    });
+
+    // Open a new sheet instance to exercise an explicit retry after a failed save.
+    mocks.patchCollectionMeta.mockRejectedValueOnce(new Error("Offline"));
+    fireEvent.click(screen.getByTestId("btn-collection-settings-col-sp"));
+    fireEvent.change(screen.getByTestId("input-collection-bg-opacity-col-sp"), { target: { value: "44" } });
+    fireEvent.click(screen.getByTestId("btn-close-collection-settings-col-sp"));
+    // A failed close keeps the sheet open and exposes an explicit retry rather
+    // than pretending the local slider was durable.
+    await waitFor(() => expect(mocks.patchCollectionMeta).toHaveBeenCalledWith("col-sp", { bgOpacity: 0.44 }));
+    expect(screen.getByTestId("collection-settings-sheet-col-sp")).toBeInTheDocument();
+    expect(screen.getByTestId("collection-opacity-save-status-col-sp")).toHaveTextContent(/not saved yet/i);
+    fireEvent.click(screen.getByTestId("btn-retry-collection-bg-opacity-col-sp"));
+    await waitFor(() => expect(mocks.patchCollectionMeta).toHaveBeenLastCalledWith("col-sp", { bgOpacity: 0.44 }));
+  });
+
+  it("does not claim a restored revision is server-active until persistence succeeds", async () => {
+    const revision2 = { ...REVISION_1, id: "rev-2", name: "Draft 2", savedAt: "2024-03-01T00:00:00Z" };
+    const collection = {
+      ...COLLECTION_SPECIAL,
+      specialMeta: { ...COLLECTION_SPECIAL.specialMeta, layoutRevisions: [REVISION_1, revision2] },
+    };
+    currentCollections = [collection];
+    useSpecialCollectionStore.setState({
+      active: {
+        collectionId: "col-sp",
+        name: "Alaska 01",
+        bgImage: null,
+        bgImageW: 0,
+        bgImageH: 0,
+        bgOpacity: 0.5,
+        bgGeoAnchors: null,
+        layoutRevisions: [REVISION_1, revision2],
+        activeRevisionId: "rev-1",
+      },
+    });
+    mocks.patchCollectionMeta.mockRejectedValueOnce(new Error("Offline"));
+    renderWithProviders(<CollectionsSection />);
+    fireEvent.click(screen.getByTestId("btn-collection-settings-col-sp"));
+    fireEvent.click(screen.getByTestId("btn-restore-revision-rev-2"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("collection-settings-error")).toHaveTextContent(/could not save the active layout/i);
+    });
+    expect(screen.getByTestId("collection-revision-row-rev-1")).toHaveTextContent(/active/i);
+    expect(screen.getByTestId("collection-revision-row-rev-2")).not.toHaveTextContent(/active/i);
+  });
+
+  it("confirms revision deletion, prevents duplicate submission, and retains it after failure", async () => {
+    currentCollections = [COLLECTION_SPECIAL];
+    let rejectDelete!: (reason?: unknown) => void;
+    mocks.deleteLayoutRevision.mockImplementationOnce(
+      () => new Promise<void>((_resolve, reject) => { rejectDelete = reject; }),
+    );
+    renderWithProviders(<CollectionsSection />);
+    fireEvent.click(screen.getByTestId("btn-collection-settings-col-sp"));
+    fireEvent.click(screen.getByTestId("btn-delete-revision-rev-1"));
+    expect(screen.getByTestId("confirm-delete-revision-dialog-rev-1")).toBeInTheDocument();
+    const confirm = screen.getByTestId("btn-confirm-delete-revision-rev-1");
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    expect(mocks.deleteLayoutRevision).toHaveBeenCalledTimes(1);
+
+    rejectDelete(new Error("Offline"));
+    await waitFor(() => {
+      expect(screen.getByTestId("collection-revision-delete-error-rev-1")).toHaveTextContent(/still saved/i);
+    });
+    expect(screen.getByTestId("collection-revision-row-rev-1")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("btn-confirm-delete-revision-rev-1"));
+    await waitFor(() => expect(mocks.deleteLayoutRevision).toHaveBeenCalledTimes(2));
   });
 
   it("pins, validates, retries, and synchronizes two GPS anchors", async () => {
@@ -827,6 +979,23 @@ describe("CollectionsSection — special collections", () => {
 // ---------------------------------------------------------------------------
 
 describe("AddToCollectionDialog", () => {
+  it("closes with Escape and restores focus to its opener", async () => {
+    const onClose = vi.fn();
+    const trigger = document.createElement("button");
+    document.body.appendChild(trigger);
+    trigger.focus();
+    const { unmount } = renderWithProviders(
+      <AddToCollectionDialog label="Lake Upload" targets={[{ datasetId: "ds-1" }]} onClose={onClose} />,
+    );
+
+    expect(document.activeElement).toBe(screen.getByTestId("add-to-collection-dialog"));
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    unmount();
+    expect(trigger).toHaveFocus();
+    trigger.remove();
+  });
+
   it("adds all targets to the picked collection (multi-select bulk add)", async () => {
     currentCollections = [COLLECTION_TRIP, COLLECTION_EMPTY];
     const onClose = vi.fn();

@@ -145,3 +145,4 @@
 - [Schema unique-index definition parity](schema-unique-index-definition-parity.md) — compare ordered expressions and bounded, normalized partial predicates, not only index names.
 - [Mobile Playwright GPU crash](mobile-playwright-gpu-crash.md) — host Chromium may crash before Pixel-device contexts stabilize; classify those runs as environment-limited.
 - [JSDOM reload spying](jsdom-location-reload-spy.md) — Location.reload is non-redefinable; stub the global window before invoking reload handlers.
+- [Validation-lock suite aggregation](validation-lock-suite-aggregation.md) — scripts lock tests can hang in the aggregate unit command while isolated retries remain green.
