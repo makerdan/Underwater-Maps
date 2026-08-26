@@ -82,4 +82,17 @@ reason to alter API behavior.
 The palette E2E settings cross-device reset also fails deterministically in
 isolation because the fixed “Settings synced” indicator intercepts clicks on
 the reset confirmation. Treat that as settings UI/test coverage work, not a
-dataset-route regression.
+ dataset-route regression.
+
+## 2026-08-26 — additional deterministic BathyScan baseline failures
+The standard unit tier reproduced nine failures across five unrelated files:
+My Library chevron text, GpsImportDialog Clerk-provider setup, responsive sidebar
+CSSOM expectations, offline-pack freshness, and settings-import key parity. Each
+file failed once on the pre-change tree after reproducing 3/3 on the task tree.
+
+**Why:** These failures are outside timeline code and persist independently of a
+frontend timeline change.
+
+**How to apply:** When a task touches unrelated BathyScan UI, auth test setup,
+offline status, or settings backup code, do not fix these as part of the task;
+verify the affected file on the pre-change tree before classifying the tier red.

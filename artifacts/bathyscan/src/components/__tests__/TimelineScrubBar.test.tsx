@@ -51,6 +51,7 @@ function resetAllOverlays() {
     windOverlayActive: false,
     weatherStationsActive: false,
     rawsOverlayActive: false,
+    sidebarMode: "plan",
   });
 }
 
@@ -122,6 +123,34 @@ describe("TimelineScrubBar — scrubber visibility (overlay gate)", () => {
     rerender(<TimelineScrubBar />);
     expect(getByTestId("timeline-scrub-bar").style.transform).toBe("translateY(100%)");
   });
+
+  it.each(["explore", "analyze", "live"] as const)(
+    "scrubber is hidden in %s mode even when a time-sensitive overlay is active",
+    (sidebarMode) => {
+      useUiStore.setState({ tideOverlayActive: true, sidebarMode });
+      const { getByTestId } = render(<TimelineScrubBar />);
+      const bar = getByTestId("timeline-scrub-bar");
+
+      expect(bar.style.transform).toBe("translateY(100%)");
+      expect(bar.style.opacity).toBe("0");
+      expect(bar.getAttribute("aria-hidden")).toBe("true");
+    },
+  );
+
+  it("shows the scrubber again when returning to Plan with an active overlay", () => {
+    useUiStore.setState({ tideOverlayActive: true, sidebarMode: "explore" });
+    const { getByTestId } = render(<TimelineScrubBar />);
+    const bar = getByTestId("timeline-scrub-bar");
+    expect(bar.style.transform).toBe("translateY(100%)");
+
+    act(() => {
+      useUiStore.setState({ sidebarMode: "plan" });
+    });
+
+    expect(bar.style.transform).toBe("translateY(0)");
+    expect(bar.style.opacity).toBe("1");
+    expect(bar.getAttribute("aria-hidden")).toBe("false");
+  });
 });
 
 describe("TimelineScrubBar — deactivate mid-play stops interval", () => {
@@ -164,6 +193,22 @@ describe("TimelineScrubBar — deactivate mid-play stops interval", () => {
     });
 
     expect(useTimelineStore.getState().isPlaying).toBe(false);
+  });
+
+  it("switching away from Plan mid-play resets isPlaying to false", () => {
+    useUiStore.setState({ tideOverlayActive: true, sidebarMode: "plan" });
+    useTimelineStore.setState({ isPlaying: true });
+
+    const { getByTestId } = render(<TimelineScrubBar />);
+    expect(getByTestId("timeline-scrub-bar").style.transform).toBe("translateY(0)");
+    expect(useTimelineStore.getState().isPlaying).toBe(true);
+
+    act(() => {
+      useUiStore.setState({ sidebarMode: "explore" });
+    });
+
+    expect(useTimelineStore.getState().isPlaying).toBe(false);
+    expect(getByTestId("timeline-scrub-bar").style.transform).toBe("translateY(100%)");
   });
 
   it("scrubber is hidden after tide overlay is deactivated mid-play", () => {

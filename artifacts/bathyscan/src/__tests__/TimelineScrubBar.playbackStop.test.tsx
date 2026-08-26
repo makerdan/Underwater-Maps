@@ -39,6 +39,7 @@ vi.mock("@/lib/uiStore", () => ({
     windOverlayActive: boolean;
     weatherStationsActive: boolean;
     rawsOverlayActive: boolean;
+    sidebarMode: "explore" | "plan" | "analyze" | "live";
   }) => unknown) => {
     const state = (globalThis as unknown as { __uiState: typeof defaultUiState }).__uiState;
     return sel(state);
@@ -77,6 +78,7 @@ const defaultUiState = {
   windOverlayActive: false,
   weatherStationsActive: false,
   rawsOverlayActive: false,
+  sidebarMode: "plan" as "explore" | "plan" | "analyze" | "live",
 };
 
 // ---------------------------------------------------------------------------
@@ -137,5 +139,28 @@ describe("TimelineScrubBar — playback stop when hidden (stale-closure regressi
 
     // visible stays true — should not stop playback
     expect(setPlayingMock).not.toHaveBeenCalledWith(false);
+  });
+
+  it("calls setPlaying(false) when switching away from Plan while playing", () => {
+    const { rerender } = render(<TimelineScrubBar />);
+    setPlayingMock.mockClear();
+
+    act(() => {
+      (globalThis as unknown as { __timelineState: typeof defaultTimelineState }).__timelineState = {
+        ...(globalThis as unknown as { __timelineState: typeof defaultTimelineState }).__timelineState,
+        isPlaying: true,
+      };
+    });
+    rerender(<TimelineScrubBar />);
+
+    act(() => {
+      (globalThis as unknown as { __uiState: typeof defaultUiState }).__uiState = {
+        ...(globalThis as unknown as { __uiState: typeof defaultUiState }).__uiState,
+        sidebarMode: "explore",
+      };
+    });
+    rerender(<TimelineScrubBar />);
+
+    expect(setPlayingMock).toHaveBeenCalledWith(false);
   });
 });

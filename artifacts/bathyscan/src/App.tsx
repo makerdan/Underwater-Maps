@@ -1970,9 +1970,9 @@ function Main() {
         {/* Depth-profile chart — bottom-centre, z-36 */}
         <DepthProfilePanel />
 
-        {/* Timeline scrubber bar — fixed at bottom, z-34, visible when a
-            time-sensitive overlay is active. Depth-profile (z-36) renders
-            on top when both are open so the bar never obscures the chart. */}
+        {/* Timeline scrubber bar — fixed at bottom, z-34, visible in Plan mode
+            when a time-sensitive overlay is active. Depth-profile (z-36)
+            renders on top when both are open so the bar never obscures the chart. */}
         <TimelineScrubBar />
 
         {/* Full-screen overview map — z-40, rendered above all HUD elements */}

@@ -1,9 +1,9 @@
 /**
  * TimelineScrubBar — global time scrubber pinned to the bottom of the 3D view.
  *
- * Visible when at least one time-sensitive overlay (tide, currents, weather
- * stations, wind) is active. Drives useTimelineStore which all time-sensitive
- * overlays will read (wired in the next task).
+ * Visible in Plan mode when at least one time-sensitive overlay (tide, currents,
+ * weather stations, wind) is active. Drives useTimelineStore which all
+ * time-sensitive overlays will read (wired in the next task).
  *
  * Layout:
  *   - Fixed to the bottom of the viewport (z-index 34).
@@ -58,11 +58,14 @@ export const TimelineScrubBar: React.FC = () => {
   const windOverlayActive = useUiStore((s) => s.windOverlayActive);
   const weatherStationsActive = useUiStore((s) => s.weatherStationsActive);
   const rawsOverlayActive = useUiStore((s) => s.rawsOverlayActive);
+  const sidebarMode = useUiStore((s) => s.sidebarMode);
 
   // Must exactly mirror useTimelineVisible() in uiStore.ts so the scrubber bar
-  // is always visible whenever any overlay drives timeline-dependent behavior.
-  const visible =
+  // is always visible in Plan mode whenever any overlay drives timeline-dependent
+  // behavior. The planning controls own the global scrubber.
+  const timeSensitiveOverlayActive =
     tideOverlayActive || currentOverlayActive || windOverlayActive || weatherStationsActive || rawsOverlayActive;
+  const visible = sidebarMode === "plan" && timeSensitiveOverlayActive;
 
   // Depth-profile panel clearance: when a profile is active and at its default
   // bottom position, push the scrubber bar upward so it sits above the chart.
