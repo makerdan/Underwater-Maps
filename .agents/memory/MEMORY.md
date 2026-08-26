@@ -144,3 +144,4 @@
 - [Sidebar responsive CSSOM expectation](sidebar-responsive-cssom.md) — wide sidebar min-width assertion is a deterministic jsdom/CSSOM baseline mismatch, unrelated to Plan tools.
 - [Schema unique-index definition parity](schema-unique-index-definition-parity.md) — compare ordered expressions and bounded, normalized partial predicates, not only index names.
 - [Mobile Playwright GPU crash](mobile-playwright-gpu-crash.md) — host Chromium may crash before Pixel-device contexts stabilize; classify those runs as environment-limited.
+- [JSDOM reload spying](jsdom-location-reload-spy.md) — Location.reload is non-redefinable; stub the global window before invoking reload handlers.

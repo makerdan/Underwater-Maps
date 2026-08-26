@@ -37,7 +37,11 @@ export function Toaster() {
                 className="shrink-0 self-start text-destructive-foreground/70 hover:text-destructive-foreground"
               />
             )}
-            {action}
+            {Array.isArray(action) ? (
+              <div className="flex shrink-0 items-center gap-2">
+                {action}
+              </div>
+            ) : action}
             <ToastClose />
           </Toast>
         )

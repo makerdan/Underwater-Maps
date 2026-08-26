@@ -84,6 +84,7 @@ vi.mock("@/lib/settingsStore", () => {
     clearDatasetHome: vi.fn(),
     datasetHomePositions: {},
     syncedSnapshot: null,
+    lastSyncedAt: "2026-01-01T00:00:00Z",
   };
   const useSettingsStore = Object.assign(
     (sel?: (s: typeof state) => unknown) => (sel ? sel(state) : state),
@@ -191,6 +192,7 @@ describe("useServerSettingsSync — toast after 3 consecutive flush failures", (
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     vi.resetModules();
   });
 
@@ -257,6 +259,115 @@ describe("useServerSettingsSync — toast after 3 consecutive flush failures", (
   });
 });
 
+// ── Suite 3: cross-device conflict actions ────────────────────────────────────
+
+function getConflictActions(): Array<{
+  props: { children?: string; altText?: string; onClick?: () => void };
+}> {
+  const toastArg = mockToast.mock.calls.at(-1)?.[0] as
+    | { action?: unknown }
+    | undefined;
+  return (Array.isArray(toastArg?.action) ? toastArg.action : []) as Array<{
+    props: { children?: string; altText?: string; onClick?: () => void };
+  }>;
+}
+
+describe("useServerSettingsSync — cross-device conflict actions", () => {
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    mockToast.mockClear();
+    mockDismiss.mockClear();
+    saveSettingsMock.mutateAsync.mockReset();
+    saveSettingsMock.mutateAsync.mockRejectedValue({ status: 409 });
+
+    const { useServerSettingsSync } = await import("@/hooks/useServerSettingsSync");
+    renderHook(() => useServerSettingsSync());
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it("shows both clearly labeled choices with explanatory copy after a 409", async () => {
+    await triggerFlushAndAdvance();
+
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Settings updated on another device",
+        description:
+          "Another device saved newer settings. Keep Old Settings reloads and applies " +
+          "the newer remote settings. Keep My Current Settings saves your current " +
+          "settings over the remote version.",
+      }),
+    );
+
+    const actions = getConflictActions();
+    expect(actions).toHaveLength(2);
+    expect(actions.map((action) => action.props.children)).toEqual([
+      "Keep Old Settings",
+      "Keep My Current Settings",
+    ]);
+    expect(actions.map((action) => action.props.altText)).toEqual([
+      "Keep Old Settings",
+      "Keep My Current Settings",
+    ]);
+    expect(actions.every((action) => typeof action.props.onClick === "function")).toBe(true);
+  });
+
+  it("reloads when the user keeps the newer remote settings", async () => {
+    const reload = vi.fn();
+    vi.stubGlobal("window", {
+      ...window,
+      location: { ...window.location, reload },
+    });
+    await triggerFlushAndAdvance();
+
+    const oldSettingsAction = getConflictActions().find(
+      (action) => action.props.children === "Keep Old Settings",
+    );
+    expect(oldSettingsAction?.props.onClick).toBeDefined();
+    oldSettingsAction!.props.onClick!();
+
+    expect(mockDismiss).toHaveBeenCalledOnce();
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it("force-saves current settings without a client version and clears the conflict", async () => {
+    const { getSettingsSyncStatus } = await import("@/hooks/useServerSettingsSync");
+    saveSettingsMock.mutateAsync
+      .mockRejectedValueOnce({ status: 409 })
+      .mockResolvedValueOnce({ __updatedAt: "2026-01-02T00:00:00Z" });
+
+    await triggerFlushAndAdvance();
+    const currentSettingsAction = getConflictActions().find(
+      (action) => action.props.children === "Keep My Current Settings",
+    );
+    expect(currentSettingsAction?.props.onClick).toBeDefined();
+
+    await act(async () => {
+      currentSettingsAction!.props.onClick!();
+      await vi.advanceTimersByTimeAsync(0);
+      for (let i = 0; i < 8; i++) await Promise.resolve();
+    });
+
+    expect(saveSettingsMock.mutateAsync).toHaveBeenCalledTimes(2);
+    const firstPayload = saveSettingsMock.mutateAsync.mock.calls[0]?.[0] as {
+      data: Record<string, unknown>;
+    };
+    const overwritePayload = saveSettingsMock.mutateAsync.mock.calls[1]?.[0] as {
+      data: Record<string, unknown>;
+    };
+    expect(firstPayload.data.__clientVersion).toBe("2026-01-01T00:00:00Z");
+    expect(overwritePayload.data.__clientVersion).toBeUndefined();
+    expect(getSettingsSyncStatus().conflictDetected).toBe(false);
+    expect(mockDismiss).toHaveBeenCalledOnce();
+  });
+});
+
 // ── Suite 2: back-off schedule ────────────────────────────────────────────────
 
 describe("useServerSettingsSync — exponential back-off after threshold failures", () => {
@@ -275,6 +386,7 @@ describe("useServerSettingsSync — exponential back-off after threshold failure
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     vi.resetModules();
   });
 

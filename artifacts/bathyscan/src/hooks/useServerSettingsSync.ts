@@ -142,18 +142,36 @@ function _showConflictToast(): void {
     toastDismiss?.();
     window.location.reload();
   };
+  const handleKeepCurrent = () => {
+    toastDismiss?.();
+    // _conflictDetected is already true from the rejected PUT, so this
+    // deliberately uses the existing unversioned overwrite path. Keep the
+    // rejection handled here so the existing conflict/error status remains
+    // available through the Settings bar for another retry.
+    void _flush?.().catch(() => {
+      /* keep the conflict state and existing retry/error behavior */
+    });
+  };
   const { dismiss } = toast({
     title: "Settings updated on another device",
     description:
-      "Another device saved newer settings. Tap \u2018Reload\u2019 to apply them, " +
-      "or tap \u2018Overwrite\u2019 in the Settings bar to keep your current changes.",
+      "Another device saved newer settings. Keep Old Settings reloads and applies " +
+      "the newer remote settings. Keep My Current Settings saves your current " +
+      "settings over the remote version.",
     variant: "destructive",
     duration: 12_000,
-    action: createElement(
-      ToastAction as ElementType,
-      { altText: "Reload to merge", onClick: handleReload },
-      "Reload",
-    ),
+    action: [
+      createElement(
+        ToastAction as ElementType,
+        { altText: "Keep Old Settings", onClick: handleReload },
+        "Keep Old Settings",
+      ),
+      createElement(
+        ToastAction as ElementType,
+        { altText: "Keep My Current Settings", onClick: handleKeepCurrent },
+        "Keep My Current Settings",
+      ),
+    ],
   });
   toastDismiss = dismiss;
 }
