@@ -90,6 +90,7 @@ export function useProximityStreamingWiring({
   userDatasets,
 }: UseProximityStreamingWiringArgs): void {
   const proximityMode = useSettingsStore((s) => s.proximityMode ?? true);
+  const collectionScopeIds = useTerrainStore((s) => s.collectionScopeIds);
 
   // Build a map from datasetId → bbox for ALL datasets that have geographic
   // bounding box data — both preset catalog entries and user-uploaded datasets.
@@ -160,15 +161,42 @@ export function useProximityStreamingWiring({
 
   useEffect(() => {
     const { addSelectedToPool, removeSelected, selectedIds } = useTerrainStore.getState();
+    const collectionScope = collectionScopeIds ? new Set(collectionScopeIds) : null;
 
     if (!proximityMode) {
       // Remove every auto-registered ID from the pool (and evict if active).
       // removeSelected handles both selectedIds and visibleDatasets atomically.
-      for (const id of autoRegisteredIds) {
+      for (const id of [...autoRegisteredIds]) {
+        // A collection owns its selected members independently of proximity
+        // mode. Do not let a prior ordinary auto-registration remove one.
+        if (collectionScope?.has(id)) {
+          autoRegisteredIds.delete(id);
+          continue;
+        }
         removeSelected(id);
       }
       autoRegisteredIds.clear();
       return;
+    }
+
+    // When a collection is active, IDs that were previously auto-registered
+    // during ordinary exploration are no longer eligible unless they are a
+    // resolved member. Remove them before a late catalog response can activate
+    // or fetch them.
+    for (const id of [...autoRegisteredIds]) {
+      if (collectionScope && !collectionScope.has(id)) {
+        removeSelected(id);
+        autoRegisteredIds.delete(id);
+      }
+    }
+
+    // Leaving collection mode commonly follows setSinglePrimary(), which resets
+    // selectedIds. Drop registry entries that no longer have a pool entry so
+    // normal catalog enrollment can resume on this same render.
+    if (!collectionScope) {
+      for (const id of [...autoRegisteredIds]) {
+        if (!selectedIds.includes(id)) autoRegisteredIds.delete(id);
+      }
     }
 
     // ── Stale-ID eviction ─────────────────────────────────────────────────────
@@ -193,12 +221,19 @@ export function useProximityStreamingWiring({
         liveCatalogIds.add(d.id);
       }
       for (const id of [...autoRegisteredIds]) {
+        // Collection membership is authoritative even if the catalog response
+        // is stale or delayed relative to collection activation.
+        if (collectionScope?.has(id)) continue;
         if (!liveCatalogIds.has(id)) {
           removeSelected(id);
           autoRegisteredIds.delete(id);
         }
       }
     }
+
+    // activateCollection() has already selected every resolvable member. The
+    // collection scope intentionally suppresses all catalog-wide enrollment.
+    if (collectionScope) return;
 
     const alreadySelected = new Set(selectedIds);
 
@@ -223,13 +258,25 @@ export function useProximityStreamingWiring({
         autoRegisteredIds.add(d.id);
       }
     }
-  }, [proximityMode, datasets, userDatasets]);
+  }, [proximityMode, collectionScopeIds, datasets, userDatasets]);
 
   // Called by the proximity hook when a selected-but-not-active dataset should
   // be loaded into the scene. Adds it to visibleDatasets (with null grids) and
   // fetches the terrain+overview via React Query (uses cache when available).
   const handleProximityActivate = useCallback(
     async (datasetId: string, source: DatasetSource) => {
+      const canStillActivate = () => {
+        const state = useTerrainStore.getState();
+        return (
+          state.selectedIds.includes(datasetId) &&
+          (!state.collectionScopeIds || state.collectionScopeIds.includes(datasetId))
+        );
+      };
+
+      // An interval tick can be queued just before a collection replaces the
+      // selected pool. Re-check synchronously so that old catalog work never
+      // starts after the collection owns selection.
+      if (!canStillActivate()) return;
       useTerrainStore.getState().autoActivate(datasetId);
       useProximityStreamingStore.getState().setLoadingDatasetId(datasetId);
       try {
@@ -254,10 +301,12 @@ export function useProximityStreamingWiring({
               staleTime: Infinity,
             }),
           ]);
-          useTerrainStore.getState().setDatasetGrids(datasetId, {
-            activeGrid: terrainData as TerrainData,
-            overviewGrid: overviewData as TerrainData,
-          });
+          if (canStillActivate()) {
+            useTerrainStore.getState().setDatasetGrids(datasetId, {
+              activeGrid: terrainData as TerrainData,
+              overviewGrid: overviewData as TerrainData,
+            });
+          }
         } else {
           // User dataset: load via user-dataset endpoints
           const [terrainData, overviewData] = await Promise.all([
@@ -280,14 +329,20 @@ export function useProximityStreamingWiring({
               staleTime: Infinity,
             }),
           ]);
-          useTerrainStore.getState().setDatasetGrids(datasetId, {
-            activeGrid: terrainData as TerrainData,
-            overviewGrid: overviewData as TerrainData,
-          });
+          if (canStillActivate()) {
+            useTerrainStore.getState().setDatasetGrids(datasetId, {
+              activeGrid: terrainData as TerrainData,
+              overviewGrid: overviewData as TerrainData,
+            });
+          }
         }
       } catch {
         // Load failed — remove from selected pool so it doesn't spin forever.
-        useTerrainStore.getState().removeSelected(datasetId);
+        // A collection that started while this request was in flight owns its
+        // member selection; its regular loader reports the failure instead.
+        if (canStillActivate()) {
+          useTerrainStore.getState().removeSelected(datasetId);
+        }
       } finally {
         // Clear the loading indicator regardless of success or failure.
         const store = useProximityStreamingStore.getState();

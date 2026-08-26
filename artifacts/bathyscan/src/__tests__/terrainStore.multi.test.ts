@@ -106,6 +106,37 @@ describe("terrainStore multi-dataset", () => {
     expect(state.selectedSources).toMatchObject({ alpha: "user", beta: "preset" });
   });
 
+  it("keeps collection scope authoritative through additive retries", () => {
+    const store = useTerrainStore.getState();
+    store.setCollectionScope("trip-collection", ["alpha"]);
+    store.activateCollection([{ datasetId: "alpha", source: "user" }]);
+    store.addCollectionMembers([
+      { datasetId: "alpha", source: "user" },
+      { datasetId: "beta", source: "preset" },
+    ]);
+
+    const state = useTerrainStore.getState();
+    expect(state.collectionScopeId).toBe("trip-collection");
+    expect(state.collectionScopeIds).toEqual(["alpha", "beta"]);
+    expect(state.selectedIds).toEqual(["alpha", "beta"]);
+    expect(state.visibleDatasets.map((entry) => entry.datasetId)).toEqual(["alpha", "beta"]);
+  });
+
+  it("clears collection scope for an ordinary selection and ignores a stale collection retry", () => {
+    const store = useTerrainStore.getState();
+    store.setCollectionScope("trip-collection", ["collection-member"]);
+    store.activateCollection([{ datasetId: "collection-member", source: "user" }]);
+
+    store.setSinglePrimary("ordinary-map", "preset");
+    store.addCollectionMembers([{ datasetId: "late-collection-member", source: "user" }]);
+
+    const state = useTerrainStore.getState();
+    expect(state.collectionScopeId).toBeNull();
+    expect(state.collectionScopeIds).toBeNull();
+    expect(state.selectedIds).toEqual([]);
+    expect(state.visibleDatasets.map((entry) => entry.datasetId)).toEqual(["ordinary-map"]);
+  });
+
   it("records the first collection member for the App primary-terrain handoff", () => {
     useTerrainStore.getState().setSinglePrimary("stale-preset", "preset");
     useTerrainStore.getState().activateCollection([

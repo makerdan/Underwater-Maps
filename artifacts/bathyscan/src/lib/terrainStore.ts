@@ -155,6 +155,13 @@ interface TerrainStore {
   selectedSources: Record<string, DatasetSource>;
 
   /**
+   * Explicit collection-owned selection scope. While non-null, proximity
+   * registration must not add anything outside these resolved member IDs.
+   */
+  collectionScopeId: string | null;
+  collectionScopeIds: string[] | null;
+
+  /**
    * True when the user has explicitly opted into side-by-side multi-dataset viewing
    * (via toggleVisible / "Load together"). False in normal sequential navigation.
    * When false, setSinglePrimary evicts all prior datasets before promoting a new one.
@@ -233,6 +240,9 @@ interface TerrainStore {
       dataUpdatedAt?: string | null;
     }>,
   ) => void;
+
+  /** Establish the collection scope before an activation handoff begins. */
+  setCollectionScope: (collectionId: string, datasetIds: string[]) => void;
 
   /**
    * Add resolvable collection members to the current Explore scene without
@@ -356,6 +366,8 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
   selectedIds: [],
   selectedSources: {},
   multiDatasetMode: false,
+  collectionScopeId: null,
+  collectionScopeIds: null,
   overviewFetchErrorIds: [],
   datasetFetchErrorIds: [],
 
@@ -570,6 +582,8 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         const nextVisible = [...prev.visibleDatasets, entry];
         return {
           ...prev,
+          collectionScopeId: null,
+          collectionScopeIds: null,
           visibleDatasets: nextVisible,
           selectedIds: nextSelectedIds,
           selectedSources: nextSelectedSources,
@@ -581,6 +595,8 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       // No room — add to selected pool only; proximity streaming handles activation.
       return {
         ...prev,
+        collectionScopeId: null,
+        collectionScopeIds: null,
         selectedIds: nextSelectedIds,
         selectedSources: nextSelectedSources,
         multiDatasetMode: true,
@@ -610,6 +626,8 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         const nextVisible = [...prev.visibleDatasets, entry];
         return {
           ...prev,
+          collectionScopeId: null,
+          collectionScopeIds: null,
           visibleDatasets: nextVisible,
           selectedIds: nextSelectedIds,
           selectedSources: nextSelectedSources,
@@ -621,6 +639,8 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       // No room or already visible — just update selected pool.
       return {
         ...prev,
+        collectionScopeId: null,
+        collectionScopeIds: null,
         selectedIds: nextSelectedIds,
         selectedSources: nextSelectedSources,
         multiDatasetMode: true,
@@ -654,6 +674,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       return {
         ...prev,
         visibleDatasets,
+        collectionScopeIds: unique.map((entry) => entry.datasetId),
         pendingPrimaryHandoffId: unique[0]?.datasetId ?? null,
         selectedIds,
         selectedSources,
@@ -664,8 +685,18 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       };
     }),
 
+  setCollectionScope: (collectionId, datasetIds) =>
+    set((prev) => ({
+      ...prev,
+      collectionScopeId: collectionId,
+      collectionScopeIds: [...new Set(datasetIds.filter(Boolean))],
+    })),
+
   addCollectionMembers: (entries) =>
     set((prev) => {
+      // A retry that completes after the user has started another selection
+      // must not resurrect the old collection or broaden the new selection.
+      if (prev.collectionScopeIds === null) return prev;
       const existingIds = new Set(prev.visibleDatasets.map((entry) => entry.datasetId));
       const seen = new Set<string>();
       const additions = entries.filter((entry) => {
@@ -695,9 +726,16 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         ...prev.selectedSources,
         ...Object.fromEntries(additions.map((entry) => [entry.datasetId, entry.source])),
       };
+      const collectionScopeIds = [
+        ...prev.collectionScopeIds,
+        ...additions
+          .map((entry) => entry.datasetId)
+          .filter((id) => !prev.collectionScopeIds!.includes(id)),
+      ];
       return {
         ...prev,
         visibleDatasets,
+        collectionScopeIds,
         selectedIds,
         selectedSources,
         multiDatasetMode: true,
@@ -802,6 +840,8 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       const nextVisible = [entry];
       return {
         ...prev,
+        collectionScopeId: null,
+        collectionScopeIds: null,
         visibleDatasets: nextVisible,
         pendingPrimaryHandoffId: null,
         selectedIds: [],
@@ -826,6 +866,8 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       selectedIds: [],
       selectedSources: {},
       multiDatasetMode: false,
+      collectionScopeId: null,
+      collectionScopeIds: null,
       overviewFetchErrorIds: [],
       datasetFetchErrorIds: [],
     }),

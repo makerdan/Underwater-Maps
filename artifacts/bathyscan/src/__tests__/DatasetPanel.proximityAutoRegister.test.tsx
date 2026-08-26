@@ -57,6 +57,8 @@ const terrainStoreMock = vi.hoisted(() => {
     primaryDatasetId: null as string | null,
     selectedIds: [] as string[],
     selectedSources: {} as Record<string, string>,
+    collectionScopeId: null as string | null,
+    collectionScopeIds: null as string[] | null,
     evictedId: null as string | null,
     autoEvictedId: null as string | null,
     toggleVisible: vi.fn(),
@@ -268,6 +270,8 @@ beforeEach(() => {
 
   terrainStoreMock.selectedIds = [];
   terrainStoreMock.selectedSources = {};
+  terrainStoreMock.collectionScopeId = null;
+  terrainStoreMock.collectionScopeIds = null;
   terrainStoreMock.visibleDatasets = [];
   terrainStoreMock.addSelectedToPool.mockClear();
   terrainStoreMock.addSelected.mockClear();
@@ -609,5 +613,104 @@ describe("DatasetPanel — proximity auto-registration: remount does not re-enro
     // prevents re-enrollment on remount (the core bug fix).
     expect(terrainStoreMock.addSelectedToPool).not.toHaveBeenCalled();
     void callCountAfterFirstMount; // used above for assertion ordering
+  });
+});
+
+describe("DatasetPanel — proximity auto-registration: collection scope", () => {
+  it("removes an already-enrolled EFH-style dataset when collection activation takes ownership", async () => {
+    apiState.userDatasets = [
+      {
+        id: "noaa-efh-species-nearby",
+        name: "EFH Species — nearby",
+        minDepth: 0,
+        maxDepth: 100,
+        createdAt: "2024-01-01T00:00:00Z",
+        bbox: BBOX,
+      },
+    ];
+    let rerender!: (ui: React.ReactElement) => void;
+    await act(async () => {
+      ({ rerender } = render(React.createElement(DatasetPanel, {})));
+    });
+    expect(terrainStoreMock.selectedIds).toContain("noaa-efh-species-nearby");
+
+    terrainStoreMock.removeSelected.mockClear();
+    terrainStoreMock.collectionScopeId = "collection-trip";
+    terrainStoreMock.collectionScopeIds = ["collection-member"];
+    terrainStoreMock.selectedIds = ["collection-member"];
+    terrainStoreMock.selectedSources = { "collection-member": "user" };
+    await act(async () => {
+      rerender(React.createElement(DatasetPanel, {}));
+    });
+
+    expect(terrainStoreMock.removeSelected).toHaveBeenCalledWith("noaa-efh-species-nearby");
+    expect(terrainStoreMock.selectedIds).not.toContain("noaa-efh-species-nearby");
+  });
+
+  it("does not enroll a delayed, nearby EFH-style dataset that is absent from the active collection", async () => {
+    terrainStoreMock.collectionScopeId = "collection-trip";
+    terrainStoreMock.collectionScopeIds = ["collection-member"];
+    terrainStoreMock.selectedIds = ["collection-member"];
+    terrainStoreMock.selectedSources = { "collection-member": "user" };
+
+    let rerender!: (ui: React.ReactElement) => void;
+    await act(async () => {
+      ({ rerender } = render(React.createElement(DatasetPanel, {})));
+    });
+
+    // The user-dataset catalog resolves after the collection has activated.
+    apiState.userDatasets = [
+      {
+        id: "noaa-efh-species-nearby",
+        name: "EFH Species — nearby",
+        minDepth: 0,
+        maxDepth: 100,
+        createdAt: "2024-01-01T00:00:00Z",
+        bbox: BBOX,
+      },
+    ];
+    await act(async () => {
+      rerender(React.createElement(DatasetPanel, {}));
+    });
+
+    const enrolledIds = terrainStoreMock.addSelectedToPool.mock.calls.map((call) => call[0]);
+    expect(enrolledIds).not.toContain("noaa-efh-species-nearby");
+    expect(terrainStoreMock.selectedIds).not.toContain("noaa-efh-species-nearby");
+    expect(terrainStoreMock.addSelected).not.toHaveBeenCalled();
+  });
+
+  it("returns to ordinary catalog enrollment after collection scope ends", async () => {
+    terrainStoreMock.collectionScopeId = "collection-trip";
+    terrainStoreMock.collectionScopeIds = ["collection-member"];
+    terrainStoreMock.selectedIds = ["collection-member"];
+    terrainStoreMock.selectedSources = { "collection-member": "user" };
+    apiState.userDatasets = [
+      {
+        id: "nearby-upload",
+        name: "Nearby upload",
+        minDepth: 0,
+        maxDepth: 100,
+        createdAt: "2024-01-01T00:00:00Z",
+        bbox: BBOX,
+      },
+    ];
+
+    let rerender!: (ui: React.ReactElement) => void;
+    await act(async () => {
+      ({ rerender } = render(React.createElement(DatasetPanel, {})));
+    });
+    expect(terrainStoreMock.addSelectedToPool).not.toHaveBeenCalledWith("nearby-upload", "user");
+
+    // Mirrors setSinglePrimary(): an intentional ordinary selection clears the
+    // collection-owned pool before the wiring sees the next catalog render.
+    terrainStoreMock.collectionScopeId = null;
+    terrainStoreMock.collectionScopeIds = null;
+    terrainStoreMock.selectedIds = [];
+    terrainStoreMock.selectedSources = {};
+    await act(async () => {
+      rerender(React.createElement(DatasetPanel, {}));
+    });
+
+    expect(terrainStoreMock.addSelectedToPool).toHaveBeenCalledWith("nearby-upload", "user");
   });
 });

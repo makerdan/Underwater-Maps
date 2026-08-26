@@ -519,6 +519,7 @@ export const CollectionsSection: React.FC = () => {
   const setCollectionLoadNotice = useUiStore((s) => s.setCollectionLoadNotice);
   const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
   const datasetFetchErrorIds = useTerrainStore((s) => s.datasetFetchErrorIds);
+  const collectionScopeId = useTerrainStore((s) => s.collectionScopeId);
 
   useEffect(() => { if (creating) createInputRef.current?.focus(); }, [creating]);
 
@@ -622,12 +623,17 @@ export const CollectionsSection: React.FC = () => {
           source: "user" as const,
         }];
       });
+      terrain.setCollectionScope(c.id, entries.map((entry) => entry.datasetId));
       terrain.activateCollection(entries);
       await useSpecialCollectionStore.getState().activateForPuzzle(c, unresolvedMemberNames);
-      useUiStore.getState().setOverviewOpen(true);
+      if (useTerrainStore.getState().collectionScopeId === c.id) {
+        useUiStore.getState().setOverviewOpen(true);
+      }
     } finally {
-      activatingRef.current = null;
-      setActivatingId(null);
+      if (activatingRef.current === c.id) {
+        activatingRef.current = null;
+        setActivatingId(null);
+      }
     }
   }, [memberDatasetId, setCollectionLoadNotice]);
 
@@ -671,6 +677,7 @@ export const CollectionsSection: React.FC = () => {
         collectionId: c.id,
         datasetId: entries[0]!.datasetId,
       };
+      terrainStore.setCollectionScope(c.id, entries.map((entry) => entry.datasetId));
       terrainStore.activateCollection(entries);
       // A normal collection load replaces any puzzle overlay/layout and must
       // not leave the user in the Overview-only presentation.
@@ -683,8 +690,10 @@ export const CollectionsSection: React.FC = () => {
         ...errors,
         [c.id]: err instanceof Error ? err.message : "Could not load this collection. Try again.",
       }));
-      activatingRef.current = null;
-      setActivatingId(null);
+      if (activatingRef.current === c.id) {
+        activatingRef.current = null;
+        setActivatingId(null);
+      }
     }
   }, [memberDatasetId, setCollectionLoadNotice]);
 
@@ -734,6 +743,7 @@ export const CollectionsSection: React.FC = () => {
       const unresolvedMemberNames = c.members
         .filter((m) => !resolveMember(m))
         .map((m) => m.name);
+      if (useTerrainStore.getState().collectionScopeId !== c.id) return;
       setCollectionLoadNotice(
         unresolvedMemberNames.length > 0
           ? { collectionId: c.id, memberNames: unresolvedMemberNames }
@@ -748,7 +758,9 @@ export const CollectionsSection: React.FC = () => {
         return next;
       });
       // Unlike the initial load, retry is additive: retain all current terrain
-      // entries and append only members that have materialized since then.
+      // entries and append only members that have materialized since then. If
+      // the user switched collections (or resumed ordinary exploration) during
+      // the refetch, do not resurrect this collection's old members.
       useTerrainStore.getState().addCollectionMembers(entries);
     } catch (err) {
       setLoadErrors((errors) => ({
@@ -756,10 +768,22 @@ export const CollectionsSection: React.FC = () => {
         [c.id]: err instanceof Error ? err.message : "Could not retry this collection. Try again.",
       }));
     } finally {
-      activatingRef.current = null;
-      setActivatingId(null);
+      if (activatingRef.current === c.id) {
+        activatingRef.current = null;
+        setActivatingId(null);
+      }
     }
   }, [allSaves, qc, setCollectionLoadNotice]);
+
+  // A collection retry/activation can await server state while the user begins
+  // another exploration selection. Release the old row's loading state as soon
+  // as its terrain scope is no longer active, so it cannot block the new flow.
+  useEffect(() => {
+    if (!activatingRef.current || activatingRef.current === collectionScopeId) return;
+    activatingRef.current = null;
+    pendingPrimaryLoadRef.current = null;
+    setActivatingId(null);
+  }, [collectionScopeId]);
 
   // Apply-to-3D badge state: which collection's saved layout the 3D scene
   // currently reflects (and whether it has been edited since applying).
