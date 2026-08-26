@@ -42,6 +42,7 @@ const mocks = vi.hoisted(() => ({
   getCollectionBackground: vi.fn(),
   invalidateQueries: vi.fn(),
   setQueryData: vi.fn(),
+  getQueryData: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -167,6 +168,7 @@ vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({
     invalidateQueries: mocks.invalidateQueries,
     setQueryData: mocks.setQueryData,
+    getQueryData: mocks.getQueryData,
   }),
 }));
 
@@ -253,6 +255,7 @@ beforeEach(() => {
   mocks.getCollectionBackground.mockReset().mockResolvedValue(new Blob(["reference"], { type: "image/png" }));
   mocks.invalidateQueries.mockReset().mockResolvedValue(undefined);
   mocks.setQueryData.mockReset();
+  mocks.getQueryData.mockReset().mockReturnValue(undefined);
   useSpecialCollectionStore.setState({ active: null, pendingRestore: null, pendingPuzzleOn: 0, geoLayout: null, unresolvedMemberNames: [] });
   useUiStore.getState().setOverviewOpen(false);
   useUiStore.getState().setCollectionLoadNotice(null);
@@ -349,6 +352,42 @@ describe("CollectionsSection", () => {
     ]));
     expect(screen.getByTestId("collection-load-warning-col-trip")).toHaveTextContent(/Not Ready/);
     useTerrainStore.setState({ activateCollection: original });
+  });
+
+  it("retries unavailable catalog saves additively without entering Puzzle mode", async () => {
+    const activateCollection = vi.fn();
+    const addCollectionMembers = vi.fn();
+    const originalActivate = useTerrainStore.getState().activateCollection;
+    const originalAdd = useTerrainStore.getState().addCollectionMembers;
+    useTerrainStore.setState({ activateCollection, addCollectionMembers });
+    const incompleteCollection = {
+      ...COLLECTION_TRIP,
+      members: [
+        COLLECTION_TRIP.members[0],
+        { id: "mem-later", kind: "catalogSave", refId: "save-later", name: "Ready Later", createdAt: "2024-01-03T00:00:00Z" },
+      ],
+    };
+    currentCollections = [incompleteCollection];
+    currentSaves = [];
+    renderWithProviders(<CollectionsSection />);
+
+    fireEvent.click(screen.getByTestId("btn-load-collection-col-trip"));
+    await waitFor(() => expect(activateCollection).toHaveBeenCalledWith([
+      { datasetId: "ds-1", source: "user" },
+    ]));
+    expect(screen.getByTestId("btn-retry-collection-col-trip")).toBeInTheDocument();
+
+    const freshSave = { id: "save-later", datasetId: "catalog-later" };
+    mocks.getQueryData.mockReturnValue([freshSave]);
+    fireEvent.click(screen.getByTestId("btn-retry-collection-col-trip"));
+    await waitFor(() => expect(addCollectionMembers).toHaveBeenCalledWith([
+      { datasetId: "ds-1", source: "user" },
+      { datasetId: "catalog-later", source: "preset" },
+    ]));
+    expect(useUiStore.getState().overviewOpen).toBe(false);
+    expect(screen.queryByTestId("collection-load-warning-col-trip")).not.toBeInTheDocument();
+
+    useTerrainStore.setState({ activateCollection: originalActivate, addCollectionMembers: originalAdd });
   });
 
   it("creates a collection via + new and invalidates the query", async () => {

@@ -220,6 +220,8 @@ const CollectionRow: React.FC<{
   onActivate?: () => void;
   /** Load resolvable members into the 3D Explore view without puzzle mode. */
   onLoad?: () => void;
+  /** Retry members that were unavailable during the last ordinary load. */
+  onRetry?: () => void;
   /** True while the activate flow is loading datasets. */
   activating?: boolean;
   /** Names of saved members that were unavailable during the last activation. */
@@ -232,7 +234,7 @@ const CollectionRow: React.FC<{
    * edited after applying. Null/undefined hides the badge.
    */
   geoBadge?: "applied" | "outdated" | null;
-}> = ({ collection, expanded, onToggle, onRename, onDelete, onRemoveMember, removingMemberIds, onDownloadOffline, offlineRollup = "none", onOpenSettings, onActivate, onLoad, activating = false, unavailableMemberNames = [], loadError = null, geoBadge = null }) => {
+}> = ({ collection, expanded, onToggle, onRename, onDelete, onRemoveMember, removingMemberIds, onDownloadOffline, offlineRollup = "none", onOpenSettings, onActivate, onLoad, onRetry, activating = false, unavailableMemberNames = [], loadError = null, geoBadge = null }) => {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -397,6 +399,16 @@ const CollectionRow: React.FC<{
           {collection.collectionKind === "special"
             ? `Unavailable puzzle piece${unavailableMemberNames.length === 1 ? "" : "s"}: ${unavailableMemberNames.join(", ")}`
             : `Unavailable member${unavailableMemberNames.length === 1 ? "" : "s"} skipped: ${unavailableMemberNames.join(", ")}`}
+            {onRetry && (
+              <button
+                data-testid={`btn-retry-collection-${collection.id}`}
+                onClick={onRetry}
+                disabled={activating}
+                style={{ marginLeft: 8, background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.4)", borderRadius: 3, color: "#fbbf24", cursor: activating ? "wait" : "pointer", fontSize: "calc(11px * var(--bs-font-scale, 1))", padding: "1px 6px", whiteSpace: "nowrap" }}
+              >
+                {activating ? "Retrying…" : "Retry now"}
+              </button>
+            )}
         </div>
       )}
       {loadError && (
@@ -667,6 +679,54 @@ export const CollectionsSection: React.FC = () => {
     }
   }, [memberDatasetId, setCollectionLoadNotice]);
 
+  const handleRetry = useCallback(async (c: DatasetCollection) => {
+    if (activatingRef.current) return;
+    activatingRef.current = c.id;
+    setActivatingId(c.id);
+    try {
+      // Force the saves query to resolve again: catalog-save materialization may
+      // have completed since the original collection load.
+      await qc.invalidateQueries({ queryKey: getGetDatasetsMySavesQueryKey() });
+      const freshSaves = qc.getQueryData<UserCatalogSave[]>(getGetDatasetsMySavesQueryKey()) ?? allSaves;
+      const freshSavesById = new Map(freshSaves.map((save) => [save.id, save]));
+      const resolveMember = (m: DatasetCollectionMember): string | null =>
+        m.kind === "dataset" ? m.refId : freshSavesById.get(m.refId)?.datasetId ?? null;
+      const entries = c.members.flatMap((m) => {
+        const datasetId = resolveMember(m);
+        return datasetId
+          ? [{ datasetId, source: m.kind === "dataset" ? "user" as const : "preset" as const }]
+          : [];
+      });
+      const unresolvedMemberNames = c.members
+        .filter((m) => !resolveMember(m))
+        .map((m) => m.name);
+      setCollectionLoadNotice(
+        unresolvedMemberNames.length > 0
+          ? { collectionId: c.id, memberNames: unresolvedMemberNames }
+          : null,
+      );
+      if (entries.length === 0) {
+        throw new Error("No collection members are available to load yet.");
+      }
+      setLoadErrors((errors) => {
+        const next = { ...errors };
+        delete next[c.id];
+        return next;
+      });
+      // Unlike the initial load, retry is additive: retain all current terrain
+      // entries and append only members that have materialized since then.
+      useTerrainStore.getState().addCollectionMembers(entries);
+    } catch (err) {
+      setLoadErrors((errors) => ({
+        ...errors,
+        [c.id]: err instanceof Error ? err.message : "Could not retry this collection. Try again.",
+      }));
+    } finally {
+      activatingRef.current = null;
+      setActivatingId(null);
+    }
+  }, [allSaves, qc, setCollectionLoadNotice]);
+
   // Apply-to-3D badge state: which collection's saved layout the 3D scene
   // currently reflects (and whether it has been edited since applying).
   const geoLayout = useSpecialCollectionStore((s) => s.geoLayout);
@@ -790,6 +850,7 @@ export const CollectionsSection: React.FC = () => {
               onOpenSettings={c.collectionKind === "special" ? () => setSettingsForId(c.id) : undefined}
               onActivate={c.collectionKind === "special" ? () => void handleActivate(c) : undefined}
               onLoad={() => void handleLoad(c)}
+              onRetry={c.collectionKind === "special" ? undefined : () => void handleRetry(c)}
               activating={activatingId === c.id}
               unavailableMemberNames={
                 collectionLoadNotice?.collectionId === c.id ? collectionLoadNotice.memberNames : []

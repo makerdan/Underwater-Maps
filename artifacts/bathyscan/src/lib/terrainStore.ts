@@ -228,6 +228,18 @@ interface TerrainStore {
   ) => void;
 
   /**
+   * Add resolvable collection members to the current Explore scene without
+   * replacing datasets the user already has loaded.
+   */
+  addCollectionMembers: (
+    entries: Array<{
+      datasetId: string;
+      source: DatasetSource;
+      dataUpdatedAt?: string | null;
+    }>,
+  ) => void;
+
+  /**
    * Add a dataset to the selected pool WITHOUT activating it.
    * Used by the proximity-mode auto-registration effect so that all datasets
    * are enrolled in the proximity pool but none are activated immediately —
@@ -625,6 +637,47 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         multiDatasetMode: true,
         evictedId: null,
         autoEvictedId: null,
+        ...syncPrimaryGrids(visibleDatasets),
+      };
+    }),
+
+  addCollectionMembers: (entries) =>
+    set((prev) => {
+      const existingIds = new Set(prev.visibleDatasets.map((entry) => entry.datasetId));
+      const seen = new Set<string>();
+      const additions = entries.filter((entry) => {
+        if (!entry.datasetId || existingIds.has(entry.datasetId) || seen.has(entry.datasetId)) {
+          return false;
+        }
+        seen.add(entry.datasetId);
+        return true;
+      });
+      if (additions.length === 0) return prev;
+
+      const additionsAsVisible: VisibleDataset[] = additions.map((entry) => ({
+        datasetId: entry.datasetId,
+        source: entry.source,
+        activeGrid: null,
+        overviewGrid: null,
+        dataUpdatedAt: entry.dataUpdatedAt ?? null,
+      }));
+      const visibleDatasets = [...prev.visibleDatasets, ...additionsAsVisible];
+      const selectedIds = [
+        ...prev.selectedIds,
+        ...additionsAsVisible
+          .map((entry) => entry.datasetId)
+          .filter((id) => !prev.selectedIds.includes(id)),
+      ];
+      const selectedSources = {
+        ...prev.selectedSources,
+        ...Object.fromEntries(additions.map((entry) => [entry.datasetId, entry.source])),
+      };
+      return {
+        ...prev,
+        visibleDatasets,
+        selectedIds,
+        selectedSources,
+        multiDatasetMode: true,
         ...syncPrimaryGrids(visibleDatasets),
       };
     }),

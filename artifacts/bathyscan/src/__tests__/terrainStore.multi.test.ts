@@ -90,6 +90,22 @@ describe("terrainStore multi-dataset", () => {
     ).toBe("user");
   });
 
+  it("addCollectionMembers preserves loaded entries and appends only new members", () => {
+    const alphaGrid = makeGrid("alpha");
+    useTerrainStore.getState().activateCollection([{ datasetId: "alpha", source: "user" }]);
+    useTerrainStore.getState().setDatasetGrids("alpha", { activeGrid: alphaGrid, overviewGrid: alphaGrid });
+    useTerrainStore.getState().addCollectionMembers([
+      { datasetId: "alpha", source: "user" },
+      { datasetId: "beta", source: "preset" },
+    ]);
+
+    const state = useTerrainStore.getState();
+    expect(state.visibleDatasets.map((entry) => entry.datasetId)).toEqual(["alpha", "beta"]);
+    expect(state.visibleDatasets[0]?.activeGrid).toBe(alphaGrid);
+    expect(state.selectedIds).toEqual(["alpha", "beta"]);
+    expect(state.selectedSources).toMatchObject({ alpha: "user", beta: "preset" });
+  });
+
   it("toggleVisible queues datasets beyond MAX_ACTIVE_DATASETS in selectedIds", () => {
     // With the streaming model, toggleVisible activates immediately only while
     // visibleDatasets.length < MAX_ACTIVE_DATASETS (3). Beyond that, datasets are
