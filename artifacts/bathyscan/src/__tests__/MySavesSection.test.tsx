@@ -28,6 +28,7 @@ import React from "react";
 import { renderWithProviders } from "./setup";
 import { MySavesSection } from "@/components/MySavesSection";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { UPLOAD_SESSION_KEY } from "@/lib/uploadSession";
 
 // ---------------------------------------------------------------------------
 // Hoisted shared spies
@@ -151,6 +152,8 @@ let currentMySaves: unknown[] = [];
 let currentUserFolders: unknown[] = [];
 let currentSaveFolderExpanded: Record<string, boolean> = {};
 let currentWaterType = "saltwater";
+let currentUploadStatus: unknown = undefined;
+let currentUploadJobStatus: unknown = undefined;
 
 // ---------------------------------------------------------------------------
 // Module mocks
@@ -175,6 +178,18 @@ vi.mock(
       }),
       useGetUserFolders: () => ({
         data: currentUserFolders,
+        isFetching: false,
+        isLoading: false,
+        isError: false,
+      }),
+      useGetChunkUploadStatus: () => ({
+        data: currentUploadStatus,
+        isFetching: false,
+        isLoading: false,
+        isError: false,
+      }),
+      useGetUploadJobStatus: () => ({
+        data: currentUploadJobStatus,
         isFetching: false,
         isLoading: false,
         isError: false,
@@ -330,6 +345,9 @@ function resetState() {
   currentUserFolders = [];
   currentSaveFolderExpanded = {};
   currentWaterType = "saltwater";
+  currentUploadStatus = undefined;
+  currentUploadJobStatus = undefined;
+  sessionStorage.removeItem(UPLOAD_SESSION_KEY);
   useSettingsStore.setState({ defaultMapLoad: null });
 }
 
@@ -354,6 +372,77 @@ describe("MySavesSection — visibility", () => {
     expect(
       screen.getByText(/No datasets yet — upload sonar data or save datasets from the catalog/i),
     ).toBeInTheDocument();
+  });
+
+  it("rehydrates a server-backed upload after reload and shows processing progress", () => {
+    sessionStorage.setItem(UPLOAD_SESSION_KEY, JSON.stringify({
+      uploadId: "upload-session-1",
+      jobId: "job-1",
+      fileName: "deep-survey.zip",
+      fileSize: 1024,
+      lastModified: 123,
+      totalChunks: 1,
+    }));
+    currentUploadStatus = {
+      uploadId: "upload-session-1",
+      receivedChunks: [0],
+      lifecycleStatus: "processing",
+      jobId: "job-1",
+    };
+    currentUploadJobStatus = { status: "processing", progress: 42 };
+
+    renderSection();
+
+    expect(screen.getByTestId("upload-processing-status")).toHaveTextContent("deep-survey.zip");
+    expect(screen.getByText(/processing upload · 42%/i)).toBeInTheDocument();
+  });
+
+  it("keeps a failed upload visible with retry guidance", () => {
+    sessionStorage.setItem(UPLOAD_SESSION_KEY, JSON.stringify({
+      uploadId: "upload-session-2",
+      jobId: "job-2",
+      fileName: "failed-survey.csv",
+      fileSize: 1024,
+      lastModified: 123,
+      totalChunks: 1,
+    }));
+    currentUploadStatus = {
+      uploadId: "upload-session-2",
+      receivedChunks: [0],
+      lifecycleStatus: "error",
+      jobId: "job-2",
+    };
+    currentUploadJobStatus = { status: "error", progress: 18, error: "Unsupported source format" };
+
+    renderSection();
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/upload failed — retry in find data/i);
+    expect(screen.getByRole("alert")).toHaveTextContent("Unsupported source format");
+  });
+
+  it("clears the persisted session after the server reports completion", async () => {
+    sessionStorage.setItem(UPLOAD_SESSION_KEY, JSON.stringify({
+      uploadId: "upload-session-3",
+      jobId: "job-3",
+      fileName: "ready-survey.csv",
+      fileSize: 1024,
+      lastModified: 123,
+      totalChunks: 1,
+    }));
+    currentUploadStatus = {
+      uploadId: "upload-session-3",
+      receivedChunks: [0],
+      lifecycleStatus: "done",
+      jobId: "job-3",
+    };
+    currentUploadJobStatus = { status: "done", progress: 100, datasetId: "dataset-3" };
+
+    renderSection();
+
+    await waitFor(() => {
+      expect(sessionStorage.getItem(UPLOAD_SESSION_KEY)).toBeNull();
+      expect(screen.queryByTestId("upload-processing-status")).not.toBeInTheDocument();
+    });
   });
 });
 

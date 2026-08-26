@@ -56,6 +56,12 @@ import { useMarkerEditStore } from "@/lib/markerEditStore";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useZoneOverlayStore } from "@/lib/zoneOverlayStore";
 import { useOfflineStore } from "@/lib/offlineStore";
+import {
+  saveUploadSession,
+  clearUploadSession,
+  loadUploadSession,
+  type SavedUploadSession,
+} from "@/lib/uploadSession";
 import { useSettingsStore, type CameraBookmark } from "@/lib/settingsStore";
 import { MySavesSection } from "@/components/MySavesSection";
 import { CollectionsSection } from "@/components/CollectionsSection";
@@ -156,28 +162,6 @@ export const MAX_UPLOAD_POLL_DURATION_MS = 5 * 60 * 1_000; // 5 minutes
  */
 export const EFH_DIVIDER_KEY_ACTIVE = "\x00efh-divider-active";
 export const EFH_DIVIDER_KEY_QUEUED = "\x00efh-divider-queued";
-
-const UPLOAD_SESSION_KEY = "bathyscan_upload_session";
-interface SavedUploadSession {
-  uploadId: string;
-  fileName: string;
-  fileSize: number;
-  lastModified: number;
-  totalChunks: number;
-}
-function saveUploadSession(s: SavedUploadSession) {
-  try { sessionStorage.setItem(UPLOAD_SESSION_KEY, JSON.stringify(s)); } catch { /* ignore */ }
-}
-function clearUploadSession() {
-  try { sessionStorage.removeItem(UPLOAD_SESSION_KEY); } catch { /* ignore */ }
-}
-function loadUploadSession(): SavedUploadSession | null {
-  try {
-    const raw = sessionStorage.getItem(UPLOAD_SESSION_KEY);
-    return raw ? (JSON.parse(raw) as SavedUploadSession) : null;
-  } catch { return null; }
-}
-
 const PANEL: React.CSSProperties = {
   background: "rgba(0,10,20,0.82)",
   border: "1px solid rgba(0,229,255,0.18)",
@@ -1781,8 +1765,12 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false, up
       setChunkedError("Server accepted the upload but returned an invalid job ID — please retry.");
       return false;
     }
-    // Finalize accepted and jobId confirmed — the session is safely handed off to the server.
-    clearUploadSession();
+    // Keep the server handoff discoverable to My Saves if this panel unmounts.
+    // DatasetPanel clears it when polling reaches a terminal state.
+    const savedSession = loadUploadSession();
+    if (savedSession && savedSession.uploadId === uploadId) {
+      saveUploadSession({ ...savedSession, jobId });
+    }
     setChunkedPhase("processing");
     setChunkedJobId(jobId);
     return true;
@@ -2249,6 +2237,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false, up
 
         if (job.status === "done" && job.datasetId) {
           stopped = true;
+          clearUploadSession();
           setChunkedPhase("idle");
           setChunkedJobId(null);
           setChunkedJobProgress(0);
@@ -2288,7 +2277,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false, up
           }
         } else if (job.status === "error") {
           stopped = true;
-          clearUploadSession();
           setChunkedPhase("error");
           setChunkedError(job.error ?? "Processing failed. Please try uploading again.");
         } else {

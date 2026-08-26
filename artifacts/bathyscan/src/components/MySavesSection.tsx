@@ -18,6 +18,8 @@ import {
   useGetDatasetsMySaves,
   useGetUserDatasets,
   useGetUserFolders,
+  useGetChunkUploadStatus,
+  useGetUploadJobStatus,
   useDeleteDatasetsMySavesId,
   usePostDatasetsMySavesIdRetry,
   useDeleteUserDatasetsId,
@@ -32,6 +34,8 @@ import {
   getGetDatasetsMySavesQueryKey,
   getGetUserDatasetsQueryKey,
   getGetUserFoldersQueryKey,
+  getGetChunkUploadStatusQueryKey,
+  getGetUploadJobStatusQueryKey,
   type UserCatalogSave,
   type UserDatasetMeta,
   type DatasetFolder,
@@ -64,6 +68,7 @@ import {
 import { useOfflineScopeStore } from "@/lib/offlineScopeStore";
 import { OVERLAY_Z } from "@/lib/overlayScale";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
+import { clearUploadSession, loadUploadSession, saveUploadSession, type SavedUploadSession } from "@/lib/uploadSession";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -199,6 +204,77 @@ const OfflineRollupBadge: React.FC<{
     >
       {label}
     </span>
+  );
+};
+
+const UploadProcessingStatus: React.FC = () => {
+  const { isSignedIn, isLoaded } = useAuth();
+  const [session, setSession] = useState<SavedUploadSession | null>(() => loadUploadSession());
+  const uploadStatus = useGetChunkUploadStatus(session?.uploadId ?? "", {
+    query: {
+      queryKey: getGetChunkUploadStatusQueryKey(session?.uploadId ?? ""),
+      enabled: Boolean(session?.uploadId && isLoaded && isSignedIn),
+      refetchInterval: 2_000,
+    },
+  });
+  const jobId = uploadStatus.data?.jobId ?? session?.jobId ?? "";
+  const jobStatus = useGetUploadJobStatus(jobId, {
+    query: {
+      queryKey: getGetUploadJobStatusQueryKey(jobId),
+      enabled: Boolean(jobId && isLoaded && isSignedIn),
+      refetchInterval: 2_000,
+    },
+  });
+
+  useEffect(() => {
+    const status = jobStatus.data?.status ?? uploadStatus.data?.lifecycleStatus;
+    if (status === "done") {
+      clearUploadSession();
+      setSession(null);
+    } else if (status === "error") {
+      if (session && jobId && session.jobId !== jobId) {
+        const next = { ...session, jobId };
+        saveUploadSession(next);
+        setSession(next);
+      }
+    } else if (!session?.jobId && jobId && session) {
+      const next = { ...session, jobId };
+      saveUploadSession(next);
+      setSession(next);
+    }
+  }, [jobStatus.data?.status, uploadStatus.data?.lifecycleStatus, jobId, session]);
+
+  const status = jobStatus.data?.status ?? uploadStatus.data?.lifecycleStatus;
+  if (!session || !status || status === "done") return null;
+
+  const isError = status === "error";
+  const progress = typeof jobStatus.data?.progress === "number" ? jobStatus.data.progress : null;
+  return (
+    <div
+      data-testid="upload-processing-status"
+      role={isError ? "alert" : undefined}
+      style={{
+        ...CARD,
+        borderLeft: `2px solid ${isError ? STATUS_COLORS.failed : STATUS_COLORS.processing}99`,
+        background: isError ? "rgba(248,113,113,0.06)" : "rgba(96,165,250,0.06)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span aria-hidden="true">{isError ? "⚠" : "◌"}</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ color: isError ? "#fca5a5" : "#bfdbfe", fontWeight: 600, overflowWrap: "anywhere" }}>
+            {session.fileName}
+          </div>
+          <div style={{ color: isError ? "#f87171" : "#60a5fa", fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+            {isError ? "Upload failed — retry in Find Data" : status === "queued" ? "Upload queued" : "Processing upload"}
+            {progress !== null ? ` · ${Math.round(progress)}%` : ""}
+          </div>
+          {isError && jobStatus.data?.error && (
+            <ErrorMessage message={jobStatus.data.error} style={{ marginTop: 5, fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#fca5a5" }} />
+          )}
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -1730,6 +1806,10 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
       {isListPending && (
         <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 8 }}>Loading…</div>
       )}
+
+      {/* A chunked upload is owned by the server after finalize, so keep its
+          status visible even when Find Data (and its upload panel) is closed. */}
+      <UploadProcessingStatus />
 
       {/* Delete errors */}
       {deleteError && (
