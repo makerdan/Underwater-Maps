@@ -85,6 +85,24 @@ describe("AdvancedSection", () => {
     expect(btn).toHaveAttribute("aria-expanded", "false");
   });
 
+  it("collapsed content is hidden from assistive technology and interaction", () => {
+    const { container } = render(
+      <AdvancedSection panelId="overlaysToolsAdvanced">
+        <button data-testid="inner-btn">hidden action</button>
+      </AdvancedSection>,
+    );
+    const root = container.firstChild as HTMLElement;
+    const toggle = screen.getByTestId("advanced-toggle-overlaysToolsAdvanced");
+    const content = root.children[1] as HTMLElement;
+
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveAttribute("aria-controls", "advanced-content-overlaysToolsAdvanced");
+    expect(content).toHaveAttribute("id", "advanced-content-overlaysToolsAdvanced");
+    expect(content).toHaveAttribute("aria-hidden", "true");
+    expect(content).toHaveAttribute("inert");
+    expect(content).toHaveStyle({ pointerEvents: "none" });
+  });
+
   it("collapsed container uses maxHeight=0px to clip children (CSS-clip design, not DOM removal)", () => {
     const { container } = render(
       <AdvancedSection panelId="overlaysToolsAdvanced">
@@ -168,6 +186,27 @@ describe("AdvancedSection", () => {
     );
     const btn = screen.getByTestId("advanced-toggle-overlaysToolsAdvanced");
     expect(btn).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("expanded content is exposed and remains interactive", () => {
+    resetMocks(false);
+    const { container } = render(
+      <AdvancedSection panelId="tidePanelAdvanced">
+        <button data-testid="inner-btn" onClick={mockToggle}>usable action</button>
+      </AdvancedSection>,
+    );
+    const root = container.firstChild as HTMLElement;
+    const toggle = screen.getByTestId("advanced-toggle-tidePanelAdvanced");
+    const content = root.children[1] as HTMLElement;
+
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(toggle).toHaveAttribute("aria-controls", "advanced-content-tidePanelAdvanced");
+    expect(content).toHaveAttribute("aria-hidden", "false");
+    expect(content).not.toHaveAttribute("inert");
+    expect(content).toHaveStyle({ pointerEvents: "auto" });
+
+    fireEvent.click(screen.getByTestId("inner-btn"));
+    expect(mockToggle).toHaveBeenCalledOnce();
   });
 
   it("expanded container has maxHeight=1200px", () => {

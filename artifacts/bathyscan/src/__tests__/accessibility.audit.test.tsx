@@ -28,6 +28,8 @@ import { axe } from "vitest-axe";
 import { SimulatedDataConfirmDialog } from "@/components/SimulatedDataConfirmDialog";
 import { useSimulatedDataStore, type PendingSwitch } from "@/lib/simulatedDataStore";
 import { useCameraStore } from "@/lib/cameraStore";
+import { AdvancedSection } from "@/components/AdvancedSection";
+import { DEFAULTS, usePanelCollapseStore } from "@/lib/panelCollapseStore";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -415,5 +417,50 @@ describe("CanvasAriaAnnouncer aria-live region", () => {
 
     expect(region.textContent).toContain("45");
     expect(region.textContent).toContain("37.8000");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. Collapsed sidebar sections
+// ---------------------------------------------------------------------------
+describe("Advanced sidebar section accessibility", () => {
+  const sectionIds = [
+    "overlaysToolsAdvanced",
+    "tidePanelAdvanced",
+    "currentsPanelAdvanced",
+    "habitatAdvanced",
+    "seafloorAdvanced",
+  ] as const;
+
+  beforeEach(() => {
+    usePanelCollapseStore.setState({ collapsed: { ...DEFAULTS } });
+  });
+
+  it.each(sectionIds)("removes %s controls from the accessibility tree while collapsed", (panelId) => {
+    const { container } = render(
+      <AdvancedSection panelId={panelId}>
+        <button type="button">Hidden control</button>
+      </AdvancedSection>,
+    );
+    const content = container.querySelector(`#advanced-content-${panelId}`) as HTMLElement;
+
+    expect(content).toHaveAttribute("aria-hidden", "true");
+    expect(content).toHaveAttribute("inert");
+    expect(content).toHaveStyle({ pointerEvents: "none" });
+  });
+
+  it.each(sectionIds)("restores %s controls when expanded", (panelId) => {
+    usePanelCollapseStore.getState().setCollapsed(panelId, false);
+    const { container } = render(
+      <AdvancedSection panelId={panelId}>
+        <button type="button">Usable control</button>
+      </AdvancedSection>,
+    );
+    const content = container.querySelector(`#advanced-content-${panelId}`) as HTMLElement;
+
+    expect(content).toHaveAttribute("aria-hidden", "false");
+    expect(content).not.toHaveAttribute("inert");
+    expect(content).toHaveStyle({ pointerEvents: "auto" });
+    expect(screen.getByRole("button", { name: "Usable control" })).toBeVisible();
   });
 });

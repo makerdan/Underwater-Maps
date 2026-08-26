@@ -50,6 +50,7 @@ export const AdvancedSection: React.FC<AdvancedSectionProps> = ({
         data-testid={`advanced-toggle-${panelId}`}
         onClick={() => toggle(panelId)}
         aria-expanded={!collapsed}
+        aria-controls={`advanced-content-${panelId}`}
         style={{
           width: "100%",
           display: "flex",
@@ -99,6 +100,7 @@ export const AdvancedSection: React.FC<AdvancedSectionProps> = ({
 
       {/* Always-mounted children clipped via max-height for smooth animation */}
       <div
+        id={`advanced-content-${panelId}`}
         aria-hidden={collapsed}
         inert={collapsed || undefined}
         style={{
