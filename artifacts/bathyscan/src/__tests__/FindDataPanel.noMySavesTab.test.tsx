@@ -1,12 +1,9 @@
 /**
- * Regression guard: FindDataPanel must NOT render a "My Saves" tab.
- *
- * My Saves lives exclusively in the left-side DatasetPanel (Explore sidebar).
- * This test prevents the tab from silently creeping back into the right panel.
+ * Regression guard: FindDataPanel only exposes My Saves to signed-in users.
  *
  * Asserts:
- *   (a) No element with data-testid="find-data-my-saves-tab" is rendered.
- *   (b) The tab bar contains exactly 2 tab buttons (Search + NCEI Portal).
+ *   (a) A signed-out user does not see the private library tab.
+ *   (b) The public tab bar contains Search + NCEI Portal.
  */
 import React from "react";
 import { describe, it, expect, vi } from "vitest";
@@ -97,8 +94,8 @@ vi.mock("@/components/ViewscreenTooltip", () => ({
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("FindDataPanel — no My Saves tab (regression guard)", () => {
-  it("does not render a find-data-my-saves-tab element", () => {
+describe("FindDataPanel — My Saves auth gate", () => {
+  it("does not render a find-data-my-saves-tab element for signed-out users", () => {
     renderWithProviders(<FindDataPanel onClose={vi.fn()} />);
     expect(screen.queryByTestId("find-data-my-saves-tab")).toBeNull();
   });
@@ -108,7 +105,7 @@ describe("FindDataPanel — no My Saves tab (regression guard)", () => {
     // Verify the two expected tabs are present by testid.
     expect(screen.getByTestId("find-data-search-tab")).toBeInTheDocument();
     expect(screen.getByTestId("find-data-ncei-tab")).toBeInTheDocument();
-    // No My Saves tab button at all.
+    // Private library controls are hidden until authentication is ready.
     expect(screen.queryByTestId("find-data-my-saves-tab")).toBeNull();
   });
 });

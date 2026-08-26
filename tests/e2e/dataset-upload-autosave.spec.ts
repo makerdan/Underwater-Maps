@@ -120,6 +120,15 @@ async function ensureExploreMode(page: Page): Promise<void> {
       { timeout: 8_000 },
     )
     .catch(() => {});
+  // Panel collapse state is persisted independently of the sidebar mode.
+  // Expand the library before checking for the uploaded row so a prior
+  // journey cannot make a persisted upload appear to be missing.
+  const libraryToggle = page.getByRole("button", { name: "MY LIBRARY", exact: true });
+  if (
+    (await libraryToggle.getAttribute("aria-expanded").catch(() => null)) === "false"
+  ) {
+    await libraryToggle.click().catch(() => {});
+  }
 }
 
 /**
@@ -319,6 +328,7 @@ test.describe("upload auto-save end-to-end", () => {
     // text, because the parse + grid step can be quick enough on small
     // inputs that the progress UI flips to the completed state before
     // Playwright can latch onto it.
+    await ensureExploreMode(page);
     const newRow = page
       .getByTestId(/^btn-user-dataset-/)
       .filter({ hasText: expectedName });

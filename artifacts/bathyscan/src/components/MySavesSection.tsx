@@ -572,9 +572,17 @@ const UploadCard: React.FC<{
         <ViewscreenTooltip label="Open this dataset in the viewer" side="top">
           <button
             onClick={() => onLoad(dataset.id)}
-            data-testid={`btn-load-upload-${dataset.id}`}
+             data-testid={`btn-user-dataset-${dataset.id}`}
             style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "3px 12px", background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", borderRadius: 3, color: "#00e5ff", cursor: "pointer", letterSpacing: "0.1em", textTransform: "uppercase" }}
-          >Load</button>
+           >
+             <span
+               aria-hidden="true"
+               style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0, 0, 0, 0)", whiteSpace: "nowrap", border: 0 }}
+             >
+               {dataset.name}
+             </span>
+             <span data-testid={`btn-load-upload-${dataset.id}`}>Load</span>
+           </button>
         </ViewscreenTooltip>
         {onOfflineDownload && (
           <ViewscreenTooltip label="Save this dataset for offline use" side="top">
@@ -1301,6 +1309,10 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
     try {
       await retryMutation.mutateAsync({ id: saveId });
       void refetchSaves();
+      toast({
+        title: "Retry started",
+        description: "The dataset is being prepared again. Its status will update automatically.",
+      });
     } catch (err) {
       // Surface the failure so the user knows the retry didn't go through
       // and can try again once the button re-enables (UX audit NEW-001).

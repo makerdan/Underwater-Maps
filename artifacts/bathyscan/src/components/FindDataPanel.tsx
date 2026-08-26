@@ -57,13 +57,14 @@ import { useReturnFocus } from "@/hooks/useReturnFocus";
 import { OVERLAY_Z } from "@/lib/overlayScale";
 import { CatalogResultFilters } from "@/components/CatalogResultFilters";
 import { filterCatalogResults, EMPTY_CATALOG_RESULT_FILTERS, type CatalogResultFilters as CatalogFilters } from "@/lib/catalogResultFilters";
+import { MySavesSection } from "@/components/MySavesSection";
 
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type Tab = "search" | "ncei";
+type Tab = "search" | "ncei" | "my-saves";
 
 const DATA_TYPE_ICONS: Record<string, string> = {
   bathymetry: "🌊",
@@ -1092,7 +1093,12 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const nceiFromRef = useRef(1);
   const [nceiAccumulated, setNceiAccumulated] = useState<NceiPortalResult[]>([]);
   const prevNceiPageRef = useRef<NceiPortalResult[] | undefined>(undefined);
-  const { setDatasetId, setCatalogSourcedAt, datasetId: currentDatasetId } = useAppState();
+  const {
+    setDatasetId,
+    setCatalogSourcedAt,
+    setPendingExternalUserDatasetId,
+    datasetId: currentDatasetId,
+  } = useAppState();
   const { isSignedIn, isLoaded } = useAuth();
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -1661,6 +1667,46 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     [setDatasetId, setCatalogSourcedAt, searchResults, onClose],
   );
 
+  const handleLoadCatalogSave = useCallback(
+    (save: UserCatalogSave) => {
+      if (!save.datasetId) {
+        toast({
+          title: "Dataset not ready",
+          description: "This saved dataset is still processing. Try again when it is ready.",
+          variant: "destructive",
+        });
+        return;
+      }
+      void requestDatasetSwitch({
+        datasetId: save.datasetId,
+        datasetName: save.displayLabel ?? save.catalog?.name ?? save.catalogId,
+        onConfirm: () => {
+          onClose();
+          setPendingExternalUserDatasetId(save.datasetId!);
+          setCatalogSourcedAt({
+            forDatasetId: save.datasetId!,
+            date: save.catalog?.createdAt ?? null,
+          });
+        },
+      });
+    },
+    [onClose, setCatalogSourcedAt, setPendingExternalUserDatasetId, toast],
+  );
+
+  const handleLoadUserDataset = useCallback(
+    (id: string, createdAt?: string | null) => {
+      void requestDatasetSwitch({
+        datasetId: id,
+        onConfirm: () => {
+          onClose();
+          setPendingExternalUserDatasetId(id);
+          setCatalogSourcedAt({ forDatasetId: id, date: createdAt ?? null });
+        },
+      });
+    },
+    [onClose, setCatalogSourcedAt, setPendingExternalUserDatasetId],
+  );
+
   const panelStyle: React.CSSProperties = isMobile
     ? {
         ...PANEL,
@@ -1743,6 +1789,17 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             NCEI Portal
           </button>
         </ViewscreenTooltip>
+        {isSignedIn && (
+          <ViewscreenTooltip label="Browse your saved datasets and uploads" side="bottom">
+            <button
+              data-testid="find-data-my-saves-tab"
+              style={tabStyle(tab === "my-saves")}
+              onClick={() => { hasUserInteractedRef.current = true; setTab("my-saves"); }}
+            >
+              My Saves
+            </button>
+          </ViewscreenTooltip>
+        )}
       </div>
 
       {/* Search tab */}
@@ -2117,6 +2174,18 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* My Saves tab */}
+      {tab === "my-saves" && (
+        <div style={{ flex: 1, overflowY: "auto", padding: "12px 6px" }}>
+          <MySavesSection
+            onLoadCatalogSave={handleLoadCatalogSave}
+            onLoadUserDataset={handleLoadUserDataset}
+            onBrowseDatasets={() => setTab("search")}
+            browseLabel="BROWSE DATASETS →"
+          />
         </div>
       )}
 

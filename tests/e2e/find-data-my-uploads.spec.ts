@@ -162,12 +162,12 @@ test.describe("Find Data — My Uploads browse and reload smoke test", () => {
     await mySavesTab.click();
 
     // The Tolstoi card must appear in the My Uploads section.
-    const uploadCard = page.getByTestId(`upload-card-${UPLOAD_ID}`);
+    const uploadCard = panel.getByTestId(`upload-card-${UPLOAD_ID}`);
     await expect(uploadCard).toBeVisible({ timeout: 10_000 });
     await expect(uploadCard).toContainText(UPLOAD_NAME);
 
     // Click the Load button on the Tolstoi card.
-    const loadBtn = page.getByTestId(`btn-load-upload-${UPLOAD_ID}`);
+    const loadBtn = panel.getByTestId(`btn-load-upload-${UPLOAD_ID}`);
     await expect(loadBtn).toBeVisible({ timeout: 5_000 });
 
     // After clicking Load the panel closes (onClose is called inside onConfirm).
