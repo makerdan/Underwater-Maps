@@ -27,6 +27,7 @@ import { screen, fireEvent, waitFor, within, act } from "@testing-library/react"
 import React from "react";
 import { renderWithProviders } from "./setup";
 import { MySavesSection } from "@/components/MySavesSection";
+import { useSettingsStore } from "@/lib/settingsStore";
 
 // ---------------------------------------------------------------------------
 // Hoisted shared spies
@@ -258,11 +259,16 @@ vi.mock("@/components/ViewscreenTooltip", () => ({
 vi.mock("@/lib/settingsStore", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/settingsStore")>();
   const mockUseSettingsStore = (
-    sel: (s: { waterType: string; saveFolderExpanded: Record<string, boolean> }) => unknown,
+    sel: (s: {
+      waterType: string;
+      saveFolderExpanded: Record<string, boolean>;
+      defaultMapLoad: ReturnType<typeof actual.useSettingsStore.getState>["defaultMapLoad"];
+    }) => unknown,
   ) =>
     sel({
       waterType: currentWaterType,
       saveFolderExpanded: currentSaveFolderExpanded,
+      defaultMapLoad: actual.useSettingsStore.getState().defaultMapLoad,
     });
   Object.assign(mockUseSettingsStore, {
     persist: actual.useSettingsStore.persist,
@@ -324,6 +330,7 @@ function resetState() {
   currentUserFolders = [];
   currentSaveFolderExpanded = {};
   currentWaterType = "saltwater";
+  useSettingsStore.setState({ defaultMapLoad: null });
 }
 
 // ---------------------------------------------------------------------------
@@ -520,6 +527,73 @@ describe("MySavesSection — upload Load button", () => {
       "upload-a",
       expect.anything(),
     );
+  });
+});
+
+describe("MySavesSection — preferred startup dataset", () => {
+  beforeEach(resetState);
+
+  it("stars a loadable upload using the existing default-map setting", () => {
+    currentUserDatasets = [UPLOAD_A];
+    renderSection();
+
+    const star = screen.getByTestId("btn-preferred-upload-upload-a");
+    expect(star).toHaveAttribute("aria-pressed", "false");
+    expect(star).toHaveAccessibleName(/set .*preferred startup dataset/i);
+
+    fireEvent.click(star);
+
+    expect(useSettingsStore.getState().defaultMapLoad).toEqual({
+      kind: "upload",
+      id: "upload-a",
+    });
+  });
+
+  it("stars a ready materialized catalog save by its linked dataset id", () => {
+    currentUserDatasets = [UPLOAD_A];
+    currentMySaves = [SAVE_FOR_UPLOAD_A];
+    renderSection();
+
+    fireEvent.click(screen.getByTestId("btn-preferred-save-save-001"));
+
+    expect(useSettingsStore.getState().defaultMapLoad).toEqual({
+      kind: "upload",
+      id: "upload-a",
+    });
+  });
+
+  it("moves the one preference when another library dataset is starred", () => {
+    currentUserDatasets = [UPLOAD_A, UPLOAD_B];
+    useSettingsStore.setState({ defaultMapLoad: { kind: "upload", id: "upload-a" } });
+    renderSection();
+
+    fireEvent.click(screen.getByTestId("btn-preferred-upload-upload-b"));
+
+    expect(useSettingsStore.getState().defaultMapLoad).toEqual({
+      kind: "upload",
+      id: "upload-b",
+    });
+  });
+
+  it("clears the preference when the currently preferred dataset is unstarred", () => {
+    currentUserDatasets = [UPLOAD_A];
+    useSettingsStore.setState({ defaultMapLoad: { kind: "upload", id: "upload-a" } });
+    renderSection();
+
+    const star = screen.getByTestId("btn-preferred-upload-upload-a");
+    expect(star).toHaveAttribute("aria-pressed", "true");
+    expect(star).toHaveAccessibleName(/remove .*preferred startup dataset/i);
+
+    fireEvent.click(star);
+
+    expect(useSettingsStore.getState().defaultMapLoad).toBeNull();
+  });
+
+  it("does not offer a star for a save that is not yet materialized", () => {
+    currentMySaves = [{ ...SAVE_FOR_UPLOAD_A, status: "processing", datasetId: null }];
+    renderSection();
+
+    expect(screen.queryByTestId("btn-preferred-save-save-001")).not.toBeInTheDocument();
   });
 });
 

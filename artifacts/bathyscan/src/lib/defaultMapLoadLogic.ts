@@ -9,11 +9,11 @@
  * Branches (evaluated in priority order):
  *   1. upload-check not ready  → "wait" (upload existence not yet confirmed)
  *   2. URL share link           → "url-switch"  (URL always wins)
- *   3. resume last session      → "switch"       (when cameraSpawnBehaviour="last")
- *   4. preset preference        → "switch"       (preferred or first available)
- *   5. upload preference        → "upload-pending" | "switch" (exists / deleted)
- *   6. no preference            → "switch"       (first available)
- *   7. no datasets              → "none"
+ *   3. stored preference        → "switch" | "upload-pending" (preferred or
+ *      first available when stale)
+ *   4. resume last session      → "switch" (when cameraSpawnBehaviour="last")
+ *   5. no preference            → "switch" (first available)
+ *   6. no datasets              → "none"
  */
 import type { DefaultMapLoad, LastSession } from "./settingsStore";
 
@@ -86,16 +86,6 @@ export function resolveDefaultDataset(
     return { type: "url-switch", datasetId: urlMatch.id, name: urlMatch.name };
   }
 
-  // Resume last session: when no URL share link is present, prefer the
-  // dataset from the last session so the user picks up where they left off.
-  if (cameraSpawnBehaviour === "last" && lastSession?.datasetId) {
-    const sessionDataset = datasets.find((d) => d.id === lastSession.datasetId);
-    if (sessionDataset) {
-      return { type: "switch", datasetId: sessionDataset.id, name: sessionDataset.name };
-    }
-    // Dataset no longer exists — fall through to defaultMapLoad / first preset.
-  }
-
   // Apply the user's stored default.
   if (defaultMapLoad) {
     if (defaultMapLoad.kind === "preset") {
@@ -115,6 +105,17 @@ export function resolveDefaultDataset(
       const target = datasets[0];
       if (target) return { type: "switch", datasetId: target.id, name: target.name };
       return { type: "none" };
+    }
+  }
+
+  // Resume last session only when there is no stored preference. A valid
+  // preferred upload or catalog save is intentionally stronger than resuming
+  // the previous scene, while stale preferences above already fell back to
+  // datasets[0] safely.
+  if (cameraSpawnBehaviour === "last" && lastSession?.datasetId) {
+    const sessionDataset = datasets.find((d) => d.id === lastSession.datasetId);
+    if (sessionDataset) {
+      return { type: "switch", datasetId: sessionDataset.id, name: sessionDataset.name };
     }
   }
 

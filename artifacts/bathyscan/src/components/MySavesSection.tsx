@@ -203,6 +203,48 @@ const OfflineRollupBadge: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
+// PreferredDatasetButton — startup dataset preference control
+// ---------------------------------------------------------------------------
+
+const PreferredDatasetButton: React.FC<{
+  datasetId: string;
+  datasetName: string;
+  isPreferred: boolean;
+  disabled?: boolean;
+  testId: string;
+  onToggle: (datasetId: string) => void;
+}> = ({ datasetId, datasetName, isPreferred, disabled = false, testId, onToggle }) => {
+  const label = isPreferred
+    ? `Remove ${datasetName} as preferred startup dataset`
+    : `Set ${datasetName} as preferred startup dataset`;
+  return (
+    <ViewscreenTooltip label={label} side="left">
+      <button
+        type="button"
+        data-testid={testId}
+        aria-label={label}
+        aria-pressed={isPreferred}
+        disabled={disabled}
+        onClick={() => onToggle(datasetId)}
+        style={{
+          background: "transparent",
+          border: "none",
+          color: isPreferred ? "#facc15" : "#64748b",
+          cursor: disabled ? "wait" : "pointer",
+          fontSize: "calc(18px * var(--bs-font-scale, 1))",
+          lineHeight: 1,
+          padding: "0 2px",
+          flexShrink: 0,
+          opacity: disabled ? 0.5 : 1,
+        }}
+      >
+        {isPreferred ? "★" : "☆"}
+      </button>
+    </ViewscreenTooltip>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // SaveCard
 // ---------------------------------------------------------------------------
 
@@ -220,7 +262,11 @@ const SaveCard: React.FC<{
   onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null; resolutionM?: number | null }) => void;
   /** Offline pack status for the materialized dataset ("none" hides the badge). */
   offlineStatus?: PackStatus;
-}> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting, onRename, onAddToView, atViewCap = false, visibleDatasetIds, onOfflineDownload, offlineStatus = "none" }) => {
+  /** True when this ready, materialized save is the preferred startup dataset. */
+  isPreferred?: boolean;
+  /** Sets or clears this save's materialized dataset as the preferred startup dataset. */
+  onTogglePreferred?: (datasetId: string) => void;
+}> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting, onRename, onAddToView, atViewCap = false, visibleDatasetIds, onOfflineDownload, offlineStatus = "none", isPreferred = false, onTogglePreferred }) => {
   const statusColor = STATUS_COLORS[save.status] ?? "#e2e8f0";
   const icon = save.catalog ? (DATA_TYPE_ICONS[save.catalog.dataType] ?? "📦") : "📦";
   const displayName = save.displayLabel ?? save.catalog?.name ?? save.catalogId;
@@ -342,6 +388,16 @@ const SaveCard: React.FC<{
             >✎</button>
           </ViewscreenTooltip>
         )}
+        {save.status === "ready" && save.datasetId && onTogglePreferred && (
+          <PreferredDatasetButton
+            datasetId={save.datasetId}
+            datasetName={displayName}
+            isPreferred={isPreferred}
+            disabled={deleting}
+            testId={`btn-preferred-save-${save.id}`}
+            onToggle={onTogglePreferred}
+          />
+        )}
         <ViewscreenTooltip label="Delete this saved dataset" side="left">
           <button
             type="button"
@@ -458,7 +514,11 @@ const UploadCard: React.FC<{
   onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null; resolutionM?: number | null }) => void;
   /** Offline pack status for this upload ("none" hides the badge). */
   offlineStatus?: PackStatus;
-}> = ({ dataset, onLoad, onDelete, onRename, deleting, onAddToView, isAlreadyInView = false, atViewCap = false, onOfflineDownload, offlineStatus = "none" }) => {
+  /** True when this upload is the preferred startup dataset. */
+  isPreferred?: boolean;
+  /** Sets or clears this upload as the preferred startup dataset. */
+  onTogglePreferred?: (datasetId: string) => void;
+}> = ({ dataset, onLoad, onDelete, onRename, deleting, onAddToView, isAlreadyInView = false, atViewCap = false, onOfflineDownload, offlineStatus = "none", isPreferred = false, onTogglePreferred }) => {
   const createdDate = useMemo(() => {
     const d = new Date(dataset.createdAt);
     if (Number.isNaN(d.getTime())) return dataset.createdAt.slice(0, 10);
@@ -541,6 +601,16 @@ const UploadCard: React.FC<{
               style={{ background: "transparent", border: "none", color: "#cbd5e1", cursor: deleting ? "wait" : "pointer", fontSize: "calc(14px * var(--bs-font-scale, 1))", lineHeight: 1, padding: "0 2px", flexShrink: 0 }}
             >✎</button>
           </ViewscreenTooltip>
+        )}
+        {onTogglePreferred && (
+          <PreferredDatasetButton
+            datasetId={dataset.id}
+            datasetName={dataset.name}
+            isPreferred={isPreferred}
+            disabled={deleting}
+            testId={`btn-preferred-upload-${dataset.id}`}
+            onToggle={onTogglePreferred}
+          />
         )}
         <ViewscreenTooltip label="Delete this uploaded dataset" side="left">
           <button
@@ -707,11 +777,13 @@ const DraggableSaveCard: React.FC<{
   onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null; resolutionM?: number | null }) => void;
   onAddToCollection?: (save: UserCatalogSave) => void;
   offlineStatus?: PackStatus;
+  isPreferred?: boolean;
+  onTogglePreferred?: (datasetId: string) => void;
   /** Multi-select: true when this card is checked. */
   isSelected?: boolean;
   /** Multi-select: called with the save id when the checkbox is toggled. */
   onToggleSelect?: (id: string) => void;
-}> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting, onRename, onMoveTo, onAddToView, atViewCap, visibleDatasetIds, onOfflineDownload, onAddToCollection, offlineStatus, isSelected = false, onToggleSelect }) => {
+}> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting, onRename, onMoveTo, onAddToView, atViewCap, visibleDatasetIds, onOfflineDownload, onAddToCollection, offlineStatus, isPreferred = false, onTogglePreferred, isSelected = false, onToggleSelect }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `save-${save.id}`,
     data: { kind: "save", saveId: save.id },
@@ -761,6 +833,7 @@ const DraggableSaveCard: React.FC<{
           retrying={retrying} onDelete={onDelete} deleting={deleting} onRename={onRename}
           onAddToView={onAddToView} atViewCap={atViewCap} visibleDatasetIds={visibleDatasetIds}
           onOfflineDownload={onOfflineDownload} offlineStatus={offlineStatus}
+          isPreferred={isPreferred} onTogglePreferred={onTogglePreferred}
         />
       </div>
     </div>
@@ -784,11 +857,13 @@ const DraggableUploadCard: React.FC<{
   onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null; resolutionM?: number | null }) => void;
   onAddToCollection?: (dataset: UserDatasetMeta) => void;
   offlineStatus?: PackStatus;
+  isPreferred?: boolean;
+  onTogglePreferred?: (datasetId: string) => void;
   /** Multi-select: true when this card is checked. */
   isSelected?: boolean;
   /** Multi-select: called with the dataset id when the checkbox is toggled. */
   onToggleSelect?: (id: string) => void;
-}> = ({ dataset, onLoad, onDelete, onRename, deleting, onMoveTo, onAddToView, isAlreadyInView = false, atViewCap = false, onOfflineDownload, onAddToCollection, offlineStatus, isSelected = false, onToggleSelect }) => {
+}> = ({ dataset, onLoad, onDelete, onRename, deleting, onMoveTo, onAddToView, isAlreadyInView = false, atViewCap = false, onOfflineDownload, onAddToCollection, offlineStatus, isPreferred = false, onTogglePreferred, isSelected = false, onToggleSelect }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `upload-${dataset.id}`,
     data: { kind: "upload", datasetId: dataset.id },
@@ -837,6 +912,7 @@ const DraggableUploadCard: React.FC<{
           onDelete={onDelete} onRename={onRename} deleting={deleting}
           onAddToView={onAddToView} isAlreadyInView={isAlreadyInView} atViewCap={atViewCap}
           onOfflineDownload={onOfflineDownload} offlineStatus={offlineStatus}
+          isPreferred={isPreferred} onTogglePreferred={onTogglePreferred}
         />
       </div>
     </div>
@@ -1092,6 +1168,7 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
   const qc = useQueryClient();
   const { toast } = useToast();
   const waterType = useSettingsStore((s) => s.waterType);
+  const defaultMapLoad = useSettingsStore((s) => s.defaultMapLoad);
   // Live offline-pack statuses (per materialized dataset id); refreshes on
   // pack save/delete via the offlinePackStore listener registry.
   const packStatuses = useOfflinePackStatuses();
@@ -1414,6 +1491,15 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
     }));
   }, []);
 
+  const handleTogglePreferred = useCallback((datasetId: string) => {
+    const current = useSettingsStore.getState().defaultMapLoad;
+    useSettingsStore.getState().setDefaultMapLoad(
+      current?.kind === "upload" && current.id === datasetId
+        ? null
+        : { kind: "upload", id: datasetId },
+    );
+  }, []);
+
   // ── Move-to-folder dialog ─────────────────────────────────────────────────
   const [moveTarget, setMoveTarget] = useState<
     | { kind: "save"; save: UserCatalogSave }
@@ -1554,6 +1640,8 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
           atViewCap={atViewCap}
           visibleDatasetIds={visibleDatasetIds}
           onOfflineDownload={onOfflineDownload}
+           isPreferred={defaultMapLoad?.kind === "upload" && defaultMapLoad.id === item.save.datasetId}
+           onTogglePreferred={handleTogglePreferred}
           onAddToCollection={(s) => setAddToCollection({
             label: s.displayLabel ?? s.catalog?.name ?? s.catalogId,
             targets: [{ catalogSaveId: s.id }],
@@ -1574,6 +1662,8 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
           isAlreadyInView={visibleDatasetIds?.has(item.dataset.id) ?? false}
           atViewCap={atViewCap}
           onOfflineDownload={onOfflineDownload}
+           isPreferred={defaultMapLoad?.kind === "upload" && defaultMapLoad.id === item.dataset.id}
+           onTogglePreferred={handleTogglePreferred}
           onAddToCollection={(d) => setAddToCollection({
             label: d.name,
             targets: [{ datasetId: d.id }],

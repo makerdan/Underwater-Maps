@@ -93,6 +93,58 @@ describe("resolveDefaultDataset — settings hydration race", () => {
       expect(action.datasetId).toBe("ds-a");
     }
   });
+
+  it("valid preferred upload wins over last-session restoration", () => {
+    const action = resolveDefaultDataset(
+      baseArgs({
+        defaultMapLoad: { kind: "upload", id: "user-upload-1" },
+        userDatasets: [{ id: "user-upload-1", name: "Preferred Upload" }],
+        isSignedIn: true,
+        cameraSpawnBehaviour: "last",
+        lastSession: {
+          lon: 0,
+          lat: 0,
+          depth: 10,
+          heading: 0,
+          datasetId: "ds-b",
+          headingConvention: "north-up",
+        },
+      }),
+    );
+    expect(action).toEqual({ type: "upload-pending", uploadId: "user-upload-1" });
+  });
+
+  it("shared-link destination wins over a valid preferred upload", () => {
+    const action = resolveDefaultDataset(
+      baseArgs({
+        defaultMapLoad: { kind: "upload", id: "user-upload-1" },
+        userDatasets: [{ id: "user-upload-1", name: "Preferred Upload" }],
+        isSignedIn: true,
+        urlDatasetId: "ds-b",
+      }),
+    );
+    expect(action).toEqual({ type: "url-switch", datasetId: "ds-b", name: "Dataset B" });
+  });
+
+  it("stale upload preference falls back to the first available dataset, not last session", () => {
+    const action = resolveDefaultDataset(
+      baseArgs({
+        defaultMapLoad: { kind: "upload", id: "deleted-upload" },
+        userDatasets: [],
+        isSignedIn: true,
+        cameraSpawnBehaviour: "last",
+        lastSession: {
+          lon: 0,
+          lat: 0,
+          depth: 10,
+          heading: 0,
+          datasetId: "ds-b",
+          headingConvention: "north-up",
+        },
+      }),
+    );
+    expect(action).toEqual({ type: "switch", datasetId: "ds-a", name: "Dataset A" });
+  });
 });
 
 describe("resolveDefaultDataset — settingsReady guard contract", () => {

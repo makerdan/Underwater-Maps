@@ -148,4 +148,22 @@ describe("resolveDefaultDataset", () => {
     );
     expect(result).toEqual({ type: "switch", datasetId: DS1.id, name: DS1.name });
   });
+
+  it("no preference allows last-session restoration", () => {
+    const result = resolveDefaultDataset(
+      args({
+        defaultMapLoad: null,
+        cameraSpawnBehaviour: "last",
+        lastSession: {
+          lon: 0,
+          lat: 0,
+          depth: 10,
+          heading: 0,
+          datasetId: DS2.id,
+          headingConvention: "north-up",
+        },
+      }),
+    );
+    expect(result).toEqual({ type: "switch", datasetId: DS2.id, name: DS2.name });
+  });
 });
