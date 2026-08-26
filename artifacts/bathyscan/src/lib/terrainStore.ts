@@ -38,6 +38,53 @@ function getActiveCap(): number {
 
 export type DatasetSource = "preset" | "user";
 
+/**
+ * Proximity activation owns a short-lived terrain/overview query pair. Keep
+ * its cancellation callbacks outside the persisted render state so selection
+ * transitions can abort work that no longer has a valid destination without
+ * coupling this store to React Query.
+ */
+type ProximityRequestCanceller = () => void;
+const proximityRequestCancellers = new Map<string, Set<ProximityRequestCanceller>>();
+
+/**
+ * Register cancellation work for an in-flight proximity load. The returned
+ * cleanup must run when that load settles, regardless of success or failure.
+ */
+export function registerProximityRequest(
+  datasetId: string,
+  cancel: ProximityRequestCanceller,
+): () => void {
+  const cancellers = proximityRequestCancellers.get(datasetId) ?? new Set();
+  cancellers.add(cancel);
+  proximityRequestCancellers.set(datasetId, cancellers);
+
+  return () => {
+    const active = proximityRequestCancellers.get(datasetId);
+    if (!active) return;
+    active.delete(cancel);
+    if (active.size === 0) proximityRequestCancellers.delete(datasetId);
+  };
+}
+
+/**
+ * Abort only proximity loads that cannot contribute to the new selection.
+ * Keeping an ID is important for collection transitions: a request already in
+ * flight for a member shared by the old and new selection remains useful.
+ */
+export function cancelObsoleteProximityRequests(keepDatasetIds: Iterable<string>): void {
+  const keep = new Set(keepDatasetIds);
+  for (const [datasetId, cancellers] of proximityRequestCancellers) {
+    if (keep.has(datasetId)) continue;
+    for (const cancel of [...cancellers]) cancel();
+  }
+}
+
+/** Test-only cleanup for the module-level proximity request registry. */
+export function __resetProximityRequestCancellers(): void {
+  proximityRequestCancellers.clear();
+}
+
 export interface VisibleDataset {
   /** Stable id (terrain.datasetId). For preset datasets this is the catalogue id;
    *  for user uploads this is the server-assigned id returned from /api/upload. */
@@ -647,7 +694,10 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       };
     }),
 
-  activateCollection: (entries) =>
+  activateCollection: (entries) => {
+    // Collection members replace the prior proximity pool. Retain requests for
+    // any member that remains relevant across the handoff.
+    cancelObsoleteProximityRequests(entries.map((entry) => entry.datasetId));
     set((prev) => {
       const seen = new Set<string>();
       const unique = entries.filter((entry) => {
@@ -683,14 +733,20 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         autoEvictedId: null,
         ...syncPrimaryGrids(visibleDatasets),
       };
-    }),
+    });
+  },
 
-  setCollectionScope: (collectionId, datasetIds) =>
+  setCollectionScope: (collectionId, datasetIds) => {
+    const scopeIds = [...new Set(datasetIds.filter(Boolean))];
+    // This runs before activateCollection so obsolete proximity fetches stop as
+    // soon as the collection selection starts, not after its members render.
+    cancelObsoleteProximityRequests(scopeIds);
     set((prev) => ({
       ...prev,
       collectionScopeId: collectionId,
-      collectionScopeIds: [...new Set(datasetIds.filter(Boolean))],
-    })),
+      collectionScopeIds: scopeIds,
+    }));
+  },
 
   addCollectionMembers: (entries) =>
     set((prev) => {
@@ -823,7 +879,9 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       };
     }),
 
-  setSinglePrimary: (datasetId, source) =>
+  setSinglePrimary: (datasetId, source) => {
+    // A normal replace selection makes every other proximity result obsolete.
+    cancelObsoleteProximityRequests([datasetId]);
     set((prev) => {
       // Preserve already-loaded grids when re-promoting a dataset that is
       // currently visible — otherwise promoting the active dataset (e.g. the
@@ -851,9 +909,11 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         evictedId: null,
         autoEvictedId: null,
       };
-    }),
+    });
+  },
 
-  clear: () =>
+  clear: () => {
+    cancelObsoleteProximityRequests([]);
     set({
       visibleDatasets: [],
       primaryDatasetIds: [],
@@ -870,7 +930,8 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       collectionScopeIds: null,
       overviewFetchErrorIds: [],
       datasetFetchErrorIds: [],
-    }),
+    });
+  },
 
   clearEviction: () =>
     set((prev) => (prev.evictedId === null ? prev : { ...prev, evictedId: null })),

@@ -15,6 +15,7 @@
  * 500 ms sampling interval is never doubled.
  */
 import { useCallback, useEffect, useMemo } from "react";
+import { isCancelledError } from "@tanstack/react-query";
 import {
   getGetDatasetsIdTerrainQueryKey,
   getGetDatasetsIdTerrainUrl,
@@ -27,7 +28,11 @@ import {
   type TerrainData,
 } from "@workspace/api-client-react";
 import { queryClient } from "@/lib/queryClient";
-import { useTerrainStore, type DatasetSource } from "@/lib/terrainStore";
+import {
+  registerProximityRequest,
+  useTerrainStore,
+  type DatasetSource,
+} from "@/lib/terrainStore";
 import { useProximityStreamingStore } from "@/lib/proximityStreamingStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { makeProgressTerrainFetcher } from "@/lib/progressTerrainFetcher";
@@ -48,6 +53,17 @@ import {
  * dataset to be re-enrolled even when it is already in selectedIds.
  */
 const autoRegisteredIds = new Set<string>();
+
+function isAbortedRequest(error: unknown): boolean {
+  return (
+    isCancelledError(error) ||
+    (error instanceof DOMException && error.name === "AbortError") ||
+    (typeof error === "object" &&
+      error !== null &&
+      "name" in error &&
+      error.name === "AbortError")
+  );
+}
 
 /**
  * Test-only reset — clears the module-level autoRegisteredIds set so that
@@ -279,6 +295,32 @@ export function useProximityStreamingWiring({
       if (!canStillActivate()) return;
       useTerrainStore.getState().autoActivate(datasetId);
       useProximityStreamingStore.getState().setLoadingDatasetId(datasetId);
+      const cancelQueryPair =
+        source === "preset"
+          ? () => {
+              void queryClient.cancelQueries({
+                queryKey: getGetDatasetsIdTerrainQueryKey(datasetId),
+                exact: true,
+              });
+              void queryClient.cancelQueries({
+                queryKey: getGetDatasetsIdOverviewQueryKey(datasetId),
+                exact: true,
+              });
+            }
+          : () => {
+              void queryClient.cancelQueries({
+                queryKey: getGetUserDatasetsIdTerrainQueryKey(datasetId),
+                exact: true,
+              });
+              void queryClient.cancelQueries({
+                queryKey: getGetUserDatasetsIdOverviewQueryKey(datasetId),
+                exact: true,
+              });
+            };
+      const unregisterProximityRequest = registerProximityRequest(
+        datasetId,
+        cancelQueryPair,
+      );
       try {
         if (source === "preset") {
           const [terrainData, overviewData] = await Promise.all([
@@ -336,7 +378,10 @@ export function useProximityStreamingWiring({
             });
           }
         }
-      } catch {
+      } catch (error) {
+        // React Query cancellation is intentional when selection changes. It
+        // must not surface as a failed load or remove the newly valid selection.
+        if (isAbortedRequest(error)) return;
         // Load failed — remove from selected pool so it doesn't spin forever.
         // A collection that started while this request was in flight owns its
         // member selection; its regular loader reports the failure instead.
@@ -344,6 +389,7 @@ export function useProximityStreamingWiring({
           useTerrainStore.getState().removeSelected(datasetId);
         }
       } finally {
+        unregisterProximityRequest();
         // Clear the loading indicator regardless of success or failure.
         const store = useProximityStreamingStore.getState();
         if (store.loadingDatasetId === datasetId) {
