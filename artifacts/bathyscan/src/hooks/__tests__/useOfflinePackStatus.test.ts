@@ -122,7 +122,9 @@ describe("rollupPackStatus", () => {
 
 describe("useOfflinePackStatuses", () => {
   it("loads statuses on mount", async () => {
-    mockListOfflinePacks.mockResolvedValue([pack("a")]);
+    mockListOfflinePacks.mockResolvedValue([
+      pack("a", { expiresAt: Date.now() + 7 * DAY }),
+    ]);
     const { result } = renderHook(() => useOfflinePackStatuses());
     await waitFor(() => expect(result.current.get("a")).toBe("downloaded"));
   });
@@ -134,7 +136,9 @@ describe("useOfflinePackStatuses", () => {
     expect(result.current.size).toBe(0);
 
     // A pack is saved elsewhere → listener fires → statuses refresh.
-    mockListOfflinePacks.mockResolvedValue([pack("b")]);
+    mockListOfflinePacks.mockResolvedValue([
+      pack("b", { expiresAt: Date.now() + 7 * DAY }),
+    ]);
     await act(async () => {
       for (const l of listeners) l();
     });
