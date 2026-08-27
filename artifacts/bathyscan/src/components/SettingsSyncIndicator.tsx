@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useUser } from "@/lib/clerkCompat";
 import {
   flushServerSync,
@@ -21,7 +21,8 @@ export function SettingsSyncIndicator() {
     getSettingsSyncStatus,
   );
 
-  const [showAcknowledgement, setShowAcknowledgement] = useState(true);
+  const [showAcknowledgement, setShowAcknowledgement] = useState(false);
+  const hasShownAcknowledgementRef = useRef(false);
 
   const hasPendingEdits =
     syncStatus.syncing ||
@@ -29,11 +30,18 @@ export function SettingsSyncIndicator() {
     hasUnackedSettingsEdits();
 
   useEffect(() => {
-    if (!isSignedIn || hasPendingEdits) {
+    if (!isSignedIn) {
+      hasShownAcknowledgementRef.current = false;
       setShowAcknowledgement(false);
       return;
     }
 
+    if (hasPendingEdits || hasShownAcknowledgementRef.current) {
+      setShowAcknowledgement(false);
+      return;
+    }
+
+    hasShownAcknowledgementRef.current = true;
     setShowAcknowledgement(true);
     const timeoutId = setTimeout(() => {
       setShowAcknowledgement(false);

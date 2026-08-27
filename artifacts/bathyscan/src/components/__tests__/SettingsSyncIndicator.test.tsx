@@ -78,29 +78,18 @@ describe("SettingsSyncIndicator", () => {
     expect(screen.getByText("Settings pending sync")).toBeInTheDocument();
   });
 
-  it("shows a fresh acknowledgement after later pending work completes", () => {
+  it("keeps later pending-to-clean transitions silent", () => {
     render(<SettingsSyncIndicator />);
 
-    act(() => vi.advanceTimersByTime(1_000));
+    act(() => vi.advanceTimersByTime(2_000));
+    expect(screen.queryByTestId("global-settings-sync-status")).toBeNull();
 
     unackedState.value = true;
     act(() => syncControl.setStatus({ syncing: true, lastSyncFailed: false }));
     expect(screen.getByText("Settings pending sync")).toBeInTheDocument();
 
-    // Let the original acknowledgement timer reach its deadline while the
-    // actionable pending state is displayed.
-    act(() => vi.advanceTimersByTime(1_000));
-
     unackedState.value = false;
     act(() => syncControl.setStatus({ syncing: false, lastSyncFailed: false }));
-    expect(screen.getByTestId("global-settings-sync-status")).toHaveAttribute(
-      "data-sync-state",
-      "acknowledged",
-    );
-
-    act(() => vi.advanceTimersByTime(1_999));
-    expect(screen.getByText("Settings synced")).toBeInTheDocument();
-    act(() => vi.advanceTimersByTime(1));
     expect(screen.queryByTestId("global-settings-sync-status")).toBeNull();
   });
 
@@ -141,15 +130,23 @@ describe("SettingsSyncIndicator", () => {
 
     unackedState.value = false;
     act(() => syncControl.setStatus({ syncing: false, lastSyncFailed: false }));
+    expect(screen.queryByTestId("global-settings-sync-status")).toBeNull();
+  });
+
+  it("resets acknowledgement eligibility after sign-out", () => {
+    const { rerender } = render(<SettingsSyncIndicator />);
+    act(() => vi.advanceTimersByTime(2_000));
+    expect(screen.queryByTestId("global-settings-sync-status")).toBeNull();
+
+    authState.isSignedIn = false;
+    rerender(<SettingsSyncIndicator />);
+    expect(screen.queryByTestId("global-settings-sync-status")).toBeNull();
+
+    authState.isSignedIn = true;
+    rerender(<SettingsSyncIndicator />);
     expect(screen.getByTestId("global-settings-sync-status")).toHaveAttribute(
       "data-sync-state",
       "acknowledged",
     );
-  });
-
-  it("is hidden for signed-out users", () => {
-    authState.isSignedIn = false;
-    render(<SettingsSyncIndicator />);
-    expect(screen.queryByTestId("global-settings-sync-status")).toBeNull();
   });
 });
