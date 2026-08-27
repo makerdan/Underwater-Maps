@@ -49,6 +49,35 @@ beforeEach(() => {
 });
 
 describe("ThrottlePanel — unit-aware text", () => {
+  it("starts a new Drive Boat session at the 22 mph default when no preference exists", () => {
+    useSettingsStore.getState().setUnits("imperial");
+    useDriveBoatStore.getState().resetForSignOut();
+    render(
+      <TooltipProvider>
+        <AppProvider>
+          <ThrottlePanel />
+        </AppProvider>
+      </TooltipProvider>,
+    );
+
+    expect((screen.getByRole("spinbutton") as HTMLInputElement).value).toBe("22");
+  });
+
+  it("persists and respects an explicitly selected boat speed", () => {
+    useSettingsStore.getState().setUnits("imperial");
+    useDriveBoatStore.getState().setBoatSpeedMph(31);
+    render(
+      <TooltipProvider>
+        <AppProvider>
+          <ThrottlePanel />
+        </AppProvider>
+      </TooltipProvider>,
+    );
+
+    expect((screen.getByRole("spinbutton") as HTMLInputElement).value).toBe("31");
+    expect(localStorage.getItem("bathyscan:boatSpeedMph")).toBe("31");
+  });
+
   it("shows km/h suffix and converted tick labels in metric mode", () => {
     useSettingsStore.getState().setUnits("metric");
     renderWithState(15);

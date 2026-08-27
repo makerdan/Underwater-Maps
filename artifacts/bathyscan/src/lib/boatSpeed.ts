@@ -3,7 +3,7 @@ import { WORLD_SIZE } from "./terrain";
 
 export const BOAT_MIN_MPH = 3;
 export const BOAT_MAX_MPH = 55;
-export const BOAT_DEFAULT_MPH = 15;
+export const BOAT_DEFAULT_MPH = 22;
 
 const MPH_TO_MS = 0.44704;
 
@@ -104,23 +104,32 @@ export const FLY_MAX_FRAME_WU = 20;
  * world-units-per-second and the per-frame displacement cap are scaled by
  * this factor so the cap does not swallow the boost.
  */
-export const TURBO_MULTIPLIER = 10;
+export const TURBO_MULTIPLIER = 100;
 
 /**
- * Fly-mode MPU derivation helper.
+ * Movement MPU derivation helper.
  *
  * Unlike `computeMetersPerWorldUnit`, which returns `1` as a sentinel for a
  * zero-extent (point) terrain, this helper returns `FLY_FALLBACK_MPU` for any
  * grid that is null, undefined, or degenerate.  Real survey datasets are always
  * at least several hundred metres wide (mpu >> 1), so `mpu ≤ 1` unambiguously
  * indicates the `computeMetersPerWorldUnit` sentinel, not a genuine physical
- * scale.  Using `FLY_FALLBACK_MPU` instead prevents unintended ultra-fast
+ * scale. Using `FLY_FALLBACK_MPU` instead prevents unintended ultra-fast
  * camera movement when no valid dataset is loaded.
  */
-export function computeFlyMpu(grid: TerrainData | null | undefined): number {
+export function computeMovementMpu(grid: TerrainData | null | undefined): number {
   if (!grid) return FLY_FALLBACK_MPU;
   const mpu = computeMetersPerWorldUnit(grid);
   return mpu > 1 ? mpu : FLY_FALLBACK_MPU;
+}
+
+/**
+ * Backward-compatible name for the free-fly caller.  Movement scaling is
+ * shared with realistic Drive Boat mode so both paths use the active grid's
+ * geographic scale and the same safe fallback for invalid bounds.
+ */
+export function computeFlyMpu(grid: TerrainData | null | undefined): number {
+  return computeMovementMpu(grid);
 }
 
 /**

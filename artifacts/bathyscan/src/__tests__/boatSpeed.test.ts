@@ -6,6 +6,7 @@ import {
   BOAT_MIN_MPH,
   boatMphToWorldUnitsPerSecond,
   computeMetersPerWorldUnit,
+  computeMovementMpu,
   computeFlyMpu,
   computeFlyScaledSpeed,
   smoothMpuStep,
@@ -130,7 +131,7 @@ describe("boatMphToWorldUnitsPerSecond", () => {
     expect(boatMphToWorldUnitsPerSecond(BOAT_MIN_MPH, mpu)).toBeCloseTo(expected, 10);
   });
 
-  it("matches the m/s → world-units/s conversion at the default speed (15 mph)", () => {
+  it("matches the m/s → world-units/s conversion at the default speed (22 mph)", () => {
     const expected = (BOAT_DEFAULT_MPH * MPH_TO_MS) / mpu;
     expect(boatMphToWorldUnitsPerSecond(BOAT_DEFAULT_MPH, mpu)).toBeCloseTo(expected, 10);
   });
@@ -186,6 +187,59 @@ describe("computeFlyMpu", () => {
     const realMpu = computeMetersPerWorldUnit(grid);
     expect(realMpu).toBeGreaterThan(1);
     expect(computeFlyMpu(grid)).toBeCloseTo(realMpu, 10);
+  });
+
+  it("uses each active dataset's geographic scale for the same real-world speed", () => {
+    const alaska = makeGrid({
+      minLon: -132.6,
+      maxLon: -132.4,
+      minLat: 55.6,
+      maxLat: 55.75,
+    });
+    const texas = makeRayRoberts();
+    const speedMph = 22;
+    const speedMs = speedMph * MPH_TO_MS;
+    const alaskaMpu = computeMovementMpu(alaska);
+    const texasMpu = computeMovementMpu(texas);
+
+    expect(boatMphToWorldUnitsPerSecond(speedMph, alaskaMpu))
+      .toBeCloseTo(speedMs / alaskaMpu, 10);
+    expect(boatMphToWorldUnitsPerSecond(speedMph, texasMpu))
+      .toBeCloseTo(speedMs / texasMpu, 10);
+    expect(alaskaMpu).not.toBeCloseTo(texasMpu, 3);
+    expect(
+      boatMphToWorldUnitsPerSecond(speedMph, alaskaMpu) /
+      boatMphToWorldUnitsPerSecond(speedMph, texasMpu),
+    ).toBeCloseTo(texasMpu / alaskaMpu, 10);
+  });
+
+  it("refreshes movement scale when the active dataset changes", () => {
+    const first = makeGrid({
+      minLon: -132.6,
+      maxLon: -132.4,
+      minLat: 55.6,
+      maxLat: 55.75,
+    });
+    const second = makeRayRoberts();
+    const speedMph = 22;
+    const firstMpu = computeMovementMpu(first);
+    const secondMpu = computeMovementMpu(second);
+
+    const firstSpeed = boatMphToWorldUnitsPerSecond(speedMph, firstMpu);
+    const secondSpeed = boatMphToWorldUnitsPerSecond(speedMph, secondMpu);
+
+    expect(firstSpeed).not.toBeCloseTo(secondSpeed, 6);
+    expect(secondSpeed).toBeCloseTo((speedMph * MPH_TO_MS) / secondMpu, 10);
+  });
+
+  it("uses the safe movement fallback for a degenerate active dataset", () => {
+    const degenerate = makeGrid({
+      minLon: -132.5,
+      maxLon: -132.5,
+      minLat: 55.7,
+      maxLat: 55.7,
+    });
+    expect(computeMovementMpu(degenerate)).toBe(FLY_FALLBACK_MPU);
   });
 
   it("degenerate terrain through the full fly path uses fallback-rate crossing, not mpu=1 rate", () => {
@@ -397,6 +451,10 @@ describe("smoothMpuStep", () => {
 describe("computeFlyScaledSpeed — turbo mode", () => {
   const mpu = 200; // FLY_FALLBACK_MPU — clean reference
 
+  it("defines Turbo as a 100× multiplier", () => {
+    expect(TURBO_MULTIPLIER).toBe(100);
+  });
+
   it("turbo=true produces exactly TURBO_MULTIPLIER× the normal result when below cap", () => {
     const normal = computeFlyScaledSpeed(0, mpu, 1, false);
     const turbo = computeFlyScaledSpeed(0, mpu, 1, true);
@@ -405,9 +463,9 @@ describe("computeFlyScaledSpeed — turbo mode", () => {
     expect(turbo).toBeCloseTo(normal * TURBO_MULTIPLIER, 8);
   });
 
-  it("turbo converts the default tier to 23 mph without a frame-cap artifact", () => {
+  it("turbo converts the default tier to 230 mph without a frame-cap artifact", () => {
     const result = computeFlyScaledSpeed(FLY_DEFAULT_SPEED_TIER, mpu, 1, true);
-    const expected = (23 * MPH_TO_MS) / mpu;
+    const expected = (230 * MPH_TO_MS) / mpu;
     expect(result).toBeCloseTo(expected, 10);
     expect(result).toBeCloseTo(
       computeFlyScaledSpeed(FLY_DEFAULT_SPEED_TIER, mpu, 1, false) * TURBO_MULTIPLIER,

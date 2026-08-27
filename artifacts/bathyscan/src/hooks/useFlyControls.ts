@@ -12,7 +12,7 @@ import { worldXZToLonLat, worldYToMetres, lonLatToWorldXZ } from "@/lib/terrain"
 import { applyCameraSpawn } from "@/lib/cameraSpawn";
 import { registerResetCameraFn } from "@/lib/resetCameraRegistry";
 import { useJoystickStore } from "@/components/VirtualJoystick";
-import { computeMetersPerWorldUnit, boatMphToWorldUnitsPerSecond, BOAT_MIN_MPH, BOAT_MAX_MPH, computeFlyScaledSpeed, computeFlyMpu, smoothMpuStep } from "@/lib/boatSpeed";
+import { boatMphToWorldUnitsPerSecond, BOAT_MIN_MPH, BOAT_MAX_MPH, computeFlyScaledSpeed, computeMovementMpu, smoothMpuStep } from "@/lib/boatSpeed";
 import { tidalToWorldVelocity } from "@/lib/boatPhysics";
 import { useDriveBoatStore } from "@/lib/driveBoatStore";
 import { useCurrentsStore } from "@/lib/currentsStore";
@@ -129,7 +129,10 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   const boatSpeedMphRef = useRef(boatSpeedMph);
 
   useEffect(() => { speedIndexRef.current = speedIndex; }, [speedIndex]);
-  useEffect(() => { terrainRef.current = terrain; }, [terrain]);
+  // Keep the frame loop's source of truth in sync during render. A dataset
+  // switch must not leave one frame using the previous grid's geographic
+  // scale while the new terrain is already active.
+  terrainRef.current = terrain;
   useEffect(() => { realisticModeRef.current = realisticMode; }, [realisticMode]);
   useEffect(() => { boatSpeedMphRef.current = boatSpeedMph; }, [boatSpeedMph]);
 
@@ -942,11 +945,11 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       let scaledSpeed: number;
       let mpuForFrame = 1;
       if (isRealistic && grid) {
-        mpuForFrame = computeMetersPerWorldUnit(grid);
+        mpuForFrame = computeMovementMpu(grid);
         const wups = boatMphToWorldUnitsPerSecond(actualSpeedMphRef.current, mpuForFrame);
         scaledSpeed = wups * delta;
       } else {
-        const targetFlyMpu = computeFlyMpu(grid);
+        const targetFlyMpu = computeMovementMpu(grid);
         // Lerp smoothedFlyMpu toward the current dataset's mpu to prevent a
         // single oversized camera jump when the mpu changes abruptly at a
         // dataset boundary (e.g. crossing from a large ocean survey to a
@@ -1093,7 +1096,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
 
         if (hasTidal) {
           const { worldDX, worldDZ } = tidalToWorldVelocity(tidalSpeedKt, tidalDirDeg);
-          const mpu = mpuForFrame > 0 ? mpuForFrame : computeMetersPerWorldUnit(grid);
+          const mpu = mpuForFrame > 0 ? mpuForFrame : computeMovementMpu(grid);
           camera.position.x += (worldDX / mpu) * delta;
           camera.position.z += (worldDZ / mpu) * delta;
         }
