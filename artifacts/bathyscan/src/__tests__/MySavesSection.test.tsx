@@ -150,6 +150,7 @@ let currentIsSignedIn = true;
 let currentUserDatasets: unknown[] = [];
 let currentMySaves: unknown[] = [];
 let currentUserFolders: unknown[] = [];
+let currentGcsJobs: unknown[] = [];
 let currentSaveFolderExpanded: Record<string, boolean> = {};
 let currentWaterType = "saltwater";
 let currentUploadStatus: unknown = undefined;
@@ -175,6 +176,13 @@ vi.mock(
         isLoading: false,
         isError: false,
         refetch: () => Promise.resolve(),
+      }),
+      useGetGcsUploadJobs: () => ({
+        data: currentGcsJobs,
+        isFetching: false,
+        isLoading: false,
+        isPending: false,
+        isError: false,
       }),
       useGetUserFolders: () => ({
         data: currentUserFolders,
@@ -343,6 +351,7 @@ function resetState() {
   currentUserDatasets = [];
   currentMySaves = [];
   currentUserFolders = [];
+  currentGcsJobs = [];
   currentSaveFolderExpanded = {};
   currentWaterType = "saltwater";
   currentUploadStatus = undefined;
@@ -372,6 +381,78 @@ describe("MySavesSection — visibility", () => {
     expect(
       screen.getByText(/No datasets yet — upload sonar data or save datasets from the catalog/i),
     ).toBeInTheDocument();
+  });
+
+  it("shows durable oversized upload states after leaving Find Data", () => {
+    currentGcsJobs = [
+      {
+        id: "gcs-queued",
+        fileName: "queued-survey.csv",
+        status: "queued",
+        progress: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: "gcs-processing",
+        fileName: "processing-survey.csv",
+        status: "processing",
+        progress: 50,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: "gcs-timeout",
+        fileName: "timeout-survey.csv",
+        status: "timeout",
+        progress: 50,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: "gcs-error",
+        fileName: "failed-survey.csv",
+        status: "error",
+        progress: 18,
+        error: "Unsupported source format",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ];
+
+    renderSection();
+
+    expect(screen.getByTestId("gcs-upload-card-gcs-queued")).toHaveTextContent("Upload queued");
+    expect(screen.getByTestId("gcs-upload-card-gcs-processing")).toHaveTextContent("Processing upload");
+    expect(screen.getByTestId("gcs-upload-card-gcs-timeout")).toHaveTextContent("Still processing");
+    expect(screen.getByRole("alert")).toHaveTextContent("Unsupported source format");
+  });
+
+  it("removes the transient status card when the dataset materializes", () => {
+    currentGcsJobs = [{
+      id: "gcs-completed",
+      fileName: "completed-survey.csv",
+      status: "processing",
+      progress: 50,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }];
+    const view = renderSection();
+    expect(screen.getByTestId("gcs-upload-card-gcs-completed")).toBeInTheDocument();
+
+    currentGcsJobs = [];
+    currentUserDatasets = [{ ...UPLOAD_A, id: "materialized-dataset" }];
+    view.rerender(
+      <MySavesSection
+        onLoadCatalogSave={mocks.onLoadCatalogSave}
+        onLoadUserDataset={mocks.onLoadUserDataset}
+        onDatasetsRemoved={mocks.onDatasetsRemoved}
+        onBrowseDatasets={mocks.onBrowseDatasets}
+      />,
+    );
+
+    expect(screen.queryByTestId("gcs-upload-card-gcs-completed")).not.toBeInTheDocument();
+    expect(screen.getByTestId("upload-card-materialized-dataset")).toBeInTheDocument();
   });
 
   it("rehydrates a server-backed upload after reload and shows processing progress", () => {

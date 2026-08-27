@@ -327,6 +327,7 @@ Every new sign-in is held as **pending** until an admin approves it (`requireApp
 | GET | `/datasets/upload/jobs/:jobId` | Poll the status of a chunked-upload processing job |
 | POST | `/datasets/upload/request-gcs-url` | Get a presigned GCS PUT URL for oversized file uploads |
 | GET | `/datasets/upload/gcs-job-status` | Check processing status for a GCS-backed upload job |
+| GET | `/datasets/upload/gcs-jobs` | List the authenticated user's active oversized uploads |
 
 #### Catalog & Search
 

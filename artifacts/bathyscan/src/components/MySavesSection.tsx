@@ -16,6 +16,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetDatasetsMySaves,
+  useGetGcsUploadJobs,
   useGetUserDatasets,
   useGetUserFolders,
   useGetChunkUploadStatus,
@@ -32,6 +33,7 @@ import {
   usePatchUserFoldersIdMove,
   useDeleteUserFoldersId,
   getGetDatasetsMySavesQueryKey,
+  getGetGcsUploadJobsQueryKey,
   getGetUserDatasetsQueryKey,
   getGetUserFoldersQueryKey,
   getGetChunkUploadStatusQueryKey,
@@ -39,6 +41,7 @@ import {
   type UserCatalogSave,
   type UserDatasetMeta,
   type DatasetFolder,
+  type GcsUploadJob,
 } from "@workspace/api-client-react";
 import {
   DndContext,
@@ -92,9 +95,13 @@ function isNotFoundError(err: unknown): boolean {
 const STATUS_COLORS: Record<string, string> = {
   queued: "#f59e0b",
   processing: "#60a5fa",
+  timeout: "#fbbf24",
   ready: "#4ade80",
   failed: "#f87171",
+  error: "#f87171",
 };
+
+const EMPTY_GCS_UPLOAD_JOBS: GcsUploadJob[] = [];
 
 const DATA_TYPE_ICONS: Record<string, string> = {
   bathymetry: "🌊",
@@ -323,6 +330,60 @@ const PreferredDatasetButton: React.FC<{
 // ---------------------------------------------------------------------------
 // SaveCard
 // ---------------------------------------------------------------------------
+
+const GcsUploadCard: React.FC<{ job: GcsUploadJob }> = ({ job }) => {
+  const isError = job.status === "error";
+  const isTimeout = job.status === "timeout";
+  const statusColor = STATUS_COLORS[job.status] ?? "#e2e8f0";
+  const statusLabel = isError
+    ? "Upload failed — retry in Find Data"
+    : isTimeout
+      ? "Still processing — check back soon"
+      : job.status === "queued"
+        ? "Upload queued"
+        : "Processing upload";
+
+  return (
+    <div
+      style={{
+        ...CARD,
+        borderLeft: `2px solid ${statusColor}99`,
+        background: isError ? "rgba(248,113,113,0.06)" : "rgba(96,165,250,0.06)",
+      }}
+      data-testid={`gcs-upload-card-${job.id}`}
+      role={isError ? "alert" : undefined}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span aria-hidden="true">{isError ? "⚠" : "◌"}</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            data-testid={`gcs-upload-name-${job.id}`}
+            style={{ color: isError ? "#fca5a5" : "#bfdbfe", fontWeight: 600, overflowWrap: "anywhere" }}
+          >
+            {job.fileName}
+          </div>
+          <div
+            style={{
+              color: isError ? "#f87171" : isTimeout ? "#fbbf24" : "#60a5fa",
+              fontSize: "calc(12px * var(--bs-font-scale, 1))",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+            }}
+          >
+            {statusLabel}
+            {job.status !== "timeout" ? ` · ${Math.round(job.progress)}%` : ""}
+          </div>
+          {isError && job.error && (
+            <ErrorMessage
+              message={job.error}
+              style={{ marginTop: 5, fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#fca5a5" }}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const SaveCard: React.FC<{
   save: UserCatalogSave;
@@ -1269,6 +1330,18 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
     },
   });
 
+  const { data: gcsJobsData, isPending: isGcsPending } = useGetGcsUploadJobs({
+    query: {
+      queryKey: getGetGcsUploadJobsQueryKey(),
+      enabled: isLoaded && isSignedIn === true,
+      refetchInterval: (q) => {
+        const data = q.state.data as GcsUploadJob[] | undefined;
+        return data && data.length > 0 ? 2_000 : false;
+      },
+    },
+  });
+  const gcsJobs = gcsJobsData ?? EMPTY_GCS_UPLOAD_JOBS;
+
   const { data: userDatasets = [], isPending: isUploadPending } = useGetUserDatasets({
     query: { queryKey: getGetUserDatasetsQueryKey(), enabled: isLoaded && isSignedIn === true },
   });
@@ -1276,6 +1349,18 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
   const { data: userFolders = [] } = useGetUserFolders({
     query: { enabled: isLoaded && isSignedIn === true, queryKey: getGetUserFoldersQueryKey() },
   });
+
+  // The active-job list intentionally omits completed rows. Keep the
+  // materialized dataset list fresh while a job exists so the new dataset
+  // replaces its transient status card as soon as conversion finishes.
+  const hadGcsJobsRef = useRef(false);
+  useEffect(() => {
+    const completedSinceLastPoll = hadGcsJobsRef.current && gcsJobs.length === 0;
+    if (completedSinceLastPoll) {
+      void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
+    }
+    hadGcsJobsRef.current = gcsJobs.length > 0;
+  }, [gcsJobs, qc]);
 
   // Invalidate userDatasets list when a catalog save transitions to "ready"
   // (its backing custom_datasets row becomes available).
@@ -1680,8 +1765,8 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
     );
   }
 
-  const isListPending = isSavePending || isUploadPending;
-  const isEmpty = !isListPending && visibleSaves.length === 0 && uploadOnlyDatasets.length === 0 && userFolders.length === 0;
+  const isListPending = isSavePending || isUploadPending || isGcsPending;
+  const isEmpty = !isListPending && gcsJobs.length === 0 && visibleSaves.length === 0 && uploadOnlyDatasets.length === 0 && userFolders.length === 0;
 
   const mergedTree = buildMergedTree(userFolders, visibleSaves, uploadOnlyDatasets);
 
@@ -1810,6 +1895,7 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
       {/* A chunked upload is owned by the server after finalize, so keep its
           status visible even when Find Data (and its upload panel) is closed. */}
       <UploadProcessingStatus />
+      {gcsJobs.map((job) => <GcsUploadCard key={job.id} job={job} />)}
 
       {/* Delete errors */}
       {deleteError && (

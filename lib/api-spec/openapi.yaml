@@ -3990,6 +3990,28 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /datasets/upload/gcs-jobs:
+    get:
+      operationId: getGcsUploadJobs
+      tags: [datasets]
+      summary: List the authenticated user's active oversized uploads
+      description: Returns queued, processing, timeout, and failed direct-to-object-storage uploads that have not yet materialized into user datasets. Completed uploads are omitted once their dataset is available.
+      responses:
+        "200":
+          description: Active oversized upload jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GcsUploadJob"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /tidal:
     get:
       operationId: getTidal
@@ -9161,6 +9183,30 @@ components:
               description: 0–1 relevance to the search query
           required:
             - relevanceScore
+
+    GcsUploadJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        fileName:
+          type: string
+        status:
+          type: string
+          enum: [queued, processing, timeout, error]
+        progress:
+          type: integer
+          minimum: 0
+        error:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, fileName, status, progress, createdAt, updatedAt]
 
     UserCatalogSave:
       type: object

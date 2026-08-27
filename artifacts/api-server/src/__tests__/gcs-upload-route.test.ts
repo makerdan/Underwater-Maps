@@ -62,6 +62,7 @@ import app from "../app.js";
 import { signDatasetUploadUrl, getBucketStatus, getJobByObjectKey, recoverGcsJobStatus, bucketJobDbId } from "../lib/bucketMonitor.js";
 import { db } from "@workspace/db";
 import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
+import { and } from "drizzle-orm";
 
 const AUTHED = { "x-mock-clerk-user-id": "user_test_gcs" };
 
@@ -142,6 +143,26 @@ describe("POST /api/datasets/upload/request-gcs-url", () => {
     expect(vi.mocked(signDatasetUploadUrl)).toHaveBeenCalledWith(
       "user_test_gcs",
       "survey.csv",
+    );
+  });
+
+  it("creates a durable queued row when issuing a presigned URL", async () => {
+    vi.mocked(bucketJobDbId).mockReturnValueOnce("11111111-1111-4111-8111-111111111111");
+
+    const res = await request(app)
+      .post("/api/datasets/upload/request-gcs-url")
+      .set(AUTHED)
+      .send({ fileName: "nested/survey.csv" });
+
+    expect(res.status).toBe(200);
+    expect(vi.mocked(db.insert)).toHaveBeenCalledWith(expect.anything());
+    expect(vi.mocked(db.insert).mock.results.at(-1)?.value.values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "11111111-1111-4111-8111-111111111111",
+        userId: "user_test_gcs",
+        status: "queued",
+        progress: 0,
+      }),
     );
   });
 
@@ -426,6 +447,135 @@ describe("GET /api/datasets/upload/gcs-job-status — GCS fallback", () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ status: "done", datasetId: "dataset-abc" });
     expect(vi.mocked(recoverGcsJobStatus)).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/datasets/upload/gcs-jobs — durable My Saves discovery
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("GET /api/datasets/upload/gcs-jobs", () => {
+  const listRows = (rows: Record<string, unknown>[]) => {
+    const where = vi.fn().mockResolvedValue(rows);
+    vi.mocked(db.select).mockReturnValue({
+      from: vi.fn().mockReturnValue({ where }),
+    } as never);
+    return where;
+  };
+
+  beforeEach(() => {
+    vi.mocked(db.select).mockClear();
+  });
+
+  it("requires authentication", async () => {
+    const res = await request(app).get("/api/datasets/upload/gcs-jobs");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns queued, processing, and failed jobs with durable status details", async () => {
+    const now = new Date();
+    listRows([
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        userId: "user_test_gcs",
+        fileName: "queued.csv",
+        objectKey: GCS_OBJECT_KEY,
+        status: "queued",
+        progress: 0,
+        error: null,
+        datasetId: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        userId: "user_test_gcs",
+        fileName: "working.csv",
+        objectKey: "pending-datasets/user_test_gcs/uuid-002/working.csv",
+        status: "processing",
+        progress: 50,
+        error: null,
+        datasetId: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "33333333-3333-4333-8333-333333333333",
+        userId: "user_test_gcs",
+        fileName: "failed.csv",
+        objectKey: "pending-datasets/user_test_gcs/uuid-003/failed.csv",
+        status: "error",
+        progress: 18,
+        error: "Unsupported source format",
+        datasetId: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "55555555-5555-4555-8555-555555555555",
+        userId: "user_test_gcs",
+        fileName: "materialized.csv",
+        objectKey: "processed-datasets/user_test_gcs/uuid-005/materialized.csv",
+        status: "done",
+        progress: 100,
+        error: null,
+        datasetId: "66666666-6666-4666-8666-666666666666",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+
+    const res = await request(app)
+      .get("/api/datasets/upload/gcs-jobs")
+      .set(GCS_STATUS_AUTHED);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([
+      expect.objectContaining({ fileName: "queued.csv", status: "queued", progress: 0 }),
+      expect.objectContaining({ fileName: "working.csv", status: "processing", progress: 50 }),
+      expect.objectContaining({ fileName: "failed.csv", status: "error", error: "Unsupported source format" }),
+    ]);
+    expect(res.body).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ fileName: "materialized.csv" }),
+    ]));
+  });
+
+  it("reports stale processing jobs as timeout", async () => {
+    const stale = new Date(Date.now() - 16 * 60 * 1000);
+    listRows([{
+      id: "44444444-4444-4444-8444-444444444444",
+      userId: "user_test_gcs",
+      fileName: "stalled.csv",
+      objectKey: GCS_OBJECT_KEY,
+      status: "processing",
+      progress: 50,
+      error: null,
+      datasetId: null,
+      createdAt: stale,
+      updatedAt: stale,
+    }]);
+
+    const res = await request(app)
+      .get("/api/datasets/upload/gcs-jobs")
+      .set(GCS_STATUS_AUTHED);
+
+    expect(res.status).toBe(200);
+    expect(res.body[0]).toMatchObject({ fileName: "stalled.csv", status: "timeout", progress: 50 });
+  });
+
+  it("uses the database query to scope rows to the authenticated user and non-materialized jobs", async () => {
+    const where = listRows([]);
+
+    const res = await request(app)
+      .get("/api/datasets/upload/gcs-jobs")
+      .set(GCS_STATUS_AUTHED);
+
+    expect(res.status).toBe(200);
+    expect(where).toHaveBeenCalled();
+    const conditions = vi.mocked(and).mock.calls.at(-1) as unknown as unknown[];
+    expect(conditions).toContain("eq-condition");
+    expect(conditions).toContain("isNull-condition");
+    expect(conditions).toContain("isNotNull-condition");
   });
 });
 

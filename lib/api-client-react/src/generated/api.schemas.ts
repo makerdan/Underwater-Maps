@@ -3006,6 +3006,27 @@ export type DatasetCatalogSearchResult = DatasetCatalogEntry & {
   relevanceScore: number;
 };
 
+export type GcsUploadJobStatus = typeof GcsUploadJobStatus[keyof typeof GcsUploadJobStatus];
+
+
+export const GcsUploadJobStatus = {
+  queued: 'queued',
+  processing: 'processing',
+  timeout: 'timeout',
+  error: 'error',
+} as const;
+
+export interface GcsUploadJob {
+  id: string;
+  fileName: string;
+  status: GcsUploadJobStatus;
+  /** @minimum 0 */
+  progress: number;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type UserCatalogSaveStatus = typeof UserCatalogSaveStatus[keyof typeof UserCatalogSaveStatus];
 
 

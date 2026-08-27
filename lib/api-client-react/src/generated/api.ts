@@ -62,6 +62,7 @@ import type {
   FederatedSearchResponse,
   FinalizeChunkedUpload200,
   FinalizeChunkedUploadBody,
+  GcsUploadJob,
   GeorefBody,
   GetCatchesParams,
   GetChunkUploadStatus200,
@@ -8207,6 +8208,84 @@ export function useGetGcsJobStatus<TData = Awaited<ReturnType<typeof getGcsJobSt
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetGcsJobStatusQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetGcsUploadJobsUrl = () => {
+
+
+
+
+  return `/api/datasets/upload/gcs-jobs`
+}
+
+/**
+ * Returns queued, processing, timeout, and failed direct-to-object-storage uploads that have not yet materialized into user datasets. Completed uploads are omitted once their dataset is available.
+ * @summary List the authenticated user's active oversized uploads
+ */
+export const getGcsUploadJobs = async ( options?: RequestInit): Promise<GcsUploadJob[]> => {
+
+  return customFetch<GcsUploadJob[]>(getGetGcsUploadJobsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGcsUploadJobsQueryKey = () => {
+    return [
+    `/api/datasets/upload/gcs-jobs`
+    ] as const;
+    }
+
+
+export const getGetGcsUploadJobsQueryOptions = <TData = Awaited<ReturnType<typeof getGcsUploadJobs>>, TError = ErrorType<ApiError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGcsUploadJobs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGcsUploadJobsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGcsUploadJobs>>> = ({ signal }) => getGcsUploadJobs({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGcsUploadJobs>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGcsUploadJobsQueryResult = NonNullable<Awaited<ReturnType<typeof getGcsUploadJobs>>>
+export type GetGcsUploadJobsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List the authenticated user's active oversized uploads
+ */
+
+export function useGetGcsUploadJobs<TData = Awaited<ReturnType<typeof getGcsUploadJobs>>, TError = ErrorType<ApiError>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGcsUploadJobs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGcsUploadJobsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -4,7 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import multer from "multer";
-import { eq, and, inArray, or, lt, isNull } from "drizzle-orm";
+import { eq, and, inArray, or, lt, isNull, isNotNull } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { z } from "zod";
 import { db, customDatasetsTable, userSettingsTable, uploadJobsTable, disabledPresetsTable, uploadCalibrationTable, StoredTerrainJsonSchema, type StoredTerrainJson, type StoredTideStation } from "@workspace/db";
@@ -30,6 +30,7 @@ import {
   FinalizeChunkedUploadResponse,
   RequestGcsUploadUrlResponse,
   GetGcsJobStatusResponse,
+  GetGcsUploadJobsResponse,
   StartChunkedUploadResponse,
 } from "@workspace/api-zod";
 import { validateResponse } from "../middlewares/validateResponse.js";
@@ -3162,6 +3163,8 @@ const GcsUrlBodySchema = z.object({
   fileName: z.string().min(1).max(255),
 });
 
+const GCS_UPLOAD_TIMEOUT_MS = 15 * 60 * 1000;
+
 // ── POST /datasets/upload/request-gcs-url ────────────────────────────────────
 // Auth-required. Generates a presigned GCS PUT URL for oversized files (>50 MB).
 // The client uploads directly to GCS — the API server's memory is never involved.
@@ -3185,7 +3188,93 @@ datasetIngestionRouter.post(
 
     const userId = (req as AuthenticatedRequest).clerkUserId;
     const { uploadUrl, objectKey } = await signDatasetUploadUrl(userId, fileName);
+    const dbId = bucketJobDbId(objectKey);
+    if (dbId) {
+      await db
+        .insert(uploadJobsTable)
+        .values({
+          id: dbId,
+          userId,
+          status: "queued",
+          progress: 0,
+          fileName: path.basename(fileName),
+          objectKey,
+          updatedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: uploadJobsTable.id,
+          set: {
+            userId,
+            fileName: path.basename(fileName),
+            objectKey,
+            status: "queued",
+            progress: 0,
+            error: null,
+            datasetId: null,
+            updatedAt: new Date(),
+          },
+        });
+    }
     res.json(validateResponse(RequestGcsUploadUrlResponse, { uploadUrl, objectKey }, "POST /api/datasets/upload/request-gcs-url"));
+  }),
+);
+
+// ── GET /datasets/upload/gcs-jobs ────────────────────────────────────────────
+// Returns the authenticated user's durable, non-materialized oversized upload
+// jobs so My Saves can show them after navigation or a full-page reload.
+datasetIngestionRouter.get(
+  "/datasets/upload/gcs-jobs",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const userId = (req as AuthenticatedRequest).clerkUserId;
+    const rows = await db
+      .select({
+        id: uploadJobsTable.id,
+        userId: uploadJobsTable.userId,
+        fileName: uploadJobsTable.fileName,
+        objectKey: uploadJobsTable.objectKey,
+        status: uploadJobsTable.status,
+        progress: uploadJobsTable.progress,
+        error: uploadJobsTable.error,
+        datasetId: uploadJobsTable.datasetId,
+        createdAt: uploadJobsTable.createdAt,
+        updatedAt: uploadJobsTable.updatedAt,
+      })
+      .from(uploadJobsTable)
+      .where(and(
+        eq(uploadJobsTable.userId, userId),
+        isNotNull(uploadJobsTable.objectKey),
+        isNull(uploadJobsTable.datasetId),
+        inArray(uploadJobsTable.status, ["queued", "processing", "error"]),
+      ));
+
+    const jobs = rows
+      .filter((row) =>
+        row.userId === userId &&
+        row.objectKey !== null &&
+        row.datasetId === null &&
+        (row.status === "queued" || row.status === "processing" || row.status === "error"),
+      )
+      .map((row) => {
+        const keyName = row.objectKey?.split("/").at(-1) ?? "upload";
+        const fileName = row.fileName ?? keyName;
+        const status =
+          row.status === "processing" &&
+          Date.now() - row.updatedAt.getTime() >= GCS_UPLOAD_TIMEOUT_MS
+            ? "timeout"
+            : row.status;
+        return {
+          id: row.id,
+          fileName,
+          status,
+          progress: row.progress,
+          ...(row.error ? { error: row.error } : {}),
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+        };
+      });
+
+    res.json(validateResponse(GetGcsUploadJobsResponse, jobs, "GET /api/datasets/upload/gcs-jobs"));
   }),
 );
 

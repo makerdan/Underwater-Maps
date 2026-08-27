@@ -5571,6 +5571,26 @@ export const GetGcsJobStatusResponse = zod.object({
 
 
 /**
+ * Returns queued, processing, timeout, and failed direct-to-object-storage uploads that have not yet materialized into user datasets. Completed uploads are omitted once their dataset is available.
+ * @summary List the authenticated user's active oversized uploads
+ */
+export const getGcsUploadJobsResponseProgressMin = 0;
+
+
+
+export const GetGcsUploadJobsResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "fileName": zod.string(),
+  "status": zod.enum(['queued', 'processing', 'timeout', 'error']),
+  "progress": zod.number().min(getGcsUploadJobsResponseProgressMin),
+  "error": zod.string().optional(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const GetGcsUploadJobsResponse = zod.array(GetGcsUploadJobsResponseItem)
+
+
+/**
  * Queries the nearest NOAA water-level and currents-prediction stations
 for the given coordinates and returns current conditions with slack
 window data. Set `waterType=freshwater` for lakes and rivers. Freshwater
