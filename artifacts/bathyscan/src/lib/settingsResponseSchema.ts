@@ -29,6 +29,7 @@
 
 import { z } from "zod";
 import type { SettingsState } from "./settingsStore";
+import { isValidDailyRouteTimezone } from "./gpsImport";
 
 // ── Per-field building blocks ──────────────────────────────────────────────────
 // Each primitive helper is optional (field may be absent) with a .catch that
@@ -181,6 +182,7 @@ export const settingsFieldSchemas = {
   gpsRecordingInterval: z.number().min(1000).optional().catch(undefined),
   trailRetention: z.enum(["7", "30", "90", "all"]).optional().catch(undefined),
   followResumeDelaySec: num,
+  dailyRouteTimezone: z.string().refine(isValidDailyRouteTimezone).optional().catch(undefined),
 
   // Data
   defaultRegion: str,

@@ -79,6 +79,22 @@ describe("parseSettingsImport — field validation", () => {
     expect(r.skippedKeys).toEqual([]);
   });
 
+  it("round-trips valid daily route timezones and skips invalid values", () => {
+    const valid = parseSettingsImport({ dailyRouteTimezone: "America/Los_Angeles" });
+    expect(valid).toEqual({
+      ok: true,
+      settings: { dailyRouteTimezone: "America/Los_Angeles" },
+      skippedKeys: [],
+    });
+
+    const invalid = parseSettingsImport({ dailyRouteTimezone: "Not/A_Timezone" });
+    expect(invalid).toEqual({
+      ok: true,
+      settings: {},
+      skippedKeys: ["dailyRouteTimezone"],
+    });
+  });
+
   it("reports unknown keys as skipped and never applies them", () => {
     const r = parseSettingsImport({ totallyMadeUpKey: 1, hudOpacity: 1 });
     expect(r.ok).toBe(true);
