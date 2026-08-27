@@ -80,6 +80,7 @@ import {
   renderGridLines,
   renderScaleBar,
   renderColormapLegend,
+  OVERVIEW_CONTROL_LAYOUT,
   renderHabitatOverlay,
   renderEfhOverlay,
   renderEfhLegend,
@@ -198,8 +199,6 @@ function layoutSignatureOf(
     .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
   return JSON.stringify({ entries, groups: groupEntries });
 }
-
-const OVERVIEW_CONTROLS_TOP_OFFSET = 36;
 
 const PUZZLE_LAYOUTS_SYNC_KEY = "bathyscan:puzzleLayouts:event";
 const PUZZLE_TRANSFORMS_DENSITY_KEY = "bathyscan:puzzleTransforms:density";
@@ -4799,11 +4798,11 @@ export const OverviewMap: React.FC = () => {
         style={{
           position: "absolute",
           right: 16,
-          top: 56 + OVERVIEW_CONTROLS_TOP_OFFSET,
+          top: OVERVIEW_CONTROL_LAYOUT.zoomTopOffset + OVERVIEW_CONTROL_LAYOUT.controlsTopOffset,
           zIndex: 41,
           display: "flex",
           flexDirection: "column",
-          gap: 4,
+          gap: OVERVIEW_CONTROL_LAYOUT.zoomButtonGap,
           pointerEvents: "auto",
         }}
       >
@@ -4812,8 +4811,8 @@ export const OverviewMap: React.FC = () => {
             data-testid="overview-zoom-in"
             onClick={() => handleZoomStep(1.35)}
             style={{
-              width: 32,
-              height: 32,
+              width: OVERVIEW_CONTROL_LAYOUT.zoomButtonSize,
+              height: OVERVIEW_CONTROL_LAYOUT.zoomButtonSize,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -4835,8 +4834,8 @@ export const OverviewMap: React.FC = () => {
             data-testid="overview-zoom-out"
             onClick={() => handleZoomStep(1 / 1.35)}
             style={{
-              width: 32,
-              height: 32,
+              width: OVERVIEW_CONTROL_LAYOUT.zoomButtonSize,
+              height: OVERVIEW_CONTROL_LAYOUT.zoomButtonSize,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -4859,8 +4858,8 @@ export const OverviewMap: React.FC = () => {
             onClick={handleFitToData}
             disabled={datasetsWithGrid.length === 0}
             style={{
-              width: 32,
-              height: 32,
+              width: OVERVIEW_CONTROL_LAYOUT.zoomButtonSize,
+              height: OVERVIEW_CONTROL_LAYOUT.zoomButtonSize,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -4886,7 +4885,7 @@ export const OverviewMap: React.FC = () => {
         data-testid="overview-compass"
         style={{
           position: "absolute",
-          top: 14 + OVERVIEW_CONTROLS_TOP_OFFSET,
+          top: OVERVIEW_CONTROL_LAYOUT.compassTopOffset + OVERVIEW_CONTROL_LAYOUT.controlsTopOffset,
           right: 14,
           width: 36,
           height: 36,

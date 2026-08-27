@@ -14,7 +14,15 @@ export type { OverviewTransform } from "./transforms";
 export { buildHillshadeLayer, buildHeatmapBitmap, renderHeatmap, renderHeatmapAtBbox } from "./terrainImagery";
 export { renderGridLines, POLYGON_LOD_MIN_ZOOM, shouldDrawOverlayAtScale, renderHabitatOverlay, renderEfhOverlay, hitTestEfh, renderSubstrateOverlay, hitTestSubstrate, renderScaleBar, drawSelectionRect, buildIntertidalHotspotDescriptors, SYNTHETIC_HATCH_COLORS, renderSyntheticHatch, renderIntertidalBand } from "./overlays";
 export type { WeatherStationPin, RawsStationPin, IntertidalHotspotPin, IntertidalSpotFeature } from "./overlays";
-export { renderEfhLegend, hitTestEfhLegend, renderSubstrateLegend, hitTestSubstrateLegend, renderColormapLegend } from "./legends";
+export {
+  renderEfhLegend,
+  hitTestEfhLegend,
+  renderSubstrateLegend,
+  hitTestSubstrateLegend,
+  renderColormapLegend,
+  OVERVIEW_CONTROL_LAYOUT,
+  OVERVIEW_LEGEND_TOP,
+} from "./legends";
 export type { EfhLegendRow, EfhLegendLayout, SubstrateLegendRow, SubstrateLegendLayout } from "./legends";
 export { renderViewCone, renderCameraArrow } from "./camera";
 export { renderSavedTrails, renderSavedDrifts, hitTestSavedDrifts } from "./trails";

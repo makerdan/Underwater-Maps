@@ -7,6 +7,28 @@ import type { UnitsSystem, ColormapTheme } from "../settingsStore";
 import { getColormap } from "../colormap";
 import { hexToRgba } from "./internal";
 
+/**
+ * Shared geometry for the Overview Map's top-right compass and zoom stack.
+ * The canvas legend uses the zoom stack's bottom edge plus its own gap so the
+ * two layers cannot overlap when their positions change together.
+ */
+export const OVERVIEW_CONTROL_LAYOUT = {
+  controlsTopOffset: 36,
+  compassTopOffset: 14,
+  zoomTopOffset: 56,
+  zoomButtonSize: 32,
+  zoomButtonGap: 4,
+  zoomButtonCount: 3,
+  legendGap: 8,
+} as const;
+
+export const OVERVIEW_LEGEND_TOP =
+  OVERVIEW_CONTROL_LAYOUT.zoomTopOffset +
+  OVERVIEW_CONTROL_LAYOUT.controlsTopOffset +
+  OVERVIEW_CONTROL_LAYOUT.zoomButtonCount * OVERVIEW_CONTROL_LAYOUT.zoomButtonSize +
+  (OVERVIEW_CONTROL_LAYOUT.zoomButtonCount - 1) * OVERVIEW_CONTROL_LAYOUT.zoomButtonGap +
+  OVERVIEW_CONTROL_LAYOUT.legendGap;
+
 // ---------------------------------------------------------------------------
 // EFH legend (interactive, per-species toggle)
 // ---------------------------------------------------------------------------
@@ -278,11 +300,11 @@ export function hitTestSubstrateLegend(
 }
 
 /**
- * Render a depth-to-colour legend strip in the top-right corner of the
- * overview canvas. The strip runs from shallow (top, t=0) to deep (bottom,
- * t=1) using the active colormap theme, with depth labels at the top, middle,
- * and bottom tick marks. Matches the 3D HUD DepthScaleBar so both views
- * communicate the same colour scale.
+ * Render a depth-to-colour legend strip below the Overview Map's top-right
+ * compass and zoom controls. The strip runs from shallow (top, t=0) to deep
+ * (bottom, t=1) using the active colormap theme, with depth labels at the
+ * top, middle, and bottom tick marks. Matches the 3D HUD DepthScaleBar so both
+ * views communicate the same colour scale.
  *
  * @param theme    Active colormap theme (read from settingsStore each frame).
  * @param minDepth Shallowest depth value in the grid (metres).
@@ -303,9 +325,8 @@ export function renderColormapLegend(
   const STRIP_W = 10;
   const STRIP_H = 120;
   const MARGIN_RIGHT = 16;
-  const MARGIN_TOP = 16;
   const x = canvasW - MARGIN_RIGHT - STRIP_W;
-  const y = MARGIN_TOP;
+  const y = OVERVIEW_LEGEND_TOP;
   const LABEL_X = x - 4;
 
   const toColor = getColormap(theme);

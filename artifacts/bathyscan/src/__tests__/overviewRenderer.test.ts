@@ -11,6 +11,7 @@ import {
   renderViewCone,
   renderEfhOverlay,
   renderIntertidalBand,
+  renderColormapLegend,
 } from "../lib/overviewRenderer";
 
 // Shared stub — implementations live in src/__tests__/mocks/three.ts,
@@ -430,6 +431,7 @@ function makeCtx() {
     lineWidth: 1,
     font: "",
     textBaseline: "alphabetic" as CanvasTextBaseline,
+    textAlign: "start" as CanvasTextAlign,
     globalAlpha: 1,
     imageSmoothingEnabled: true,
     measureText: vi.fn(() => ({ width: 50 })),
@@ -438,6 +440,44 @@ function makeCtx() {
     strokeRect: vi.fn(),
   };
 }
+
+describe("renderColormapLegend — Overview control-stack spacing", () => {
+  it("starts below the zoom strip and keeps the gradient and labels visible", () => {
+    const canvasW = 1024;
+    const canvasH = 512;
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+
+    renderColormapLegend(ctx, "ocean", 0, 150, canvasW, canvasH, "metric");
+
+    const gradientCalls = (ctx.fillRect as ReturnType<typeof vi.fn>).mock.calls.filter(
+      ([, , width, height]: [number, number, number, number]) =>
+        width === 10 && height === 1,
+    );
+    const gradientYs = gradientCalls.map(([, y]: [number, number]) => y);
+    expect(gradientCalls).toHaveLength(120);
+    expect(gradientYs[0]).toBeGreaterThanOrEqual(204);
+    expect(gradientYs[gradientYs.length - 1]! + 1).toBeLessThanOrEqual(canvasH);
+
+    const border = (ctx.strokeRect as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      number,
+      number,
+      number,
+      number,
+    ];
+    expect(border[1]).toBeGreaterThanOrEqual(204);
+    expect(border[1]! + border[3]!).toBeLessThanOrEqual(canvasH);
+
+    const tickYs = (ctx.moveTo as ReturnType<typeof vi.fn>).mock.calls.map(
+      ([, y]: [number, number]) => y,
+    );
+    expect(tickYs).toEqual([204, 264, 323]);
+
+    const labels = (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls;
+    expect(labels).toHaveLength(3);
+    expect(labels.map(([text]: [string]) => text)).toEqual(["0m", "75m", "150m"]);
+    expect(labels.map(([, , y]: [string, number, number]) => y)).toEqual([204, 264, 324]);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // renderViewCone — North-up coordinate placement + cone geometry
