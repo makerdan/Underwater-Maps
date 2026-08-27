@@ -62,6 +62,7 @@ import {
   findDuplicateRoutesAcross,
   getRouterStack,
 } from "./helpers/routeGuard.js";
+import { getDocumentedUploadRoutes } from "../../build.mjs";
 import { API_DOMAINS, API_DOMAIN_KEYS } from "../routes/index.js";
 
 import { uploadIngestionRouter } from "../domains/upload/ingestion.js";
@@ -323,6 +324,26 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
       "POST /datasets/upload/request-gcs-url",
       "POST /datasets/upload/start",
     ]);
+  });
+
+  it("keeps the documented upload inventory aligned with the source router", () => {
+    const yamlPath = path.resolve(__dirname, "../../../../lib/api-spec/openapi.yaml");
+    const documented = getDocumentedUploadRoutes(fs.readFileSync(yamlPath, "utf8"))
+      .map((route) =>
+        route.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, ":$1"),
+      );
+
+    const routePairs = (router: unknown) => (getRouterStack(router) ?? [])
+      .flatMap((layer) => {
+        if (!layer.route) return [];
+        const paths = Array.isArray(layer.route.path) ? layer.route.path : [layer.route.path];
+        return paths.flatMap((routePath) => Object.entries(layer.route!.methods)
+          .filter(([, enabled]) => enabled)
+          .map(([method]) => `${method.toUpperCase()} ${routePath}`));
+      })
+      .sort();
+
+    expect(routePairs(uploadIngestionRouter)).toEqual(documented);
   });
 
   it.each(API_DOMAINS)("$name domain is composed", (domain) => {

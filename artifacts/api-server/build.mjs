@@ -3,14 +3,100 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { rm, mkdir, copyFile, readdir } from "node:fs/promises";
+import { rm, mkdir, copyFile, readdir, readFile } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
 
 const artifactDir = path.dirname(fileURLToPath(import.meta.url));
+const OPENAPI_PATH = path.resolve(artifactDir, "../../lib/api-spec/openapi.yaml");
 
-async function buildAll() {
+const UPLOAD_ROUTE_PREFIXES = ["/datasets/upload", "/datasets/raster-"];
+const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete", "head", "options"]);
+
+/**
+ * Return the documented upload-related API routes from the OpenAPI source of
+ * truth. This intentionally uses the same fixed-indentation scan as the API
+ * docs generator so the build does not need to load a YAML implementation.
+ */
+export function getDocumentedUploadRoutes(yamlText) {
+  const documented = [];
+  let inPaths = false;
+  let currentPath = null;
+
+  for (const rawLine of yamlText.split("\n")) {
+    const indent = rawLine.length - rawLine.trimStart().length;
+    const content = rawLine.trim();
+
+    if (!content || content.startsWith("#")) continue;
+
+    if (indent === 0) {
+      if (content === "paths:") {
+        inPaths = true;
+      } else if (inPaths) {
+        inPaths = false;
+      }
+      continue;
+    }
+
+    if (!inPaths) continue;
+
+    if (indent === 2) {
+      const match = content.match(/^(\/[^:]+):/);
+      currentPath = match?.[1] ?? null;
+      continue;
+    }
+
+    if (
+      indent === 4 &&
+      currentPath &&
+      UPLOAD_ROUTE_PREFIXES.some((prefix) => currentPath.startsWith(prefix))
+    ) {
+      const method = content.replace(/:.*$/, "").toLowerCase();
+      if (HTTP_METHODS.has(method)) {
+        documented.push(`${method.toUpperCase()} ${currentPath}`);
+      }
+    }
+  }
+
+  return documented.sort();
+}
+
+function openApiPathToExpressPath(openApiPath) {
+  return openApiPath.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, ":$1");
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Ensure the route registrations survived esbuild into the production entry
+ * bundle. Matching the method call and literal path together avoids a path-only
+ * check passing when a route's HTTP verb was accidentally changed or removed.
+ */
+export function assertUploadRoutesInProductionBundle(bundleText, routes) {
+  const missing = routes.filter((route) => {
+    const separator = route.indexOf(" ");
+    const method = route.slice(0, separator).toLowerCase();
+    const openApiPath = route.slice(separator + 1);
+    const expressPath = openApiPathToExpressPath(openApiPath);
+    const pattern = new RegExp(
+      `\\.${method}\\s*\\(\\s*["'\`]${escapeRegExp(expressPath)}["'\`]`,
+    );
+    return !pattern.test(bundleText);
+  });
+
+  if (missing.length > 0) {
+    throw new Error(
+      "[api-bundle-smoke] Production API bundle is missing documented " +
+        `upload route registration(s): ${missing.join(", ")}. ` +
+        "Check route composition and the esbuild entrypoint before release.",
+    );
+  }
+}
+
+export async function buildAll() {
   // Allow callers to redirect the output directory so parallel build invocations
   // (e.g. the regular dev workflow vs the E2E webServer) don't race on the same
   // `dist/` folder.
@@ -134,6 +220,17 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     },
   });
 
+  const documentedUploadRoutes = getDocumentedUploadRoutes(
+    await readFile(OPENAPI_PATH, "utf8"),
+  );
+  assertUploadRoutesInProductionBundle(
+    await readFile(path.join(distDir, "index.mjs"), "utf8"),
+    documentedUploadRoutes,
+  );
+  console.log(
+    `[api-bundle-smoke] verified ${documentedUploadRoutes.length} documented upload routes`,
+  );
+
   // Copy runtime JSON assets next to the bundled entrypoint so
   // `fs.readFileSync(resolve(__dirname, '...gen.json'))` works in the
   // production build. __dirname in dist/index.mjs resolves to `distDir/`,
@@ -158,7 +255,12 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
   console.log("  copied runtime asset: laz-perf.wasm");
 }
 
-buildAll().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  buildAll().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

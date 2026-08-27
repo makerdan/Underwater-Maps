@@ -51,7 +51,7 @@ isValidation = true
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "node scripts/validation-lock.mjs -- pnpm --filter @workspace/api-server run test:validation"
+args = "node scripts/validation-lock.mjs -- bash -c 'pnpm --filter @workspace/api-server run test:validation && pnpm --filter @workspace/api-server run build'"
 
 [[workflows.workflow]]
 name = "test-e2e-palette"
