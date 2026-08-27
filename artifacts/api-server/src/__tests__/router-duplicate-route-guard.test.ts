@@ -274,7 +274,7 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
     const { datasetDomain } = await import("../domains/datasets/index.js");
     expect(countRoutes(datasetDiscoveryRouter)).toBe(2);
     expect(countRoutes(datasetTerrainRouter)).toBe(7);
-    expect(countRoutes(uploadIngestionRouter)).toBe(10);
+    expect(countRoutes(uploadIngestionRouter)).toBe(11);
     expect(countRoutesDeep(datasetDomain.router)).toBe(
       countRoutes(datasetDiscoveryRouter) + countRoutes(datasetTerrainRouter),
     );
@@ -313,6 +313,7 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
     expect(routePairs(uploadIngestionRouter)).toEqual([
       "GET /datasets/upload/chunk/status/:uploadId",
       "GET /datasets/upload/gcs-job-status",
+      "GET /datasets/upload/gcs-jobs",
       "GET /datasets/upload/jobs/:jobId",
       "POST /datasets/raster-commit",
       "POST /datasets/raster-extract",
