@@ -11,15 +11,26 @@ globalThis.require = createRequire(import.meta.url);
 const artifactDir = path.dirname(fileURLToPath(import.meta.url));
 const OPENAPI_PATH = path.resolve(artifactDir, "../../lib/api-spec/openapi.yaml");
 
-const UPLOAD_ROUTE_PREFIXES = ["/datasets/upload", "/datasets/raster-"];
 const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete", "head", "options"]);
+// These routers are mounted under a public prefix, but their route
+// registrations remain relative to their own router. Keep this list next to
+// the bundle assertion so prefixed routes cannot silently pass by matching
+// only an unmounted handler.
+const MOUNTED_ROUTE_PREFIXES = ["/poe", "/github"];
+export const DOCUMENTED_BUNDLE_ROUTE_EXCLUSIONS = Object.freeze({
+  // Both tile handlers were intentionally removed from the API router. Their
+  // remaining OpenAPI/client surface needs a separate product decision:
+  // restore the proxy endpoints or remove the stale imagery feature.
+  "GET /terrain/satellite-tile": "handler intentionally removed; stale imagery contract tracked separately",
+  "GET /terrain/terrain-tile": "handler intentionally removed; stale imagery contract tracked separately",
+});
 
 /**
- * Return the documented upload-related API routes from the OpenAPI source of
- * truth. This intentionally uses the same fixed-indentation scan as the API
+ * Return every documented API route from the OpenAPI source of truth. This
+ * intentionally uses the same fixed-indentation scan as the API
  * docs generator so the build does not need to load a YAML implementation.
  */
-export function getDocumentedUploadRoutes(yamlText) {
+export function getDocumentedApiRoutes(yamlText) {
   const documented = [];
   let inPaths = false;
   let currentPath = null;
@@ -47,11 +58,7 @@ export function getDocumentedUploadRoutes(yamlText) {
       continue;
     }
 
-    if (
-      indent === 4 &&
-      currentPath &&
-      UPLOAD_ROUTE_PREFIXES.some((prefix) => currentPath.startsWith(prefix))
-    ) {
+    if (indent === 4 && currentPath) {
       const method = content.replace(/:.*$/, "").toLowerCase();
       if (HTTP_METHODS.has(method)) {
         documented.push(`${method.toUpperCase()} ${currentPath}`);
@@ -62,12 +69,51 @@ export function getDocumentedUploadRoutes(yamlText) {
   return documented.sort();
 }
 
-function openApiPathToExpressPath(openApiPath) {
+/**
+ * Preserve the narrower export used by the existing upload inventory test.
+ * The production build uses getDocumentedApiRoutes so every documented route
+ * is protected, while callers that specifically inspect upload routes retain
+ * their old behavior.
+ */
+export function getDocumentedUploadRoutes(yamlText) {
+  return getDocumentedApiRoutes(yamlText).filter((route) => {
+    const path = route.slice(route.indexOf(" ") + 1);
+    return path.startsWith("/datasets/upload") || path.startsWith("/datasets/raster-");
+  });
+}
+
+export function openApiPathToExpressPath(openApiPath) {
   return openApiPath.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, ":$1");
+}
+
+function openApiPathToExpressPattern(openApiPath) {
+  let pattern = "";
+  let lastIndex = 0;
+  const parameterPattern = /\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g;
+
+  for (const match of openApiPath.matchAll(parameterPattern)) {
+    const start = match.index ?? 0;
+    pattern += escapeRegExp(openApiPath.slice(lastIndex, start));
+    pattern += `(?::${match[1]}|\\*${match[1]})`;
+    lastIndex = start + match[0].length;
+  }
+
+  pattern += escapeRegExp(openApiPath.slice(lastIndex));
+  return pattern;
 }
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function routeRegistrationExists(bundleText, method, openApiPath, mountPrefix = "") {
+  const routePath = mountPrefix
+    ? openApiPath.slice(mountPrefix.length)
+    : openApiPath;
+  const pattern = new RegExp(
+    `\\.${method}\\s*\\(\\s*["'\`]${openApiPathToExpressPattern(routePath)}["'\`]`,
+  );
+  return pattern.test(bundleText);
 }
 
 /**
@@ -75,16 +121,40 @@ function escapeRegExp(value) {
  * bundle. Matching the method call and literal path together avoids a path-only
  * check passing when a route's HTTP verb was accidentally changed or removed.
  */
+export function assertApiRoutesInProductionBundle(bundleText, routes) {
+  const missing = routes.filter((route) => {
+    const separator = route.indexOf(" ");
+    const method = route.slice(0, separator).toLowerCase();
+    const openApiPath = route.slice(separator + 1);
+    if (routeRegistrationExists(bundleText, method, openApiPath)) {
+      return false;
+    }
+
+    return !MOUNTED_ROUTE_PREFIXES.some((prefix) => {
+      if (!openApiPath.startsWith(`${prefix}/`)) return false;
+      const mountPattern = new RegExp(
+        `\\.use\\s*\\(\\s*["'\`]${escapeRegExp(prefix)}["'\`]`,
+      );
+      return mountPattern.test(bundleText) &&
+        routeRegistrationExists(bundleText, method, openApiPath, prefix);
+    });
+  });
+
+  if (missing.length > 0) {
+    throw new Error(
+      "[api-bundle-smoke] Production API bundle is missing documented " +
+        `route registration(s): ${missing.join(", ")}. ` +
+        "Check route composition and the esbuild entrypoint before release.",
+    );
+  }
+}
+
 export function assertUploadRoutesInProductionBundle(bundleText, routes) {
   const missing = routes.filter((route) => {
     const separator = route.indexOf(" ");
     const method = route.slice(0, separator).toLowerCase();
     const openApiPath = route.slice(separator + 1);
-    const expressPath = openApiPathToExpressPath(openApiPath);
-    const pattern = new RegExp(
-      `\\.${method}\\s*\\(\\s*["'\`]${escapeRegExp(expressPath)}["'\`]`,
-    );
-    return !pattern.test(bundleText);
+    return !routeRegistrationExists(bundleText, method, openApiPath);
   });
 
   if (missing.length > 0) {
@@ -220,15 +290,19 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     },
   });
 
-  const documentedUploadRoutes = getDocumentedUploadRoutes(
+  const documentedApiRoutes = getDocumentedApiRoutes(
     await readFile(OPENAPI_PATH, "utf8"),
   );
-  assertUploadRoutesInProductionBundle(
+  const protectedApiRoutes = documentedApiRoutes.filter(
+    (route) => !Object.hasOwn(DOCUMENTED_BUNDLE_ROUTE_EXCLUSIONS, route),
+  );
+  assertApiRoutesInProductionBundle(
     await readFile(path.join(distDir, "index.mjs"), "utf8"),
-    documentedUploadRoutes,
+    protectedApiRoutes,
   );
   console.log(
-    `[api-bundle-smoke] verified ${documentedUploadRoutes.length} documented upload routes`,
+    `[api-bundle-smoke] verified ${protectedApiRoutes.length} documented API routes` +
+      ` (${documentedApiRoutes.length - protectedApiRoutes.length} explicitly excluded)`,
   );
 
   // Copy runtime JSON assets next to the bundled entrypoint so

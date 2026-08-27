@@ -62,7 +62,12 @@ import {
   findDuplicateRoutesAcross,
   getRouterStack,
 } from "./helpers/routeGuard.js";
-import { getDocumentedUploadRoutes } from "../../build.mjs";
+import {
+  assertApiRoutesInProductionBundle,
+  DOCUMENTED_BUNDLE_ROUTE_EXCLUSIONS,
+  getDocumentedApiRoutes,
+  getDocumentedUploadRoutes,
+} from "../../build.mjs";
 import { API_DOMAINS, API_DOMAIN_KEYS } from "../routes/index.js";
 
 import { uploadIngestionRouter } from "../domains/upload/ingestion.js";
@@ -149,6 +154,37 @@ const ROUTERS: Array<[name: string, router: unknown]> = [
   ["terrain-bundles", terrainBundlesRouter],
   ["env-pack", envPackRouter],
 ];
+
+/**
+ * Return route pairs from the route sources that make up the public API.
+ *
+ * Express does not reliably retain mount prefixes on nested router layers.
+ * The two routers mounted under a public prefix are therefore represented
+ * explicitly here, while all other composition boundaries use root paths.
+ */
+function collectRoutePairs(router: unknown, prefix = ""): string[] {
+  const stack = getRouterStack(router);
+  if (stack === null) {
+    throw new Error("Cannot collect route pairs from a router without a layer stack");
+  }
+
+  return stack.flatMap((layer) => {
+    if (layer.route) {
+      const paths = Array.isArray(layer.route.path) ? layer.route.path : [layer.route.path];
+      return paths.flatMap((routePath) =>
+        Object.entries(layer.route!.methods)
+          .filter(([, enabled]) => enabled)
+          .map(([method]) => `${method.toUpperCase()} ${prefix}${routePath}`),
+      );
+    }
+
+    const nested = (layer as { handle?: unknown }).handle;
+    return nested && getRouterStack(nested)
+      ? collectRoutePairs(nested, prefix)
+      : [];
+  });
+}
+
 describe("duplicate-route mis-merge guard (all routers)", () => {
   it("terrain query composition retains both query surfaces without duplicates", () => {
     expect(countRoutesDeep(terrainQueryRouter)).toBe(
@@ -344,6 +380,57 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
       .sort();
 
     expect(routePairs(uploadIngestionRouter)).toEqual(documented);
+  });
+
+  it("keeps every documented API route in the composed source inventory", () => {
+    const yamlPath = path.resolve(__dirname, "../../../../lib/api-spec/openapi.yaml");
+    const documented = new Set(getDocumentedApiRoutes(fs.readFileSync(yamlPath, "utf8")));
+    const registered = new Set(
+      ROUTERS
+        .filter(([name]) => name !== "platform-integrations")
+        .flatMap(([name, router]) =>
+          collectRoutePairs(router, name === "poe" ? "/poe" : ""),
+        )
+        .concat(collectRoutePairs(githubRouter, "/github"))
+        .map((route) => {
+          const separator = route.indexOf(" ");
+          const method = route.slice(0, separator);
+          const expressPath = route.slice(separator + 1);
+          const openApiPath = expressPath
+            .replace(/\*([a-zA-Z_][a-zA-Z0-9_]*)/g, "{$1}")
+            .replace(/:([a-zA-Z_][a-zA-Z0-9_]*)/g, "{$1}");
+          return `${method} ${openApiPath}`;
+        }),
+    );
+
+    const protectedDocumented = new Set(
+      [...documented].filter(
+        (route) => !Object.hasOwn(DOCUMENTED_BUNDLE_ROUTE_EXCLUSIONS, route),
+      ),
+    );
+    const missing = [...protectedDocumented]
+      .filter((route) => !registered.has(route))
+      .sort();
+
+    for (const [route, reason] of Object.entries(DOCUMENTED_BUNDLE_ROUTE_EXCLUSIONS)) {
+      expect(reason.trim(), `Documented route exclusion ${route} needs a reason`).not.toBe("");
+      expect(documented.has(route), `Stale documented route exclusion: ${route}`).toBe(true);
+      expect(registered.has(route), `Route exclusion is no longer absent from Express: ${route}`)
+        .toBe(false);
+    }
+    expect(
+      missing,
+      `Documented API route(s) missing from the composed source inventory: ${missing.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("reports the missing method/path when a documented non-upload route is absent", () => {
+    expect(() =>
+      assertApiRoutesInProductionBundle(
+        'router.get("/healthz")',
+        ["GET /healthz", "POST /query"],
+      ),
+    ).toThrow("POST /query");
   });
 
   it.each(API_DOMAINS)("$name domain is composed", (domain) => {
