@@ -18,7 +18,23 @@ import {
   SETTINGS_EXPORT_VERSION,
   SETTINGS_IMPORT_DENYLIST,
 } from "../settingsBackup";
+import { settingsFieldSchemas } from "../settingsResponseSchema";
 import { DEFAULT_SETTINGS } from "../settingsStore";
+
+describe("settings backup/schema coverage", () => {
+  it("has an import schema for every exported user-facing setting", () => {
+    const missingSchemaKeys = SETTINGS_EXPORT_KEYS.filter(
+      (key) =>
+        !SETTINGS_IMPORT_DENYLIST.has(key) &&
+        !Object.prototype.hasOwnProperty.call(settingsFieldSchemas, key),
+    );
+
+    expect(
+      missingSchemaKeys,
+      `Missing import schema for exported setting key(s): ${missingSchemaKeys.join(", ")}`,
+    ).toEqual([]);
+  });
+});
 
 describe("parseSettingsImport — top-level shape", () => {
   it("rejects null", () => {
