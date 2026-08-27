@@ -135,28 +135,9 @@ export async function createTestDb(): Promise<TestContext> {
     CREATE INDEX user_catalog_saves_user_catalog_idx
       ON user_catalog_saves (user_id, catalog_id);
 
-    CREATE TABLE dataset_collections (
-      id                       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id                  text NOT NULL,
-      name                     text NOT NULL,
-      collection_kind          text NOT NULL DEFAULT 'standard',
-      special_collection_meta  jsonb,
-      created_at               timestamp NOT NULL DEFAULT now(),
-      updated_at               timestamp NOT NULL DEFAULT now(),
-      CONSTRAINT dataset_collections_kind_check
-        CHECK (collection_kind IN ('standard', 'special'))
-    );
-
-    CREATE INDEX dataset_collections_user_id_idx
-      ON dataset_collections (user_id);
-
-    -- Collection names are unique per user, case-insensitively.
-    CREATE UNIQUE INDEX dataset_collections_user_name_uniq
-      ON dataset_collections (user_id, lower(name));
-
     CREATE TABLE dataset_collection_members (
       id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      collection_id   uuid NOT NULL REFERENCES dataset_collections(id) ON DELETE CASCADE,
+      collection_id   uuid NOT NULL,
       dataset_id      uuid REFERENCES custom_datasets(id) ON DELETE CASCADE,
       catalog_save_id uuid REFERENCES user_catalog_saves(id) ON DELETE CASCADE,
       created_at      timestamp NOT NULL DEFAULT now(),
@@ -178,6 +159,30 @@ export async function createTestDb(): Promise<TestContext> {
     CREATE UNIQUE INDEX dataset_collection_members_save_uniq
       ON dataset_collection_members (collection_id, catalog_save_id)
       WHERE catalog_save_id IS NOT NULL;
+
+    CREATE TABLE dataset_collections (
+      id                       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id                  text NOT NULL,
+      name                     text NOT NULL,
+      collection_kind          text NOT NULL DEFAULT 'standard',
+      special_collection_meta  jsonb,
+      default_member_id        uuid REFERENCES dataset_collection_members(id) ON DELETE SET NULL,
+      created_at               timestamp NOT NULL DEFAULT now(),
+      updated_at               timestamp NOT NULL DEFAULT now(),
+      CONSTRAINT dataset_collections_kind_check
+        CHECK (collection_kind IN ('standard', 'special'))
+    );
+
+    CREATE INDEX dataset_collections_user_id_idx
+      ON dataset_collections (user_id);
+
+    -- Collection names are unique per user, case-insensitively.
+    CREATE UNIQUE INDEX dataset_collections_user_name_uniq
+      ON dataset_collections (user_id, lower(name));
+
+    ALTER TABLE dataset_collection_members
+      ADD CONSTRAINT dataset_collection_members_collection_id_fk
+      FOREIGN KEY (collection_id) REFERENCES dataset_collections(id) ON DELETE CASCADE;
 
     CREATE TABLE markers (
       id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),

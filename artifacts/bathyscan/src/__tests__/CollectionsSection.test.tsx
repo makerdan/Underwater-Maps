@@ -273,11 +273,25 @@ beforeEach(() => {
   mocks.removeMemberMutateAsync.mockReset().mockResolvedValue(undefined);
   mocks.deleteDatasetMutateAsync.mockReset();
   mocks.patchCollectionMeta.mockReset().mockImplementation(
-    (_id: string, data: { bgGeoAnchors?: unknown }) =>
-      Promise.resolve({
-        ...COLLECTION_SPECIAL,
-        specialMeta: { ...COLLECTION_SPECIAL.specialMeta, bgGeoAnchors: data.bgGeoAnchors ?? null },
-      }),
+    (id: string, data: { bgGeoAnchors?: unknown; defaultMemberId?: string | null }) => {
+      const current = (
+        currentCollections as Array<{
+          id: string;
+          defaultMemberId?: string | null;
+          specialMeta?: typeof COLLECTION_SPECIAL.specialMeta;
+        }>
+      ).find((item) => item.id === id) ?? COLLECTION_SPECIAL;
+      return Promise.resolve({
+        ...current,
+        defaultMemberId:
+          data.defaultMemberId !== undefined
+            ? data.defaultMemberId
+            : (("defaultMemberId" in current ? current.defaultMemberId : null) ?? null),
+        specialMeta: current.specialMeta
+          ? { ...current.specialMeta, bgGeoAnchors: data.bgGeoAnchors ?? current.specialMeta.bgGeoAnchors }
+          : undefined,
+      });
+    },
   );
   mocks.getCollectionBackground.mockReset().mockResolvedValue(new Blob(["reference"], { type: "image/png" }));
   mocks.postCollectionBackground.mockReset().mockResolvedValue(undefined);
@@ -706,11 +720,68 @@ describe("CollectionsSection", () => {
 // ---------------------------------------------------------------------------
 
 describe("CollectionsSection — special collections", () => {
-  it("standard collections show no settings gear or activate button", () => {
+  it("standard collections show settings but not puzzle activation", () => {
     currentCollections = [COLLECTION_TRIP];
     renderWithProviders(<CollectionsSection />);
-    expect(screen.queryByTestId("btn-collection-settings-col-trip")).not.toBeInTheDocument();
+    expect(screen.getByTestId("btn-collection-settings-col-trip")).toBeInTheDocument();
     expect(screen.queryByTestId("btn-activate-collection-col-trip")).not.toBeInTheDocument();
+  });
+
+  it("saves and clears the default member from a standard collection", async () => {
+    currentCollections = [{ ...COLLECTION_TRIP, collectionKind: "standard", defaultMemberId: null }];
+    renderWithProviders(<CollectionsSection />);
+    fireEvent.click(screen.getByTestId("btn-collection-settings-col-trip"));
+
+    const selector = screen.getByTestId("select-collection-default-col-trip");
+    expect(selector).toHaveValue("");
+    expect(screen.getByRole("option", { name: /Lake Upload \(Uploaded\)/ })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /NOAA Coastal DEM \(Catalog save\)/ })).toBeInTheDocument();
+
+    fireEvent.change(selector, { target: { value: "mem-2" } });
+    await waitFor(() => {
+      expect(mocks.patchCollectionMeta).toHaveBeenCalledWith("col-trip", { defaultMemberId: "mem-2" });
+      expect(screen.getByTestId("collection-default-save-status-col-trip")).toHaveTextContent("saved");
+    });
+
+    fireEvent.change(selector, { target: { value: "" } });
+    await waitFor(() => {
+      expect(mocks.patchCollectionMeta).toHaveBeenCalledWith("col-trip", { defaultMemberId: null });
+    });
+  });
+
+  it("loads the selected member first for Explore and Puzzle activation", async () => {
+    const activateCollection = vi.fn();
+    const original = useTerrainStore.getState().activateCollection;
+    useTerrainStore.setState({ activateCollection });
+    currentSaves = [{ id: "save-1", datasetId: "catalog-1" }];
+    currentCollections = [{
+      ...COLLECTION_TRIP,
+      defaultMemberId: "mem-2",
+      collectionKind: "standard",
+    }];
+    renderWithProviders(<CollectionsSection />);
+    fireEvent.click(screen.getByTestId("btn-load-collection-col-trip"));
+    await waitFor(() => expect(activateCollection).toHaveBeenCalledWith([
+      { datasetId: "catalog-1", source: "user" },
+      { datasetId: "ds-1", source: "user" },
+    ]));
+    useTerrainStore.setState({ activateCollection: original });
+
+    vi.clearAllMocks();
+    const puzzleActivate = vi.fn();
+    useTerrainStore.setState({ activateCollection: puzzleActivate });
+    currentCollections = [{
+      ...COLLECTION_SPECIAL,
+      defaultMemberId: "mem-sp-2",
+    }];
+    currentSaves = [];
+    renderWithProviders(<CollectionsSection />);
+    fireEvent.click(screen.getByTestId("btn-activate-collection-col-sp"));
+    await waitFor(() => expect(puzzleActivate).toHaveBeenCalledWith([
+      { datasetId: "ds-2", source: "user" },
+      { datasetId: "ds-1", source: "user" },
+    ]));
+    useTerrainStore.setState({ activateCollection: original });
   });
 
   it("special create flow posts collectionKind and opens the settings sheet", async () => {

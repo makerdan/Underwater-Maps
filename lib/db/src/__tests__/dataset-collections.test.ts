@@ -271,6 +271,27 @@ describe("dataset_collection_members — cascade behavior (regression guard)", (
     expect(collections).toHaveLength(2);
   });
 
+  it("deleting the selected dataset member clears the collection default", async () => {
+    const collectionId = await insertCollection("u1", "C");
+    const datasetId = await insertDataset("u1");
+    const [member] = await ctx.db
+      .insert(datasetCollectionMembersTable)
+      .values({ collectionId, datasetId })
+      .returning({ id: datasetCollectionMembersTable.id });
+    await ctx.db
+      .update(datasetCollectionsTable)
+      .set({ defaultMemberId: member!.id })
+      .where(eq(datasetCollectionsTable.id, collectionId));
+
+    await ctx.db.delete(customDatasetsTable).where(eq(customDatasetsTable.id, datasetId));
+
+    const [collection] = await ctx.db
+      .select()
+      .from(datasetCollectionsTable)
+      .where(eq(datasetCollectionsTable.id, collectionId));
+    expect(collection!.defaultMemberId).toBeNull();
+  });
+
   it("deleting a catalog save that belongs to a collection succeeds and drops its membership row", async () => {
     const collectionId = await insertCollection("u1", "C");
     const catalogSaveId = await insertSave("u1");

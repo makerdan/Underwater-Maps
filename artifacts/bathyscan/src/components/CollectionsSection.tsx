@@ -254,7 +254,7 @@ const CollectionRow: React.FC<{
   onDownloadOffline?: () => void;
   /** Rollup offline status across the collection's members ("none" hides the badge). */
   offlineRollup?: PackRollupStatus;
-  /** Special collections only: open the settings sheet (bg image, anchors, revisions). */
+  /** Open the collection settings sheet. */
   onOpenSettings?: () => void;
   /** Special collections only: load members + enter puzzle mode + restore layout. */
   onActivate?: () => void;
@@ -406,7 +406,11 @@ const CollectionRow: React.FC<{
               <button
                 data-testid={`btn-collection-settings-${collection.id}`}
                 aria-label={`Settings for collection "${collection.name}"`}
-                title="Collection settings: reference image, opacity, geo anchors, layout revisions"
+                title={
+                  collection.collectionKind === "special"
+                    ? "Collection settings: default dataset, reference image, opacity, geo anchors, layout revisions"
+                    : "Collection settings: default dataset"
+                }
                 onClick={onOpenSettings}
                 style={{ background: "transparent", border: "none", color: "#67e8f9", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "2px 4px", flexShrink: 0 }}
               >⚙</button>
@@ -770,7 +774,7 @@ export const CollectionsSection: React.FC = () => {
     c: DatasetCollection,
     replacements: Record<string, string> = {},
   ): Promise<{
-    entries: Array<{ datasetId: string; source: "user" }>;
+    entries: Array<{ datasetId: string; source: "user"; memberId: string }>;
     unresolvedMemberNames: string[];
     candidates: RecoveryCandidatesByName;
   }> => {
@@ -837,12 +841,12 @@ export const CollectionsSection: React.FC = () => {
       }
     }
 
-    const entries: Array<{ datasetId: string; source: "user" }> = [];
+    const entries: Array<{ datasetId: string; source: "user"; memberId: string }> = [];
     const unresolvedMemberNames: string[] = [];
     for (const member of c.members) {
       const resolvedId = nativeDatasetId(member);
       if (resolvedId) {
-        entries.push({ datasetId: resolvedId, source: "user" });
+        entries.push({ datasetId: resolvedId, source: "user", memberId: member.id });
         continue;
       }
       const selectedKey = replacements[member.name];
@@ -853,9 +857,17 @@ export const CollectionsSection: React.FC = () => {
             `The selected replacement for "${member.name}" is no longer in My Library. Try again.`,
           );
         }
-        entries.push({ datasetId: candidate.datasetId, source: "user" });
+        entries.push({ datasetId: candidate.datasetId, source: "user", memberId: member.id });
       } else {
         unresolvedMemberNames.push(member.name);
+      }
+    }
+
+    if (c.defaultMemberId) {
+      const preferredIndex = entries.findIndex((entry) => entry.memberId === c.defaultMemberId);
+      if (preferredIndex > 0) {
+        const [preferred] = entries.splice(preferredIndex, 1);
+        entries.unshift(preferred!);
       }
     }
 
@@ -894,7 +906,9 @@ export const CollectionsSection: React.FC = () => {
       setRecoveryCandidates((current) => ({ ...current, [c.id]: resolved.candidates }));
       setSelectedRecoveryCandidates((current) => ({ ...current, [c.id]: {} }));
       terrain.setCollectionScope(c.id, resolved.entries.map((entry) => entry.datasetId));
-      terrain.activateCollection(resolved.entries);
+      terrain.activateCollection(
+        resolved.entries.map(({ datasetId, source }) => ({ datasetId, source })),
+      );
       await useSpecialCollectionStore.getState().activateForPuzzle(c, resolved.unresolvedMemberNames);
       if (useTerrainStore.getState().collectionScopeId === c.id) {
         useUiStore.getState().setOverviewOpen(true);
@@ -952,13 +966,14 @@ export const CollectionsSection: React.FC = () => {
         throw new Error("No collection members are available to load yet.");
       }
       const terrainStore = useTerrainStore.getState();
+      const terrainEntries = entries.map(({ datasetId, source }) => ({ datasetId, source }));
       entries.forEach((entry) => terrainStore.setDatasetFetchError(entry.datasetId, false));
       pendingPrimaryLoadRef.current = {
         collectionId: c.id,
         datasetId: entries[0]!.datasetId,
       };
       terrainStore.setCollectionScope(c.id, entries.map((entry) => entry.datasetId));
-      terrainStore.activateCollection(entries);
+      terrainStore.activateCollection(terrainEntries);
       // A normal collection load replaces any puzzle overlay/layout and must
       // not leave the user in the Overview-only presentation.
       useSpecialCollectionStore.getState().deactivate();
@@ -1051,7 +1066,9 @@ export const CollectionsSection: React.FC = () => {
       // entries and append only members that have materialized since then. If
       // the user switched collections (or resumed ordinary exploration) during
       // the refetch, do not resurrect this collection's old members.
-      useTerrainStore.getState().addCollectionMembers(entries);
+      useTerrainStore.getState().addCollectionMembers(
+        entries.map(({ datasetId, source }) => ({ datasetId, source })),
+      );
     } catch (err) {
       if (err instanceof CollectionVerificationError) {
         setVerificationErrors((errors) => ({ ...errors, [c.id]: err.message }));
@@ -1240,11 +1257,11 @@ export const CollectionsSection: React.FC = () => {
               memberRemovalErrors={memberRemovalErrors}
               onDownloadOffline={() => useOfflineScopeStore.getState().requestScopeDownload({ kind: "collection", collectionId: c.id })}
               offlineRollup={collectionRollup(c)}
-              onOpenSettings={c.collectionKind === "special" ? () => {
+              onOpenSettings={() => {
                 settingsOpenerRef.current =
                   document.activeElement instanceof HTMLElement ? document.activeElement : null;
                 setSettingsForId(c.id);
-              } : undefined}
+              }}
               onActivate={c.collectionKind === "special" ? () => void handleActivate(c) : undefined}
               onLoad={() => void handleLoad(c)}
                onRetry={() => void handleRetry(c)}

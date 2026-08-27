@@ -137,6 +137,7 @@ const datasetCollectionsTableStub = {
   name: "name",
   collectionKind: "collectionKind",
   specialMeta: "specialMeta",
+  defaultMemberId: "defaultMemberId",
   createdAt: "createdAt",
   updatedAt: "updatedAt",
 };

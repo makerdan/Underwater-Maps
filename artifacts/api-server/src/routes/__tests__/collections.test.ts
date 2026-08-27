@@ -77,7 +77,7 @@ vi.mock("@workspace/db", async () => {
   };
 
   const datasetCollectionsTable = mkTable("dataset_collections", [
-    "id", "userId", "name", "collectionKind", "specialMeta", "createdAt", "updatedAt",
+    "id", "userId", "name", "collectionKind", "specialMeta", "defaultMemberId", "createdAt", "updatedAt",
   ]);
   const datasetCollectionMembersTable = mkTable("dataset_collection_members", [
     "id", "collectionId", "datasetId", "catalogSaveId", "createdAt",
@@ -224,7 +224,10 @@ vi.mock("@workspace/db", async () => {
         if (table === "dataset_collections") {
           for (const c of matched) {
             for (let i = state.members.length - 1; i >= 0; i--) {
-              if (state.members[i]!["collectionId"] === c["id"]) state.members.splice(i, 1);
+              if (state.members[i]!["collectionId"] === c["id"]) {
+                if (state.members[i]!["id"] === c["defaultMemberId"]) c["defaultMemberId"] = null;
+                state.members.splice(i, 1);
+              }
             }
           }
         }
@@ -274,6 +277,7 @@ function seedCollection(userId: string, name: string): string {
     name,
     collectionKind: "standard",
     specialMeta: null,
+    defaultMemberId: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   });
@@ -307,6 +311,7 @@ function seedSpecialCollection(userId: string, name: string, meta?: Partial<Meta
     name,
     collectionKind: "special",
     specialMeta: { ...emptyMeta(), ...meta },
+    defaultMemberId: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   });
@@ -691,6 +696,39 @@ describe("PATCH /api/user/collections/:id/meta", () => {
       });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("invalid_request");
+  });
+
+  it("allows standard collections to set and clear a member-row default", async () => {
+    const cid = seedCollection("user-a", "Plain");
+    const dsId = seedDataset("user-a", "Lake");
+    const memberId = seedMember(cid, { datasetId: dsId });
+
+    const saved = await request(app)
+      .patch(`/api/user/collections/${cid}/meta`)
+      .send({ defaultMemberId: memberId });
+    expect(saved.status).toBe(200);
+    expect(saved.body.defaultMemberId).toBe(memberId);
+    expect(state.collections[0]).toMatchObject({ defaultMemberId: memberId });
+
+    const cleared = await request(app)
+      .patch(`/api/user/collections/${cid}/meta`)
+      .send({ defaultMemberId: null });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.defaultMemberId).toBeNull();
+  });
+
+  it("rejects a default member that belongs to another collection without disclosing it", async () => {
+    const first = seedCollection("user-a", "First");
+    const second = seedCollection("user-a", "Second");
+    const dsId = seedDataset("user-a", "Lake");
+    const memberId = seedMember(first, { datasetId: dsId });
+
+    const res = await request(app)
+      .patch(`/api/user/collections/${second}/meta`)
+      .send({ defaultMemberId: memberId });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_default_member");
+    expect(res.body.details).not.toContain(memberId);
   });
 
   it("rejects an anchor list that is not exactly two points", async () => {

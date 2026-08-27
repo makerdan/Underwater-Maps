@@ -2437,7 +2437,7 @@ export const getPatchUserCollectionsIdMetaUrl = (id: string,) => {
 }
 
 /**
- * @summary Update special-collection metadata (background opacity, geo anchors, active revision)
+ * @summary Update collection metadata (default member, or special-collection background opacity, geo anchors, active revision)
  */
 export const patchUserCollectionsIdMeta = async (id: string,
     patchCollectionMetaBody: PatchCollectionMetaBody, options?: RequestInit): Promise<DatasetCollection> => {
@@ -2487,7 +2487,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type PatchUserCollectionsIdMetaMutationError = ErrorType<ApiError>
 
     /**
- * @summary Update special-collection metadata (background opacity, geo anchors, active revision)
+ * @summary Update collection metadata (default member, or special-collection background opacity, geo anchors, active revision)
  */
 export const usePatchUserCollectionsIdMeta = <TError = ErrorType<ApiError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchUserCollectionsIdMeta>>, TError,{id: string;data: BodyType<PatchCollectionMetaBody>}, TContext>, request?: SecondParameter<typeof customFetch>}

@@ -1,0 +1,2 @@
+ALTER TABLE "dataset_collections" ADD COLUMN "default_member_id" uuid;--> statement-breakpoint
+ALTER TABLE "dataset_collections" ADD CONSTRAINT "dataset_collections_default_member_id_fk" FOREIGN KEY ("default_member_id") REFERENCES "public"."dataset_collection_members"("id") ON DELETE set null ON UPDATE no action;

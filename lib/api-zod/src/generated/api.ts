@@ -1024,6 +1024,7 @@ export const GetUserCollectionsResponseItem = zod.object({
 }).describe('A named, timestamped snapshot of the puzzle layout')).describe('Named layout revision history (max 20, oldest dropped)'),
   "activeRevisionId": zod.string().nullable().describe('Which revision is currently active (null = none)')
 }).optional().describe('Puzzle-layout metadata stored on special collections'),
+  "defaultMemberId": zod.string().nullable().describe('Membership-row UUID to promote first when loading this collection; null selects the first available member'),
   "members": zod.array(zod.object({
   "id": zod.string().describe('Membership row UUID (use for removal)'),
   "kind": zod.enum(['dataset', 'catalogSave']),
@@ -1111,6 +1112,7 @@ export const PatchUserCollectionsIdRenameResponse = zod.object({
 }).describe('A named, timestamped snapshot of the puzzle layout')).describe('Named layout revision history (max 20, oldest dropped)'),
   "activeRevisionId": zod.string().nullable().describe('Which revision is currently active (null = none)')
 }).optional().describe('Puzzle-layout metadata stored on special collections'),
+  "defaultMemberId": zod.string().nullable().describe('Membership-row UUID to promote first when loading this collection; null selects the first available member'),
   "members": zod.array(zod.object({
   "id": zod.string().describe('Membership row UUID (use for removal)'),
   "kind": zod.enum(['dataset', 'catalogSave']),
@@ -1154,7 +1156,7 @@ export const DeleteUserCollectionsIdMembersMemberIdParams = zod.object({
 
 
 /**
- * @summary Update special-collection metadata (background opacity, geo anchors, active revision)
+ * @summary Update collection metadata (default member, or special-collection background opacity, geo anchors, active revision)
  */
 export const PatchUserCollectionsIdMetaParams = zod.object({
   "id": zod.coerce.string()
@@ -1179,6 +1181,7 @@ export const patchUserCollectionsIdMetaBodyBgGeoAnchorsMax = 2;
 
 
 export const PatchUserCollectionsIdMetaBody = zod.object({
+  "defaultMemberId": zod.string().nullish().describe('Membership-row UUID to promote first when loading this collection; null restores automatic first-available selection'),
   "bgOpacity": zod.number().min(patchUserCollectionsIdMetaBodyBgOpacityMin).max(patchUserCollectionsIdMetaBodyBgOpacityMax).optional(),
   "bgGeoAnchors": zod.array(zod.object({
   "lon": zod.number().min(patchUserCollectionsIdMetaBodyBgGeoAnchorsItemLonMin).max(patchUserCollectionsIdMetaBodyBgGeoAnchorsItemLonMax),
@@ -1187,7 +1190,7 @@ export const PatchUserCollectionsIdMetaBody = zod.object({
   "imgY": zod.number().min(patchUserCollectionsIdMetaBodyBgGeoAnchorsItemImgYMin)
 }).describe('A control point mapping an image pixel to a geographic coordinate')).min(patchUserCollectionsIdMetaBodyBgGeoAnchorsMin).max(patchUserCollectionsIdMetaBodyBgGeoAnchorsMax).nullish(),
   "activeRevisionId": zod.string().nullish()
-}).describe('Partial update of special-collection metadata; at least one field must be present')
+}).describe('Partial update of collection metadata; defaultMemberId is supported for all collections, other fields require a special collection')
 
 export const patchUserCollectionsIdMetaResponseSpecialMetaBgOpacityMin = 0;
 export const patchUserCollectionsIdMetaResponseSpecialMetaBgOpacityMax = 1;
@@ -1243,6 +1246,7 @@ export const PatchUserCollectionsIdMetaResponse = zod.object({
 }).describe('A named, timestamped snapshot of the puzzle layout')).describe('Named layout revision history (max 20, oldest dropped)'),
   "activeRevisionId": zod.string().nullable().describe('Which revision is currently active (null = none)')
 }).optional().describe('Puzzle-layout metadata stored on special collections'),
+  "defaultMemberId": zod.string().nullable().describe('Membership-row UUID to promote first when loading this collection; null selects the first available member'),
   "members": zod.array(zod.object({
   "id": zod.string().describe('Membership row UUID (use for removal)'),
   "kind": zod.enum(['dataset', 'catalogSave']),

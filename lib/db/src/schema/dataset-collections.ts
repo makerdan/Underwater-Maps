@@ -1,4 +1,14 @@
-import { pgTable, text, timestamp, uuid, index, uniqueIndex, check, jsonb } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  index,
+  uniqueIndex,
+  check,
+  jsonb,
+  type AnyPgColumn,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { customDatasetsTable } from "./custom-datasets.js";
 import { userCatalogSavesTable } from "./user-catalog-saves.js";
@@ -94,6 +104,10 @@ export const datasetCollectionsTable = pgTable(
     name: text("name").notNull(),
     collectionKind: text("collection_kind").notNull().default("standard"),
     specialMeta: jsonb("special_collection_meta").$type<SpecialCollectionMeta>(),
+    defaultMemberId: uuid("default_member_id").references(
+      (): AnyPgColumn => datasetCollectionMembersTable.id,
+      { onDelete: "set null" },
+    ),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

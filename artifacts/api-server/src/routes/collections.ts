@@ -268,6 +268,7 @@ function collectionToJson(
     name: row.name,
     collectionKind: kind,
     ...(kind === "special" ? { specialMeta: metaOf(row) } : {}),
+    defaultMemberId: row.defaultMemberId ?? null,
     members,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -578,17 +579,19 @@ router.patch("/user/collections/:id/meta", requireAuth, dataMutationRateLimit, v
   }
   const id = idParsed.data;
   const body = res.locals.parsedBody as {
+    defaultMemberId?: string | null;
     bgOpacity?: number;
     bgGeoAnchors?: SpecialCollectionMeta["bgGeoAnchors"];
     activeRevisionId?: string | null;
   };
 
   if (
+    body.defaultMemberId === undefined &&
     body.bgOpacity === undefined &&
     body.bgGeoAnchors === undefined &&
     body.activeRevisionId === undefined
   ) {
-    res.status(400).json({ error: "empty_patch", details: "Provide at least one of bgOpacity, bgGeoAnchors, activeRevisionId" });
+    res.status(400).json({ error: "empty_patch", details: "Provide at least one collection metadata field" });
     return;
   }
 
@@ -597,9 +600,38 @@ router.patch("/user/collections/:id/meta", requireAuth, dataMutationRateLimit, v
     res.status(404).json({ error: "not_found", details: "Collection not found" });
     return;
   }
-  if (collection.collectionKind !== "special") {
+  const hasSpecialFields =
+    body.bgOpacity !== undefined ||
+    body.bgGeoAnchors !== undefined ||
+    body.activeRevisionId !== undefined;
+  if (hasSpecialFields && collection.collectionKind !== "special") {
     res.status(400).json({ error: "not_special", details: "Only special collections carry puzzle metadata" });
     return;
+  }
+
+  if (body.defaultMemberId !== undefined && body.defaultMemberId !== null) {
+    const memberParsed = MemberIdParamSchema.safeParse(body.defaultMemberId);
+    if (!memberParsed.success) {
+      res.status(400).json({
+        error: "invalid_default_member",
+        details: "defaultMemberId must be a valid membership-row UUID belonging to this collection",
+      });
+      return;
+    }
+    const [member] = await db
+      .select({ id: datasetCollectionMembersTable.id })
+      .from(datasetCollectionMembersTable)
+      .where(and(
+        eq(datasetCollectionMembersTable.id, memberParsed.data),
+        eq(datasetCollectionMembersTable.collectionId, id),
+      ));
+    if (!member) {
+      res.status(400).json({
+        error: "invalid_default_member",
+        details: "defaultMemberId must reference a member of this collection",
+      });
+      return;
+    }
   }
 
   if (body.bgGeoAnchors !== undefined && body.bgGeoAnchors !== null) {
@@ -627,7 +659,15 @@ router.patch("/user/collections/:id/meta", requireAuth, dataMutationRateLimit, v
     ...(body.bgGeoAnchors !== undefined ? { bgGeoAnchors: body.bgGeoAnchors } : {}),
     ...(body.activeRevisionId !== undefined ? { activeRevisionId: body.activeRevisionId } : {}),
   };
-  const updated = await saveMeta(userId, id, next);
+  const [updated] = await db
+    .update(datasetCollectionsTable)
+    .set({
+      ...(hasSpecialFields ? { specialMeta: next } : {}),
+      ...(body.defaultMemberId !== undefined ? { defaultMemberId: body.defaultMemberId } : {}),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(datasetCollectionsTable.id, id), eq(datasetCollectionsTable.userId, userId)))
+    .returning();
   if (!updated) {
     res.status(404).json({ error: "not_found", details: "Collection not found" });
     return;

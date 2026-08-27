@@ -1106,7 +1106,7 @@ paths:
     patch:
       operationId: patchUserCollectionsIdMeta
       tags: [user-datasets]
-      summary: Update special-collection metadata (background opacity, geo anchors, active revision)
+      summary: Update collection metadata (default member, or special-collection background opacity, geo anchors, active revision)
       security:
         - clerkAuth: []
       parameters:
@@ -1129,7 +1129,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/DatasetCollection"
         "400":
-          description: Invalid opacity, anchors, revision reference, or non-special collection
+          description: Invalid default member, opacity, anchors, revision reference, or non-special collection
           content:
             application/json:
               schema:
@@ -8011,6 +8011,10 @@ components:
           description: Special collections carry puzzle-layout metadata in specialMeta
         specialMeta:
           $ref: "#/components/schemas/SpecialCollectionMeta"
+        defaultMemberId:
+          type: string
+          nullable: true
+          description: Membership-row UUID to promote first when loading this collection; null selects the first available member
         members:
           type: array
           items:
@@ -8025,6 +8029,7 @@ components:
         - id
         - name
         - collectionKind
+        - defaultMemberId
         - members
         - createdAt
         - updatedAt
@@ -8163,8 +8168,12 @@ components:
 
     PatchCollectionMetaBody:
       type: object
-      description: Partial update of special-collection metadata; at least one field must be present
+      description: Partial update of collection metadata; defaultMemberId is supported for all collections, other fields require a special collection
       properties:
+        defaultMemberId:
+          type: string
+          nullable: true
+          description: Membership-row UUID to promote first when loading this collection; null restores automatic first-available selection
         bgOpacity:
           type: number
           minimum: 0

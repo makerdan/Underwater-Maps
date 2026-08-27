@@ -77,6 +77,16 @@ export function extractTableSlices(content) {
     const slice = content.slice(start, end);
     slices.set(name, (slices.get(name) ?? "") + "\n" + slice);
   }
+  // PostgreSQL permits circular foreign keys to be added after both tables
+  // exist. Include those statements with their target table so the
+  // table-definition comparison sees the same relationship as Drizzle.
+  for (const alter of content.matchAll(
+    /alter\s+table\s+(?:if\s+exists\s+)?["'`]?(\w+)["'`]?\s+add\s+constraint[\s\S]*?foreign\s+key\s*\(\s*["'`]?(\w+)["'`]?\s*\)[\s\S]*?references\s+["'`]?(\w+)["'`]?\s*\([^)]*\)(?:\s+on\s+delete\s+([a-z ]+))?/gi,
+  )) {
+    const table = alter[1].toLowerCase();
+    const slice = slices.get(table);
+    if (slice) slices.set(table, `${slice}\n${alter[0]}`);
+  }
   return slices;
 }
 
@@ -572,6 +582,16 @@ export function extractDdlTableDefinitions(slice) {
       onDelete: (ref[1] ?? "no action").trim().toLowerCase(),
     };
     columns.set(name, property);
+  }
+  for (const alter of slice.matchAll(
+    /alter\s+table\s+(?:if\s+exists\s+)?["'`]?(\w+)["'`]?\s+add\s+constraint[\s\S]*?foreign\s+key\s*\(\s*["'`]?(\w+)["'`]?\s*\)[\s\S]*?references\s+["'`]?(\w+)["'`]?\s*\([^)]*\)(?:\s+on\s+delete\s+([a-z ]+))?/gi,
+  )) {
+    const property = columns.get(alter[2].toLowerCase());
+    if (!property) continue;
+    property.references = {
+      table: alter[3].toLowerCase(),
+      onDelete: (alter[4] ?? "no action").trim().toLowerCase(),
+    };
   }
   return { columns, checks };
 }

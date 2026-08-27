@@ -151,7 +151,6 @@ export const CollectionSettingsSheet: React.FC<{
 }> = ({ collection, onClose, returnFocusTarget = null }) => {
   const qc = useQueryClient();
   const meta = collection.specialMeta;
-
   // ---- Background image preview -----------------------------------------
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [imgNatural, setImgNatural] = useState<{ w: number; h: number } | null>(null);
@@ -159,6 +158,44 @@ export const CollectionSettingsSheet: React.FC<{
   const [removingImage, setRemovingImage] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [defaultMemberId, setDefaultMemberId] = useState<string | null>(
+    collection.defaultMemberId,
+  );
+  const [defaultSaveState, setDefaultSaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+
+  useEffect(() => {
+    setDefaultMemberId(collection.defaultMemberId);
+    setDefaultSaveState("idle");
+  }, [collection.id, collection.defaultMemberId]);
+
+  const handleDefaultMemberChange = useCallback(
+    async (memberId: string) => {
+      if (defaultSaveState === "saving") return;
+      const nextDefault = memberId || null;
+      setDefaultMemberId(nextDefault);
+      setDefaultSaveState("saving");
+      setError(null);
+      try {
+        const updated = await patchUserCollectionsIdMeta(collection.id, {
+          defaultMemberId: nextDefault,
+        });
+        setDefaultMemberId(updated.defaultMemberId);
+        qc.setQueryData<DatasetCollection[]>(
+          getGetUserCollectionsQueryKey(),
+          (previous) => previous?.map((item) => (item.id === updated.id ? updated : item)),
+        );
+        await qc.invalidateQueries({ queryKey: getGetUserCollectionsQueryKey() });
+        setDefaultSaveState("saved");
+      } catch {
+        setDefaultMemberId(collection.defaultMemberId);
+        setDefaultSaveState("error");
+        setError("Could not save the default dataset. Please try again.");
+      }
+    },
+    [collection.defaultMemberId, collection.id, defaultSaveState, qc],
+  );
   const [imageLoadState, setImageLoadState] = useState<"none" | "loading" | "loaded" | "error">(
     () => meta?.bgImageKey ? "loading" : "none",
   );
@@ -561,6 +598,7 @@ export const CollectionSettingsSheet: React.FC<{
   const isActiveCollection =
     useSpecialCollectionStore((s) => s.active?.collectionId) === collection.id;
   const isBusy =
+    defaultSaveState === "saving" ||
     uploading ||
     removingImage ||
     anchorsSaving ||
@@ -773,6 +811,57 @@ export const CollectionSettingsSheet: React.FC<{
           </div>
         )}
 
+        <div style={sectionTitleStyle}>Default dataset</div>
+        <select
+          data-testid={`select-collection-default-${collection.id}`}
+          aria-label="Default dataset"
+          value={defaultMemberId ?? ""}
+          onChange={(e) => void handleDefaultMemberChange(e.target.value)}
+          disabled={defaultSaveState === "saving"}
+          style={{
+            width: "100%",
+            background: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(0,229,255,0.25)",
+            borderRadius: 3,
+            color: "#e2e8f0",
+            padding: "5px 7px",
+            fontFamily: "inherit",
+            fontSize: "calc(12px * var(--bs-font-scale, 1))",
+          }}
+        >
+          <option value="">Automatic — first available</option>
+          {collection.members.map((member) => (
+            <option key={member.id} value={member.id}>
+              {member.name} ({member.kind === "dataset" ? "Uploaded" : "Catalog save"})
+            </option>
+          ))}
+        </select>
+        <div
+          data-testid={`collection-default-save-status-${collection.id}`}
+          role="status"
+          style={{
+            minHeight: 16,
+            marginTop: 3,
+            color:
+              defaultSaveState === "error"
+                ? "#fca5a5"
+                : defaultSaveState === "saved"
+                  ? "#86efac"
+                  : "#94a3b8",
+            fontSize: "calc(11px * var(--bs-font-scale, 1))",
+          }}
+        >
+          {defaultSaveState === "saving"
+            ? "Saving default dataset…"
+            : defaultSaveState === "saved"
+              ? "Default dataset saved."
+              : defaultSaveState === "error"
+                ? "Default dataset was not saved."
+                : ""}
+        </div>
+
+        {collection.collectionKind === "special" && (
+        <>
         {/* (a) Background image upload */}
         <div style={sectionTitleStyle}>Reference image</div>
         <div
@@ -1146,6 +1235,8 @@ export const CollectionSettingsSheet: React.FC<{
               </button>
             </div>
           </div>
+        )}
+        </>
         )}
       </div>
     </div>

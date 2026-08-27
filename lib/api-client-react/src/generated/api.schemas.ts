@@ -2086,15 +2086,19 @@ export interface DatasetCollection {
   /** Special collections carry puzzle-layout metadata in specialMeta */
   collectionKind: DatasetCollectionCollectionKind;
   specialMeta?: SpecialCollectionMeta;
+  /** Membership-row UUID to promote first when loading this collection; null selects the first available member */
+  defaultMemberId: string | null;
   members: DatasetCollectionMember[];
   createdAt: string;
   updatedAt: string;
 }
 
 /**
- * Partial update of special-collection metadata; at least one field must be present
+ * Partial update of collection metadata; defaultMemberId is supported for all collections, other fields require a special collection
  */
 export interface PatchCollectionMetaBody {
+  /** Membership-row UUID to promote first when loading this collection; null restores automatic first-available selection */
+  defaultMemberId?: string | null;
   /**
      * @minimum 0
      * @maximum 1
