@@ -91,6 +91,17 @@ function assertViewportRelative(el: HTMLElement | null, label: string) {
   ).toBe(true);
 }
 
+function assertDesktopWidthAndViewportCap(size: string) {
+  // CSSOM implementations either preserve the source expression or normalize
+  // 520px + 2.25in to 736px (96 CSS px per inch).
+  const hasDesktopWidth =
+    size.includes("736px") ||
+    (size.includes("520px") && size.includes("2.25in"));
+  expect(hasDesktopWidth, `expected the 2.25-inch desktop width in "${size}"`).toBe(true);
+  expect(size, `expected a viewport width cap in "${size}"`).toContain("100vw");
+  expect(size, `expected a 32px viewport inset in "${size}"`).toMatch(/-32px/);
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -111,7 +122,7 @@ describe("Sidebar shell — responsive minWidth", () => {
     assertViewportRelative(el, "SidebarSection");
   });
 
-  it("wide SidebarSectionGroup adds two CSS inches while staying viewport-safe", () => {
+  it("wide SidebarSectionGroup adds 2.25 CSS inches while staying viewport-safe", () => {
     const { getByTestId } = render(
       <SidebarSectionGroup wide testId="wide-library-shell">
         <SidebarSection id="mapData" title="Your Data">
@@ -122,10 +133,7 @@ describe("Sidebar shell — responsive minWidth", () => {
 
     const shell = getByTestId("wide-library-shell");
     for (const size of [shell.style.width, shell.style.minWidth, shell.style.maxWidth]) {
-      // The CSSOM resolves 520px + 2in to its required 712 CSS-pixel target.
-      expect(size).toContain("712px");
-      expect(size).toContain("100vw");
-      expect(size).toContain("-32px");
+      assertDesktopWidthAndViewportCap(size);
     }
   });
 

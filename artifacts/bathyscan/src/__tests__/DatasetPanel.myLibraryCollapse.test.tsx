@@ -2,9 +2,9 @@
  * MY LIBRARY collapse / expand wiring tests.
  *
  * Verifies that:
- *   1. Clicking the "▲ MY LIBRARY" header collapses the library content
- *      and flips the chevron to "▾ MY LIBRARY".
- *   2. Clicking again re-expands, restoring "▲ MY LIBRARY".
+ *   1. Clicking the "▾ MY LIBRARY" header collapses the library content
+ *      and flips the chevron to "▸ MY LIBRARY".
+ *   2. Clicking again re-expands, restoring "▾ MY LIBRARY".
  *   3. The collapse state is driven through panelCollapseStore (the real Zustand
  *      store is used here — NOT mocked — so toggle() actually mutates state and
  *      triggers a React re-render, giving us end-to-end wiring coverage).
@@ -349,36 +349,39 @@ describe("DatasetPanel — MY LIBRARY collapse / expand", () => {
     toastSpy.mockClear();
   });
 
-  it("starts expanded: shows ▲ MY LIBRARY and renders MySavesSection", () => {
+  it("starts expanded: shows ▾ MY LIBRARY and renders MySavesSection", () => {
     render(<DatasetPanel />);
 
-    // Header should show the expanded chevron.
-    expect(getMyLibraryBtn()).toHaveTextContent("▲ MY LIBRARY");
+    // Header should show the expanded chevron and state.
+    expect(getMyLibraryBtn()).toHaveTextContent(/▾\s*MY LIBRARY/);
+    expect(getMyLibraryBtn()).toHaveAttribute("aria-expanded", "true");
 
     // The saves section should be visible in the expanded state.
     expect(screen.getByTestId("my-saves-section")).toBeInTheDocument();
   });
 
-  it("clicking the header collapses the section and flips the chevron", () => {
+  it("clicking the header collapses the section and flips the chevron to ▸", () => {
     render(<DatasetPanel />);
 
     fireEvent.click(getMyLibraryBtn());
 
     // Chevron should flip to indicate collapsed state.
-    expect(getMyLibraryBtn()).toHaveTextContent("▾ MY LIBRARY");
+    expect(getMyLibraryBtn()).toHaveTextContent(/▸\s*MY LIBRARY/);
+    expect(getMyLibraryBtn()).toHaveAttribute("aria-expanded", "false");
 
     // The collapse uses display:none, not unmount — check visibility not presence.
     expect(screen.queryByTestId("my-saves-section")).not.toBeVisible();
   });
 
-  it("clicking the header twice re-expands and restores ▲ MY LIBRARY", () => {
+  it("clicking the header twice re-expands and restores ▾ MY LIBRARY", () => {
     render(<DatasetPanel />);
 
     const btn = getMyLibraryBtn();
     fireEvent.click(btn); // collapse
     fireEvent.click(btn); // expand
 
-    expect(btn).toHaveTextContent("▲ MY LIBRARY");
+    expect(btn).toHaveTextContent(/▾\s*MY LIBRARY/);
+    expect(btn).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByTestId("my-saves-section")).toBeInTheDocument();
   });
 

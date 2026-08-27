@@ -80,6 +80,14 @@ vi.mock("@/lib/uiStore", () => ({
   useUiStore: () => vi.fn(),
 }));
 
+// Use the same compatibility boundary as the application. This keeps the
+// isolated dialog tests independent of ClerkProvider while still exercising
+// GpsImportDialog's normal auth hooks.
+vi.mock("@/lib/clerkCompat", async () => {
+  const { mockClerkCompat } = await import("@/__tests__/testHelpers.auth");
+  return mockClerkCompat();
+});
+
 vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));

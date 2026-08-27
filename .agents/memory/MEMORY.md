@@ -147,3 +147,4 @@
 - [Mobile Playwright GPU crash](mobile-playwright-gpu-crash.md) — host Chromium may crash before Pixel-device contexts stabilize; classify those runs as environment-limited.
 - [JSDOM reload spying](jsdom-location-reload-spy.md) — Location.reload is non-redefinable; stub the global window before invoking reload handlers.
 - [Validation-lock suite aggregation](validation-lock-suite-aggregation.md) — scripts lock tests can hang in the aggregate unit command while isolated retries remain green.
+- [Managed validation task environment](managed-validation-task-env.md) — managed validation workflows may omit TASK_PLAN_FILE; use the resolved tier directly when lock evidence matters.
