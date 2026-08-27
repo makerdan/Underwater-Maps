@@ -27,6 +27,11 @@ function waitForExit(child) {
 test("unit entry points use dedicated timeout guards", () => {
   assert.match(rootPackage.scripts["test:unit"], /run-with-timeout\.mjs rootUnit/);
   assert.match(scriptsPackage.scripts["test:unit"], /run-with-timeout\.mjs scriptsUnit/);
+  assert.match(
+    scriptsPackage.scripts["test:unit"],
+    /--test-concurrency=1/,
+    "scripts unit tests must run serially so lock subprocess tests cannot overlap other script-test files",
+  );
   assert.ok(budgets.rootUnit.runBudgetMs > 0);
   assert.ok(budgets.scriptsUnit.runBudgetMs > 0);
 });
