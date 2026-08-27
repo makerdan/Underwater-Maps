@@ -10,6 +10,7 @@ import {
   useIsServiceUnavailable,
   useHealthResponseTime,
   setClerkLoaded,
+  clearSessionExpired,
   signalSessionExpired,
   useIsSessionExpired,
 } from "@/lib/queryClient";
@@ -2704,6 +2705,7 @@ function SessionExpiredBanner() {
 export function ClerkAuthTokenWirer() {
   const { session } = useClerk();
   const { user } = useUser();
+  const activeSessionRef = useRef<typeof session>(null);
 
   // Persist display name to localStorage on each successful sign-in so the
   // OfflineReadOnlyBanner can show it while the device is offline.
@@ -2719,24 +2721,38 @@ export function ClerkAuthTokenWirer() {
 
   // Wire token getter into the API client.
   useEffect(() => {
+    activeSessionRef.current = session;
     if (session) {
+      const sessionForEffect = session;
+      const isCurrentSession = () => activeSessionRef.current === sessionForEffect;
+      const onExpired = DEV_AUTH_BYPASS
+        ? () => {}
+        : () => {
+            if (isCurrentSession()) signalSessionExpired();
+          };
+
       setClerkLoaded(true);
       setAuthTokenGetter(() =>
-        getTokenWithRetry(
-          () => session.getToken(),
-          // In dev-auth-bypass mode getToken() always returns null (the stub
-          // has no real Clerk session), but API calls succeed via the
-          // x-e2e-user-id header patch.  Don't fire the session-expired banner
-          // for an expected null; use a no-op so the banner is never shown.
-          DEV_AUTH_BYPASS ? () => {} : signalSessionExpired,
-        ),
+        getTokenWithRetry(() => sessionForEffect.getToken(), onExpired).then((token) => {
+          // A token from an effect that has already been replaced must not
+          // recover the newly attached session's state.
+          if (token !== null && isCurrentSession()) clearSessionExpired();
+          return token;
+        }),
       );
     } else {
       setClerkLoaded(false);
       setAuthTokenGetter(null);
     }
     return () => {
-      setAuthTokenGetter(null);
+      // React runs this cleanup before installing the next session effect.
+      // Only detach the getter if it still belongs to this effect; an older
+      // async token request must not clear a newer session's getter/state.
+      if (activeSessionRef.current === session) {
+        activeSessionRef.current = null;
+        setAuthTokenGetter(null);
+        setClerkLoaded(false);
+      }
     };
   }, [session]);
 
@@ -2746,13 +2762,21 @@ export function ClerkAuthTokenWirer() {
   // resumes silently without a page reload.
   useEffect(() => {
     if (!session) return;
-    const onExpired = DEV_AUTH_BYPASS ? () => {} : signalSessionExpired;
+    const sessionForEffect = session;
+    const isCurrentSession = () => activeSessionRef.current === sessionForEffect;
+    const onExpired = DEV_AUTH_BYPASS
+      ? () => {}
+      : () => {
+          if (isCurrentSession()) signalSessionExpired();
+        };
     const unsubscribe = useOfflineStore.subscribe((state, prevState) => {
       if (state.isOnline && !prevState.isOnline) {
         useOfflineStore.getState().setOfflineReadOnly(false);
         // Re-attempt immediately — network is back; 0 delay still does one
         // retry internally before calling onExpired.
-        void getTokenWithRetry(() => session.getToken(), onExpired, 0);
+        void getTokenWithRetry(() => sessionForEffect.getToken(), onExpired, 0).then((token) => {
+          if (token !== null && isCurrentSession()) clearSessionExpired();
+        });
       }
     });
     return unsubscribe;

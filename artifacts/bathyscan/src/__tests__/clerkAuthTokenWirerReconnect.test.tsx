@@ -22,6 +22,7 @@ import { useOfflineStore } from "@/lib/offlineStore";
 // ── Hoisted mock values — must be declared before any vi.mock() call ──────────
 
 const mockSignalSessionExpired = vi.hoisted(() => vi.fn());
+const mockClearSessionExpired = vi.hoisted(() => vi.fn());
 const mockSetClerkLoaded = vi.hoisted(() => vi.fn());
 const mockSetAuthTokenGetter = vi.hoisted(() => vi.fn());
 const mockPersistOfflineIdentity = vi.hoisted(() => vi.fn());
@@ -64,6 +65,7 @@ vi.mock("@/lib/queryClient", async (importOriginal) => {
   return {
     ...actual,
     signalSessionExpired: mockSignalSessionExpired,
+    clearSessionExpired: mockClearSessionExpired,
     setClerkLoaded: mockSetClerkLoaded,
   };
 });
@@ -180,6 +182,22 @@ describe("ClerkAuthTokenWirer — reconnect clears the offline banner", () => {
     expect(mockSignalSessionExpired).not.toHaveBeenCalled();
   });
 
+  it("clears a stale expiry notice when the authenticated token getter recovers", async () => {
+    mockGetToken.mockResolvedValue("tok-recovered");
+
+    render(<ClerkAuthTokenWirer />);
+
+    const tokenGetter = mockSetAuthTokenGetter.mock.calls.at(-1)?.[0] as
+      | (() => Promise<string | null>)
+      | undefined;
+    expect(tokenGetter).toBeDefined();
+    await act(async () => {
+      await tokenGetter?.();
+    });
+
+    expect(mockClearSessionExpired).toHaveBeenCalledOnce();
+  });
+
   it("fires signalSessionExpired when token is still null after reconnect", async () => {
     // Both getToken attempts return null → genuine expiry after reconnect.
     mockGetToken.mockResolvedValue(null);
@@ -270,6 +288,22 @@ describe("ClerkAuthTokenWirer — reconnect clears the offline banner", () => {
     });
 
     expect(mockSignalSessionExpired).not.toHaveBeenCalled();
+  });
+
+  it("detaches the old token getter before a replacement session is wired", async () => {
+    mockGetToken.mockResolvedValue("tok-old");
+    const view = render(<ClerkAuthTokenWirer />);
+
+    expect(mockSetClerkLoaded).toHaveBeenCalledWith(true);
+    sessionRef.current = null;
+    view.rerender(<ClerkAuthTokenWirer />);
+
+    expect(mockSetClerkLoaded).toHaveBeenCalledWith(false);
+    expect(mockSetAuthTokenGetter).toHaveBeenLastCalledWith(null);
+
+    sessionRef.current = mockSession;
+    view.rerender(<ClerkAuthTokenWirer />);
+    expect(mockSetClerkLoaded).toHaveBeenLastCalledWith(true);
   });
 });
 

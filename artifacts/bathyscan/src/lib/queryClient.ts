@@ -369,11 +369,12 @@ const _sessionExpiredListeners = new Set<() => void>();
 /**
  * Called by ClerkAuthTokenWirer when a session is attached (`loaded=true`) or
  * cleared (`loaded=false`).  Resets the consecutive-401 counter on detach so
- * a page reload doesn't inherit stale count.
+ * a page reload doesn't inherit stale count, and clears any expiry state left
+ * by the detached session.
  */
 export function setClerkLoaded(loaded: boolean): void {
   _clerkLoaded = loaded;
-  if (!loaded) _consecutive401Count = 0;
+  if (!loaded) clearSessionExpired();
 }
 
 /**
@@ -388,8 +389,20 @@ export function signalSessionExpired(): void {
 }
 
 /**
- * Subscribe to the session-expired event.  The callback fires at most once per
- * page lifetime (the signal is not reset).  Returns an unsubscribe function.
+ * Clear the session-expired state after Clerk has supplied a valid token or
+ * the current session has been detached.  The transition is idempotent: a
+ * counter reset without an observable state change does not notify listeners.
+ */
+export function clearSessionExpired(): void {
+  _consecutive401Count = 0;
+  if (!_isSessionExpired) return;
+  _isSessionExpired = false;
+  _sessionExpiredListeners.forEach((fn) => fn());
+}
+
+/**
+ * Subscribe to the session-expired event.  The callback fires for each
+ * observable expiry-state transition.  Returns an unsubscribe function.
  */
 export function subscribeToSessionExpired(cb: () => void): () => void {
   _sessionExpiredListeners.add(cb);
@@ -397,9 +410,9 @@ export function subscribeToSessionExpired(cb: () => void): () => void {
 }
 
 /**
- * Reactive hook: true once the session is detected as expired (persistent
- * post-load 401s or getToken() consistently returning null).
- * Stays true for the lifetime of the page — the user must reload.
+ * Reactive hook: true while the session is detected as expired (persistent
+ * post-load 401s or getToken() consistently returning null).  A valid token
+ * or detached session can clear it without a page reload.
  */
 export function useIsSessionExpired(): boolean {
   return useSyncExternalStore(

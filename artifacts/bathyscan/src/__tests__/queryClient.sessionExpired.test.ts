@@ -27,6 +27,7 @@ vi.mock("@/hooks/use-toast", () => ({
 async function freshModule(): Promise<{
   setClerkLoaded: (loaded: boolean) => void;
   signalSessionExpired: () => void;
+  clearSessionExpired: () => void;
   subscribeToSessionExpired: (cb: () => void) => () => void;
   queryClient: import("@tanstack/react-query").QueryClient;
 }> {
@@ -223,5 +224,48 @@ describe("signalSessionExpired() — direct call", () => {
     signalSessionExpired();
 
     expect(cb).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears the expiry state and allows a later expiry cycle", async () => {
+    const {
+      signalSessionExpired,
+      clearSessionExpired,
+      subscribeToSessionExpired,
+      setClerkLoaded,
+      queryClient,
+    } = await freshModule();
+    const cb = vi.fn();
+    subscribeToSessionExpired(cb);
+    setClerkLoaded(true);
+
+    signalSessionExpired();
+    expect(cb).toHaveBeenCalledTimes(1);
+
+    clearSessionExpired();
+    expect(cb).toHaveBeenCalledTimes(2);
+
+    // Clearing again is a no-op, but a new threshold crossing is observable.
+    clearSessionExpired();
+    const onError = queryClient.getQueryCache().config.onError;
+    for (let i = 0; i < 3; i++) {
+      onError?.({ status: 401 }, {} as Parameters<typeof onError>[1]);
+    }
+    expect(cb).toHaveBeenCalledTimes(3);
+  });
+
+  it("clears stale expiry state when Clerk detaches", async () => {
+    const {
+      signalSessionExpired,
+      subscribeToSessionExpired,
+      setClerkLoaded,
+    } = await freshModule();
+    const cb = vi.fn();
+    subscribeToSessionExpired(cb);
+    setClerkLoaded(true);
+    signalSessionExpired();
+
+    setClerkLoaded(false);
+
+    expect(cb).toHaveBeenCalledTimes(2);
   });
 });
