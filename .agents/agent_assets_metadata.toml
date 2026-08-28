@@ -186,3 +186,10 @@ uri = "file://exports/skill-install-confirmation.zip"
 type = "unspecified"
 title = "Skill Install Confirmation (ZIP)"
 description = "Canonical skill-install-confirmation skill ZIP from .agents/skills."
+
+[[outputs]]
+id = "B7eC9QdC6Ug3RKgl82lUP"
+uri = "file://exports/ci-validation-parity.zip"
+type = "unspecified"
+title = "CI Validation Parity Skill (ZIP)"
+description = "Canonical CI Validation Parity skill ZIP from .agents/skills."
