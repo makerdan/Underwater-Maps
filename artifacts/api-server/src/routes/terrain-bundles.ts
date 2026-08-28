@@ -36,6 +36,7 @@ import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 import { logger } from "../lib/logger.js";
 import type { BathyFetchBundle, Bbox, FetchStrategy } from "../lib/fetchers/types.js";
 import { fetchTerrainBundle } from "../domains/terrain/service.js";
+import { registerCache } from "../lib/cacheRegistry.js";
 
 const router = Router();
 
@@ -181,6 +182,7 @@ async function resolveBundleTarget(presetId: string): Promise<BundleTarget | nul
 const inFlightJobs = new Set<string>();
 const pendingJobs = new Set<string>();
 const jobDispatchedAt = new Map<string, number>();
+registerCache(() => jobDispatchedAt.clear());
 let completedJobCount = 0;
 let failedJobCount = 0;
 

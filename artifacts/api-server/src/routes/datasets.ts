@@ -74,6 +74,7 @@ import {
   type UploadSession,
   type UploadJobState,
 } from "../domains/upload/service.js";
+import { registerCache } from "../lib/cacheRegistry.js";
 import {
   runTerrainParseWorker,
   type TerrainParseWorkerInput,
@@ -184,6 +185,10 @@ type JobState = UploadJobState;
 // Debounce timers for per-extension DB writes (avoid a write on every job).
 const CALIBRATION_PERSIST_DEBOUNCE_MS = 5_000;
 const calibrationPersistTimers = new Map<string, ReturnType<typeof setTimeout>>();
+registerCache(() => {
+  for (const timer of calibrationPersistTimers.values()) clearTimeout(timer);
+  calibrationPersistTimers.clear();
+});
 
 /**
  * Upsert one extension's duration array to the DB.  Called via a debounced

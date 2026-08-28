@@ -61,6 +61,7 @@ vi.mock("drizzle-orm", () => ({
   isNull: vi.fn(() => "is-null-condition"),
   gte: vi.fn(() => "gte-condition"),
   lte: vi.fn(() => "lte-condition"),
+  gt: vi.fn(() => "gt-condition"),
   sql: vi.fn(() => "sql-fragment"),
 }));
 

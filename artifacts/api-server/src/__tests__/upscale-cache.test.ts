@@ -299,21 +299,18 @@ describe("upscale route — Zod body validation", () => {
 });
 
 // ---------------------------------------------------------------------------
-// TTL eviction hardening — fake-timer tests
+// TTL eviction hardening — deterministic clock tests
 // ---------------------------------------------------------------------------
-// These tests use vi.useFakeTimers / vi.setSystemTime so that Date.now() inside
-// getMemCacheEntry and readUpscaleDisk returns a time past the TTL, verifying
+// These tests stub Date.now() so that getMemCacheEntry and readUpscaleDisk see
+// a time past the TTL, verifying
 // that:
 //   a) the in-memory entry is evicted (not served stale)
 //   b) the disk entry is deleted via fsPromises.unlink (not served stale)
 //   c) Poe is called to produce a fresh result
 // ---------------------------------------------------------------------------
 
-describe("upscale cache — TTL eviction with fake timers", () => {
+describe("upscale cache — TTL eviction with deterministic clock", () => {
   afterEach(() => {
-    // Restore real timers after each test in this suite to avoid leaking
-    // fake-timer state into other describe blocks.
-    vi.useRealTimers();
     upscaleMemCache.clear();
     mockCreate.mockReset();
     mockUnlink.mockReset();
@@ -323,17 +320,18 @@ describe("upscale cache — TTL eviction with fake timers", () => {
   });
 
   it("evicts an expired in-memory entry and an expired disk entry, then calls Poe", async () => {
-    vi.useFakeTimers();
-
     const imageBase64 = "data:image/png;base64,TTLFakeTimerTest==";
     const factor = 2;
     const staleData = "data:image/png;base64,staleUpscaled==";
     const key = upscaleCacheKey(imageBase64, factor);
 
-    // Record "now" before advancing time
+    // Stub only the application clock. Leaving native timers intact keeps the
+    // Supertest request lifecycle and its timeouts progressing normally.
     const seedTime = Date.now();
+    const nowSpy = vi.spyOn(Date, "now");
 
     // Seed the in-memory cache at the current fake time
+    nowSpy.mockReturnValue(seedTime);
     upscaleMemCache.set(key, { data: staleData, cachedAt: seedTime, bytes: staleData.length });
 
     // Seed the disk mock so readUpscaleDisk finds an entry with the same cachedAt.
@@ -342,8 +340,8 @@ describe("upscale cache — TTL eviction with fake timers", () => {
       JSON.stringify({ imageBase64: staleData, cachedAt: seedTime, bytes: staleData.length }),
     );
 
-    // Advance system time past the TTL
-    vi.setSystemTime(seedTime + UPSCALE_CACHE_TTL_MS + 1_000);
+    // Move the application clock past the TTL without freezing native timers.
+    nowSpy.mockReturnValue(seedTime + UPSCALE_CACHE_TTL_MS + 1_000);
 
     // Poe returns a fresh result after the cache miss
     const freshResult = "data:image/png;base64,FreshAfterTTLEviction==";
@@ -367,5 +365,7 @@ describe("upscale cache — TTL eviction with fake timers", () => {
 
     // The in-memory cache must no longer contain the stale entry
     expect(upscaleMemCache.get(key)?.data).not.toBe(staleData);
+
+    nowSpy.mockRestore();
   });
 });
