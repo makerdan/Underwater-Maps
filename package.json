@@ -25,7 +25,7 @@
     "check:catalog-facade-mocks": "node scripts/check-catalog-facade-mocks.mjs",
     "check:routes-documented": "pnpm --filter @workspace/api-server exec vitest run src/__tests__/routes-documented.test.ts",
     "check:lock-skill-sync": "node scripts/check-lock-skill-sync.mjs",
-    "check:skill-mirror-sync": "node scripts/check-skill-mirror-sync.mjs",
+    "check:skill-mirror-sync": "node --test scripts/__tests__/check-skill-mirror-sync.test.mjs && node scripts/check-skill-mirror-sync.mjs",
     "check:failure-gate-zip": "node scripts/check-failure-gate-zip-stale.mjs",
     "check:poe-setup-zip": "node scripts/check-poe-setup-zip-stale.mjs",
     "check:port-authority-zip": "node scripts/check-port-authority-zip-stale.mjs",

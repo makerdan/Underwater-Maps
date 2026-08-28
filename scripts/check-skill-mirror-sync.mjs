@@ -64,27 +64,32 @@ function subdirs(dir) {
 }
 
 // ---------------------------------------------------------------------------
-// Main
+// Discovery
 // ---------------------------------------------------------------------------
 
-if (!existsSync(LOCAL_DIR)) {
-  console.log(
-    "[check-skill-mirror-sync] SKIP — .local/custom_skills/ does not exist " +
-    "(expected in fresh CI environments where the platform has not populated it).",
-  );
-  process.exit(0);
+/**
+ * Discover skills from the canonical tree, never from the runtime mirror tree.
+ *
+ * This distinction matters after a canonical directory rename: an older
+ * ignored runtime directory can remain under .local/custom_skills/ until the
+ * platform refreshes it. That old directory is not a canonical skill and must
+ * not hide the newly named canonical directory from discovery.
+ */
+export function discoverCanonicalSkills(canonicalDir = CANONICAL_DIR) {
+  return subdirs(canonicalDir) ?? [];
 }
 
-const canonicalSkills = subdirs(CANONICAL_DIR) ?? [];
-const localSkillSet = new Set(
-  (subdirs(LOCAL_DIR) ?? []).map((n) => n.toLowerCase()),
-);
-
-// Build a case-insensitive map from local name → canonical name so we can
-// match e.g. "port-authority" (local) with "Port-Authority" (canonical).
-const localNameMap = new Map();
-for (const localName of (subdirs(LOCAL_DIR) ?? [])) {
-  localNameMap.set(localName.toLowerCase(), localName);
+/**
+ * Return the existing runtime directory for a canonical name. Matching is
+ * case-insensitive for platform-created casing differences, but does not
+ * guess across different slugs. An orphaned old-slug directory therefore
+ * remains untouched until the platform creates the new counterpart.
+ */
+export function findLocalSkillDirectory(localDir, canonicalName) {
+  const localNames = subdirs(localDir) ?? [];
+  return localNames.find(
+    (localName) => localName.toLowerCase() === canonicalName.toLowerCase(),
+  ) ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -107,83 +112,111 @@ function repairMirror(canonicalSkillMd, localSkillMd, fingerprintPath) {
 // Main check + auto-repair loop
 // ---------------------------------------------------------------------------
 
-let checked = 0;
-let repaired = 0;
-const hardFailures = []; // genuinely unfixable (canonical unreadable / write failed)
-
-for (const canonicalName of canonicalSkills) {
-  const localName = localNameMap.get(canonicalName.toLowerCase());
-  if (!localName) {
-    // No counterpart in .local/custom_skills/ — out of scope per spec.
-    continue;
+/**
+ * Check and repair the runtime mirrors for canonical skills.
+ *
+ * The directory arguments are injectable so the canonical-first discovery
+ * contract can be regression-tested without touching the repository's
+ * gitignored .local/custom_skills/ tree.
+ *
+ * @returns {number} process-style exit code
+ */
+export function runSkillMirrorCheck({
+  canonicalDir = CANONICAL_DIR,
+  localDir = LOCAL_DIR,
+  logger = console,
+} = {}) {
+  if (!existsSync(localDir)) {
+    logger.log(
+      "[check-skill-mirror-sync] SKIP — .local/custom_skills/ does not exist " +
+      "(expected in fresh CI environments where the platform has not populated it).",
+    );
+    return 0;
   }
 
-  const canonicalSkillMd = join(CANONICAL_DIR, canonicalName, "SKILL.md");
-  const fingerprintPath = join(LOCAL_DIR, localName, ".fingerprint");
-  const localSkillMd = join(LOCAL_DIR, localName, "SKILL.md");
+  const canonicalSkills = discoverCanonicalSkills(canonicalDir);
+  let checked = 0;
+  let repaired = 0;
+  const hardFailures = []; // genuinely unfixable (canonical unreadable / write failed)
 
-  if (!existsSync(canonicalSkillMd)) {
-    // Canonical skill dir exists but has no SKILL.md — skip silently.
-    continue;
-  }
+  for (const canonicalName of canonicalSkills) {
+    const localName = findLocalSkillDirectory(localDir, canonicalName);
+    if (!localName) {
+      // No counterpart in .local/custom_skills/ — out of scope per spec.
+      continue;
+    }
 
-  checked++;
+    const canonicalSkillMd = join(canonicalDir, canonicalName, "SKILL.md");
+    const fingerprintPath = join(localDir, localName, ".fingerprint");
+    const localSkillMd = join(localDir, localName, "SKILL.md");
 
-  // Determine whether a repair is needed.
-  let needsRepair = false;
-  let repairReason = "";
+    if (!existsSync(canonicalSkillMd)) {
+      // Canonical skill dir exists but has no SKILL.md — skip silently.
+      continue;
+    }
 
-  if (!existsSync(fingerprintPath)) {
-    needsRepair = true;
-    repairReason = "missing .fingerprint";
-  } else {
-    const storedFingerprint = readFileSync(fingerprintPath, "utf8").trim();
-    const actualMd5 = md5OfFile(canonicalSkillMd);
-    if (storedFingerprint !== actualMd5) {
+    checked++;
+
+    // Determine whether a repair is needed.
+    let needsRepair = false;
+    let repairReason = "";
+
+    if (!existsSync(fingerprintPath)) {
       needsRepair = true;
-      repairReason = `fingerprint mismatch (stored=${storedFingerprint.slice(0, 8)}… actual=${actualMd5.slice(0, 8)}…)`;
+      repairReason = "missing .fingerprint";
+    } else {
+      const storedFingerprint = readFileSync(fingerprintPath, "utf8").trim();
+      const actualMd5 = md5OfFile(canonicalSkillMd);
+      if (storedFingerprint !== actualMd5) {
+        needsRepair = true;
+        repairReason = `fingerprint mismatch (stored=${storedFingerprint.slice(0, 8)}… actual=${actualMd5.slice(0, 8)}…)`;
+      }
+    }
+
+    if (!needsRepair) {
+      continue;
+    }
+
+    // Attempt auto-repair: re-copy canonical → mirror and re-write fingerprint.
+    const ok = repairMirror(canonicalSkillMd, localSkillMd, fingerprintPath);
+    if (ok) {
+      logger.warn(
+        `[check-skill-mirror-sync] WARN — repaired stale mirror for skill "${canonicalName}" (${repairReason}).`,
+      );
+      repaired++;
+    } else {
+      // Repair failed — this is a hard failure (e.g. unreadable canonical or
+      // read-only local dir). Report it so the operator knows.
+      logger.error(
+        `[check-skill-mirror-sync] ERROR — could not repair mirror for skill "${canonicalName}" (${repairReason}).`,
+      );
+      logger.error(
+        `  Canonical source: ${canonicalSkillMd}`,
+      );
+      logger.error(
+        `  Local mirror:     ${localSkillMd}`,
+      );
+      hardFailures.push(canonicalName);
     }
   }
 
-  if (!needsRepair) {
-    continue;
+  if (hardFailures.length > 0) {
+    logger.error(
+      `\n[check-skill-mirror-sync] FAIL — ${hardFailures.length} skill mirror(s) could not be repaired: ${hardFailures.join(", ")}`,
+    );
+    logger.error(
+      "Check that the canonical SKILL.md files are readable and .local/custom_skills/ is writable.",
+    );
+    return 1;
   }
 
-  // Attempt auto-repair: re-copy canonical → mirror and re-write fingerprint.
-  const ok = repairMirror(canonicalSkillMd, localSkillMd, fingerprintPath);
-  if (ok) {
-    console.warn(
-      `[check-skill-mirror-sync] WARN — repaired stale mirror for skill "${canonicalName}" (${repairReason}).`,
-    );
-    repaired++;
-  } else {
-    // Repair failed — this is a hard failure (e.g. unreadable canonical or
-    // read-only local dir). Report it so the operator knows.
-    console.error(
-      `[check-skill-mirror-sync] ERROR — could not repair mirror for skill "${canonicalName}" (${repairReason}).`,
-    );
-    console.error(
-      `  Canonical source: ${canonicalSkillMd}`,
-    );
-    console.error(
-      `  Local mirror:     ${localSkillMd}`,
-    );
-    hardFailures.push(canonicalName);
-  }
+  const repairedNote = repaired > 0 ? `, auto-repaired ${repaired}` : "";
+  logger.log(
+    `[check-skill-mirror-sync] OK — all ${checked} skill mirror fingerprint(s) match${repairedNote}.`,
+  );
+  return 0;
 }
 
-if (hardFailures.length > 0) {
-  console.error(
-    `\n[check-skill-mirror-sync] FAIL — ${hardFailures.length} skill mirror(s) could not be repaired: ${hardFailures.join(", ")}`,
-  );
-  console.error(
-    "Check that the canonical SKILL.md files are readable and .local/custom_skills/ is writable.",
-  );
-  process.exit(1);
+if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
+  process.exitCode = runSkillMirrorCheck();
 }
-
-const repairedNote = repaired > 0 ? `, auto-repaired ${repaired}` : "";
-console.log(
-  `[check-skill-mirror-sync] OK — all ${checked} skill mirror fingerprint(s) match${repairedNote}.`,
-);
-process.exit(0);

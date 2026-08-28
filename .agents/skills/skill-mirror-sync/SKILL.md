@@ -53,6 +53,12 @@ compare or refresh the copy. There are **no per-skill registration entries** in
 either script; adding a new directory under `.agents/skills/` is sufficient for
 it to be picked up automatically on the next run.
 
+If a canonical directory is renamed, discovery still starts from the new
+canonical directory name. An older ignored runtime directory with the previous
+slug is not treated as a counterpart, created over, or deleted by this
+contract. It remains platform-managed until the platform refreshes the runtime
+tree and creates the new counterpart.
+
 ### Fingerprint file
 
 Each live copy directory may contain a `.fingerprint` file whose sole content

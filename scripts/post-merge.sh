@@ -186,9 +186,10 @@ if [ -f "artifacts/bathyscan/public/port-authority-heavy-skill.zip" ]; then
 fi
 # Guardrail: keep .local/custom_skills/<name>/SKILL.md in sync with the
 # canonical .agents/skills/<name>/SKILL.md for every skill that already has a
-# live-copy directory. .local/ is gitignored so git never updates these copies;
-# this block re-copies and re-fingerprints them after every merge so agents
-# always read the current instructions.
+# live-copy directory. Discovery starts from canonical directories so a prior
+# runtime directory left behind by a canonical slug rename is not treated as a
+# separate skill. .local/ is gitignored so git never updates these copies; this
+# block re-copies and re-fingerprints matching mirrors after every merge.
 if [ -d ".local/custom_skills" ]; then
   _synced=0
   for canonical_dir in .agents/skills/*/; do
