@@ -1,3 +1,12 @@
+---
+name: Skill Mirror Sync
+description: >-
+  Keep canonical skills under .agents/skills synchronized with their
+  platform-managed .local/custom_skills mirrors, and detect or remediate
+  fingerprint drift. Use this skill when adding, auditing, renaming, or
+  repairing a user-authored skill mirror.
+---
+
 # Skill: Skill Mirror Sync
 
 ## Purpose
