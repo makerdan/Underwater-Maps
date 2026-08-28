@@ -549,50 +549,38 @@ Every new sign-in is held as **pending** until an admin approves it (`requireApp
 > **HARD GATE — applies before writing any plan.**
 > Read `.agents/skills/failure-gate/SKILL.md` now if you have not already done so this session.
 
-### Failure Gate checklist (complete every item before writing any plan)
+### Failure Gate checklist
 
-1. **Memory scan** — Open `.agents/memory/MEMORY.md` and scan for entries touching
-   suites or files this task affects. Note any known-flaky patterns.
-2. **Recent task scan** — Search recently merged task descriptions for "pre-existing",
-   "known failure", "flaky", or the suite names this task touches.
-3. **Spot-run** (api-server tasks only) — Run the api-server test suite once in its
-   current state and record any failures. Those failures are pre-existing by definition.
-   Skip if the task does not touch `artifacts/api-server`.
-4. **Write the section** — Add `## Pre-existing failures to ignore` to the plan after
-   "Steps". Use the populated template if failures were found, or the "None known"
-   template if not. The section is MANDATORY — a plan without it is defective.
-5. **Add `## Validation`** — Add a `## Validation` section to the plan naming the exact
-   command and a one-line justification. Choose the lightest validation tier whose
-   coverage is sufficient (consult the `validation-tiers` skill); default to
-   `test-standard` when uncertain. The section is MANDATORY — a plan without it is defective.
-   The named command is the **ceiling** for the Build agent. The Build agent must not run
-   any heavier tier regardless of what failures it encounters.
-6. **Verify the plan file** — immediately after writing (or editing) a plan file,
-   run both lint guards in single-file mode and confirm both exit 0:
-   ```sh
-   TASK_PLAN_FILE=.local/tasks/<name>.md node scripts/check-failure-gate.mjs
-   TASK_PLAN_FILE=.local/tasks/<name>.md node scripts/check-regression-guard.mjs
-   ```
-   Fix any violation before calling `bulkCreateProjectTasks`. Do not skip this step
-   even for small plans. The failure-gate guard covers `## Pre-existing failures to
-   ignore` and `## Validation`; the regression-guard covers `## Regression Guard`.
-7. **Emit the announcement** — Before writing the plan's first heading, emit:
-   `[FAILURE-GATE] Discovery checklist complete. Pre-existing failures documented: <N>. Validation command: \`<command>\`.`
+Before writing a plan, read the Failure Gate skill, scan relevant memory and recent
+task descriptions, and run the api-server spot-check only when the task changes
+`artifacts/api-server`. Use `scripts/new-plan.mjs`, document the baseline, choose
+the lightest sufficient validation tier, and emit:
 
-> **BUILD AGENT:** The validation command in `## Validation` is your ceiling.
-> Do not escalate to a heavier tier for any reason, including pre-existing
-> failures or self-classified flakes.
+`[FAILURE-GATE] Discovery checklist complete. Pre-existing failures documented: <N>. Validation command: \`<command>\`.`
 
-### Lint guard
+Every plan must contain `## Pre-existing failures to ignore` and `## Validation`
+with a registered `**Command:**`, filled `**Why:**`, and `**Do not escalate:**.
+Immediately after writing or editing a plan, verify both guards in single-file mode:
 
-`scripts/new-plan.mjs` is the required tool for creating new plan files — use it
-instead of writing files by hand. It pre-fills all required sections and refuses to
-write the file without a `--why` argument. Creating a plan file by hand bypasses
-these safety checks and is prohibited.
+```sh
+TASK_PLAN_FILE=.local/tasks/<name>.md node scripts/check-failure-gate.mjs
+TASK_PLAN_FILE=.local/tasks/<name>.md node scripts/check-regression-guard.mjs
+```
 
-`node scripts/check-failure-gate.mjs` scans all `.local/tasks/*.md` plan files and
-fails if any are missing either of the two required sections (`## Pre-existing failures
-to ignore` and `## Validation`). Run it after writing a plan batch to verify compliance.
+Document explicit ownership when a validation-repair task is fixing a listed
+baseline failure. A passing retry means intermittency only, never pre-existing
+provenance. Unrelated feature tasks may ignore documented baseline failures.
+
+> **BUILD AGENT:** Set `TASK_PLAN_FILE` for every task-driven validation run.
+> The plan's validation command is the ceiling; never escalate. Missing,
+> malformed, unreadable, or unparseable plan/tier data is a hard tier-lock
+> violation. Only an explicit `--allow-no-plan` on an ad-hoc/non-task run may
+> bypass a missing plan.
+
+`scripts/new-plan.mjs`, `scripts/check-failure-gate.mjs`, and the Failure Gate
+skill contain the detailed lint and remediation rules. `.local/tasks/` is a
+gitignored, environment-local archive, not tracked output; do not include bulk
+archive repairs in a commit.
 
 
 ## User preferences

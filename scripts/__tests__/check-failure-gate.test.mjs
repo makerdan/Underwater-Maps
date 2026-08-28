@@ -28,6 +28,74 @@ import { insertValidationLine, writeFileAtomically } from "../check-failure-gate
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const scriptPath = resolve(__dirname, "..", "check-failure-gate.mjs");
+const newPlanPath = resolve(__dirname, "..", "new-plan.mjs");
+const skillPath = resolve(__dirname, "..", "..", ".agents", "skills", "failure-gate", "SKILL.md");
+
+describe("Failure Gate refinement scenario contract", () => {
+  const skill = readFileSync(skillPath, "utf8");
+
+  it("keeps the final skill materially shorter without dropping required plan decisions", () => {
+    assert.ok(
+      skill.split("\n").length < 300,
+      "the refined always-loaded skill should remain materially shorter than the 515-line baseline",
+    );
+    assert.match(skill, /Every plan has `## Pre-existing failures to ignore` and `## Validation`/);
+    assert.match(skill, /The plan's `\*\*Command:\*\*` is the validation ceiling/);
+  });
+
+  it("lets unrelated feature work ignore documented baseline failures", () => {
+    assert.match(skill, /Explicit baseline, unrelated task:[\s\S]*skip the listed failure/);
+  });
+
+  it("lets validation-repair work explicitly own a documented baseline failure", () => {
+    assert.match(skill, /Explicit baseline, validation-repair task:[\s\S]*fix it when the plan says/);
+  });
+
+  it("classifies a passing retry as intermittency rather than provenance", () => {
+    assert.match(skill, /Any passing retry means \*\*intermittent\*\*, not pre-existing/);
+    assert.match(skill, /cannot satisfy the[\s\S]*two-factor evidence gate/);
+  });
+
+  it("fails closed on unavailable tier data except for the explicit ad-hoc opt-out", () => {
+    assert.match(skill, /Missing, unreadable, malformed, or unparseable task-plan\/tier data is a/);
+    assert.match(skill, /`--allow-no-plan` is the only bypass/);
+  });
+
+  it("keeps gitignored archive remediation environment-local", () => {
+    assert.match(skill, /`\.local\/tasks\/` is not tracked output/);
+    assert.match(skill, /Do not instruct an agent to bulk-edit[\s\S]*as part of a commit/);
+  });
+});
+
+describe("new-plan baseline ownership", () => {
+  it("distinguishes ignored baseline failures from repairs explicitly owned by the task", () => {
+    const result = spawnSync(
+      process.execPath,
+      [
+        newPlanPath,
+        "999999",
+        "--title",
+        "Ownership fixture",
+        "--why",
+        "covers the generated baseline ownership contract",
+        "--dry-run",
+        "--pre-existing",
+        "legacy suite remains red",
+        "--owned-baseline",
+        "tier-lock parser is broken",
+      ],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /\*\*Ignored baseline:\*\* legacy suite remains red/);
+    assert.match(
+      result.stdout,
+      /\*\*Owned baseline repair:\*\* tier-lock parser is broken — this task must fix it/,
+    );
+    assert.doesNotMatch(result.stdout, /Do not investigate or fix them/);
+    assert.doesNotMatch(result.stdout, /Do not attempt further validation fixes/);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Helper — run check-failure-gate.mjs from a specific working directory.

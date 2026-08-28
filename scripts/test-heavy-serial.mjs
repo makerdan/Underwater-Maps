@@ -55,8 +55,9 @@ const allowNoPlan = process.argv.includes("--allow-no-plan");
 // the plan only permitted a lighter tier — a plan ceiling of test-standard
 // should never silently run a 45-min heavy suite.
 //
-// When TASK_PLAN_FILE is not set (e.g. ad-hoc or non-task CI calls), a one-
-// line warning is printed and execution continues — graceful degradation.
+// When TASK_PLAN_FILE is not set, execution continues only when the caller
+// explicitly passes --allow-no-plan for an ad-hoc/non-task run. Any plan-file
+// read or parse failure is a hard violation.
 // ---------------------------------------------------------------------------
 
 {
@@ -89,9 +90,12 @@ const allowNoPlan = process.argv.includes("--allow-no-plan");
     );
     process.exit(1);
   } else if (result.kind === "unparseable") {
-    console.warn(
-      `[test-heavy] WARNING: tier-lock pre-check output was not parseable — skipping ceiling check.`,
+    console.error(
+      `[test-heavy] TIER-LOCK VIOLATION: tier-lock pre-check output was not parseable.\n` +
+        `             A task-driven run cannot bypass the plan ceiling when tier data is unavailable.\n` +
+        `             Fix the plan or tier-lock tooling before running validation.`,
     );
+    process.exit(1);
   } else {
     const lockedTierName = result.tierName; // e.g. "test-standard"
     if (lockedTierName !== "test-heavy") {

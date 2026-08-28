@@ -3,7 +3,7 @@
  *
  * Both run-tier.mjs and test-heavy-serial.mjs need to:
  *   1. Invoke `run-locked-tier.mjs --dry-run <planFile>` via spawnSync.
- *   2. Handle exit code 2 (no ## Validation section → graceful degradation).
+ *   2. Handle non-zero exit (missing/malformed plan → violation).
  *   3. Handle non-zero exit (tier missing/malformed → VIOLATION).
  *   4. Parse the resolved tier name from stdout with a shared regex.
  *
@@ -40,16 +40,18 @@ export const TIER_RESOLVED_RE = /resolved tier "([^"]+)"/;
  *
  * A missing ## Validation section now exits 1 (same as any other violation),
  * so it falls into the "violation" result shape rather than a special branch.
+ * A successful helper process whose output cannot be parsed is returned as
+ * "unparseable"; callers must treat that result as a hard tier-lock violation.
  *
  * @param {string | undefined} planFile - value of TASK_PLAN_FILE (may be undefined)
  * @returns {TierLockResult}
  */
-export function runTierLockDryRun(planFile) {
+export function runTierLockDryRun(planFile, { spawn = spawnSync } = {}) {
   if (!planFile) {
     return { kind: "no-plan-file" };
   }
 
-  const dryResult = spawnSync(
+  const dryResult = spawn(
     process.execPath,
     [runLockedTierScript, "--dry-run", planFile],
     { encoding: "utf8" },

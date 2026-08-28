@@ -21,7 +21,11 @@
  *   --tier <tier>       Validation tier (default: test-standard). Must be one
  *                       of the project's registered valid tier names.
  *   --pre-existing <text>
- *                       One-line description of a known pre-existing failure.
+ *                       One-line description of a known baseline failure this
+ *                       task may ignore. May be repeated.
+ *   --owned-baseline <text>
+ *                       One-line description of a known baseline failure this
+ *                       validation-repair task explicitly owns and must fix.
  *                       May be repeated. Omit when no failures are known.
  *   --out <path>        Override the output path (default: .local/tasks/task-<ref>.md).
  *   --dry-run           Print the generated content without writing to disk.
@@ -64,6 +68,7 @@ const why = getFlag("--why");
 const tier = getFlag("--tier") ?? "test-standard";
 const outOverride = getFlag("--out");
 const preExistingEntries = getRepeatedFlag("--pre-existing");
+const ownedBaselineEntries = getRepeatedFlag("--owned-baseline");
 const dryRun = args.includes("--dry-run");
 
 // ---------------------------------------------------------------------------
@@ -141,25 +146,32 @@ if (!dryRun && existsSync(outPath)) {
 // Build the pre-existing failures section
 // ---------------------------------------------------------------------------
 let preExistingSection;
-if (preExistingEntries.length > 0) {
-  const bullets = preExistingEntries.map((e) => `- ${e}`).join("\n");
+if (preExistingEntries.length > 0 || ownedBaselineEntries.length > 0) {
+  const ignoredBullets = preExistingEntries.map((e) => `- **Ignored baseline:** ${e}`);
+  const ownedBullets = ownedBaselineEntries.map(
+    (e) => `- **Owned baseline repair:** ${e} — this task must fix it.`,
+  );
+  const bullets = [...ignoredBullets, ...ownedBullets].join("\n");
   preExistingSection =
     `## Pre-existing failures to ignore\n` +
-    `These failures exist on \`main\` before this task starts. Do not investigate or fix them.\n\n` +
+    `These failures exist on \`main\` before this task starts. Each bullet explicitly\n` +
+    `states whether this task may ignore the failure or owns its repair.\n\n` +
     `${bullets}\n\n` +
     `**Flaky-test rule:** If a test not listed above fails, retry it 3× in isolation\n` +
-    `before concluding it is a regression you caused. Only treat a consistent 3/3\n` +
-    `failure as your responsibility.\n\n` +
-    `If the only remaining failures are those listed above (plus any self-classified\n` +
-    `failures — see the Failure Gate skill), you are cleared to mark this task\n` +
-    `complete. Do not attempt further validation fixes.`;
+    `to determine whether it is intermittent. A passing retry establishes\n` +
+    `intermittency, not pre-existing provenance. Use the Failure Gate evidence\n` +
+    `rules before assigning ownership.\n\n` +
+    `Before completion, fix every **Owned baseline repair**. Remaining **Ignored\n` +
+    `baseline** failures and evidence-backed self-classifications may be reported\n` +
+    `without unrelated repair work.`;
 } else {
   preExistingSection =
     `## Pre-existing failures to ignore\n` +
     `None known at plan time. Treat every failure as a potential regression.\n\n` +
-    `**Flaky-test rule:** If a test fails, retry it 3× in isolation before concluding\n` +
-    `it is a regression you caused. Only treat a consistent 3/3 failure as your\n` +
-    `responsibility.`;
+    `**Flaky-test rule:** If a test fails, retry it 3× in isolation to determine\n` +
+    `whether it is intermittent. A passing retry establishes intermittency, not\n` +
+    `pre-existing provenance. Use the Failure Gate evidence rules before assigning\n` +
+    `ownership.`;
 }
 
 // ---------------------------------------------------------------------------

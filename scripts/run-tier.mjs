@@ -97,8 +97,9 @@ for (let i = 0; i < args.length; i++) {
 // the tier being run.  This catches accidental escalation without requiring
 // the agent to remember to call run-locked-tier.mjs manually.
 //
-// When TASK_PLAN_FILE is not set (e.g. ad-hoc or non-task CI calls), a one-
-// line warning is printed and execution continues — graceful degradation.
+// When TASK_PLAN_FILE is not set, execution continues only when the caller
+// explicitly passes --allow-no-plan for an ad-hoc/non-task run. Any plan-file
+// read or parse failure is a hard violation.
 //
 // Skipped in --step mode (the inner re-entrant invocation from the lock
 // wrapper) to avoid recursive checking.
@@ -120,8 +121,8 @@ if (!isStepMode) {
  *   - allowNoPlan=false → TIER-LOCK VIOLATION + exit 1 (task invocations must
  *                         always set TASK_PLAN_FILE)
  *
- * For all other result kinds (tier mismatch, unparseable, etc.) the behaviour
- * is unchanged from before.
+ * For all other result kinds (tier mismatch, unparseable, etc.) the runner
+ * fails closed before any validation step starts.
  *
  * @param {string}  requestedTier - the run-tier.mjs arg ("fast"|"standard"|"full")
  * @param {boolean} [allowNoPlan=false] - pass true for non-task callers that
@@ -160,10 +161,12 @@ function checkTierLock(requestedTier, allowNoPlan = false) {
   }
 
   if (result.kind === "unparseable") {
-    console.warn(
-      `[run-tier] WARNING: tier-lock pre-check output was not parseable — skipping ceiling check.`,
+    console.error(
+      `[run-tier] TIER-LOCK VIOLATION: tier-lock pre-check output was not parseable.\n` +
+        `           A task-driven run cannot bypass the plan ceiling when tier data is unavailable.\n` +
+        `           Fix the plan or tier-lock tooling before running validation.`,
     );
-    return;
+    process.exit(1);
   }
 
   const lockedTierName = result.tierName; // e.g. "test-standard"

@@ -84,7 +84,7 @@ isValidation = true
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "node scripts/validation-lock.mjs -- node scripts/run-with-timeout.mjs aggregate -- node scripts/run-tier.mjs full --allow-no-plan"
+args = "node scripts/validation-lock.mjs -- bash -c 'if [ -n \"$TASK_PLAN_FILE\" ]; then node scripts/run-with-timeout.mjs aggregate -- node scripts/run-tier.mjs full; else node scripts/run-with-timeout.mjs aggregate -- node scripts/run-tier.mjs full --allow-no-plan; fi'"
 
 [[workflows.workflow]]
 name = "test-fast"
@@ -95,7 +95,7 @@ isValidation = true
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "node scripts/validation-lock.mjs -- node scripts/run-with-timeout.mjs tierFast -- node scripts/run-tier.mjs fast --allow-no-plan"
+args = "node scripts/validation-lock.mjs -- bash -c 'if [ -n \"$TASK_PLAN_FILE\" ]; then node scripts/run-with-timeout.mjs tierFast -- node scripts/run-tier.mjs fast; else node scripts/run-with-timeout.mjs tierFast -- node scripts/run-tier.mjs fast --allow-no-plan; fi'"
 
 [[workflows.workflow]]
 name = "test-standard"
@@ -128,7 +128,7 @@ isValidation = true
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "node scripts/run-with-timeout.mjs tierStandardPlus -- node scripts/run-tier.mjs full --allow-no-plan"
+args = "bash -c 'if [ -n \"$TASK_PLAN_FILE\" ]; then node scripts/run-with-timeout.mjs tierStandardPlus -- node scripts/run-tier.mjs full; else node scripts/run-with-timeout.mjs tierStandardPlus -- node scripts/run-tier.mjs full --allow-no-plan; fi'"
 
 [[workflows.workflow]]
 name = "test-standard-skip-typecheck"
@@ -139,7 +139,7 @@ isValidation = true
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "node scripts/validation-lock.mjs -- node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard --allow-no-plan --skip typecheck"
+args = "node scripts/validation-lock.mjs -- bash -c 'if [ -n \"$TASK_PLAN_FILE\" ]; then node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard --skip typecheck; else node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard --allow-no-plan --skip typecheck; fi'"
 
 [[workflows.workflow]]
 name = "audit-marker-bbox"
@@ -161,7 +161,7 @@ isValidation = true
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "node scripts/validation-lock.mjs -- node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard --allow-no-plan --skip check:duplicate-hooks-registry"
+args = "node scripts/validation-lock.mjs -- bash -c 'if [ -n \"$TASK_PLAN_FILE\" ]; then node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard --skip check:duplicate-hooks-registry; else node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard --allow-no-plan --skip check:duplicate-hooks-registry; fi'"
 
 [agent]
 stack = "PNPM_WORKSPACE"

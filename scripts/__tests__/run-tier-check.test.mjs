@@ -18,13 +18,15 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
+import { runTierLockDryRun } from "../lib/tier-lock-check.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const runTierScript = resolve(__dirname, "..", "run-tier.mjs");
+const replitConfigPath = resolve(__dirname, "..", "..", ".replit");
 
 let sandbox;
 
@@ -135,6 +137,53 @@ describe("TASK_PLAN_FILE absent", () => {
       `stderr should warn about missing TASK_PLAN_FILE.\nstderr: ${result.stderr}`,
     );
   });
+});
+
+describe("unparseable tier-lock output", () => {
+  it("returns an explicit unparseable result for successful output without a resolved tier", () => {
+    const result = runTierLockDryRun(join(sandbox, "plan-valid.md"), {
+      spawn: () => ({ status: 0, stdout: "helper completed without a resolution\n", stderr: "" }),
+    });
+    assert.deepEqual(result, {
+      kind: "unparseable",
+      output: "helper completed without a resolution",
+    });
+  });
+});
+
+describe("registered validation workflow entrypoints", () => {
+  const config = readFileSync(replitConfigPath, "utf8");
+  const workflowNames = [
+    "test-fast",
+    "test-standard",
+    "test-standard-plus",
+    "test-heavy",
+    "test-standard-skip-typecheck",
+    "test-standard-skip-dup-hooks",
+  ];
+
+  for (const workflowName of workflowNames) {
+    it(`${workflowName} only opts out when TASK_PLAN_FILE is absent`, () => {
+      const marker = `[[workflows.workflow]]\nname = "${workflowName}"`;
+      const start = config.indexOf(marker);
+      assert.notEqual(start, -1, `missing ${workflowName} workflow`);
+      const next = config.indexOf("[[workflows.workflow]]", start + marker.length);
+      const block = config.slice(start, next === -1 ? undefined : next);
+      const [taskBranch, adHocBranch = ""] = block.split("; else ");
+
+      assert.match(taskBranch, /if \[ -n \\"\$TASK_PLAN_FILE\\" \]/);
+      assert.doesNotMatch(
+        taskBranch,
+        /--allow-no-plan/,
+        "task-driven branch must preserve fail-closed tier enforcement",
+      );
+      assert.match(
+        adHocBranch,
+        /--allow-no-plan/,
+        "only the explicit no-plan branch may opt out",
+      );
+    });
+  }
 });
 
 // ── (b) Plan has no ## Validation section ───────────────────────────────────

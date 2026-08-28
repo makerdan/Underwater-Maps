@@ -50,8 +50,9 @@ const REQUIRED_SECTIONS = [
 None known at plan time. Treat every failure as a potential regression.
 
 **Flaky-test rule:** If a test fails, retry it 3× in isolation before concluding
-it is a regression you caused. Only treat a consistent 3/3 failure as your
-responsibility.
+whether it is intermittent. A passing retry establishes intermittency, not
+pre-existing provenance. Use the Failure Gate evidence rules before assigning
+ownership.
 `,
   },
   {
