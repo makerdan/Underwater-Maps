@@ -179,3 +179,10 @@ uri = "file://exports/skill-mirror-sync-skill.zip"
 type = "unspecified"
 title = "Skill Mirror Sync Skill (ZIP)"
 description = "Canonical Skill Mirror Sync skill ZIP from .agents/skills."
+
+[[outputs]]
+id = "lK8dnsDXa7NC-lKPO_UVo"
+uri = "file://exports/skill-install-confirmation.zip"
+type = "unspecified"
+title = "Skill Install Confirmation (ZIP)"
+description = "Canonical skill-install-confirmation skill ZIP from .agents/skills."
