@@ -127,3 +127,10 @@ uri = "file://.agents/skills/skill-compression/SKILL.md"
 type = "text"
 title = "Skill Compression"
 description = "Standalone download of the canonical Skill Compression custom skill."
+
+[[outputs]]
+id = "3Gn0aM0OKFcDjhmHyYOD2"
+uri = "file://downloads/poe-setup-skill.zip"
+type = "unspecified"
+title = "Poe Setup Skill (ZIP)"
+description = "Standalone ZIP containing the canonical Poe Setup skill."
