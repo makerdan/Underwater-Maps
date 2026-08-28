@@ -29,48 +29,56 @@ id = "5OuUm599gbH-0CAo6YdrN"
 uri = "file://exports/port-authority-skills.zip"
 type = "unspecified"
 title = "Port Authority Skills (updated — tiered validation)"
+logical_id = "f34f4582-737a-4017-ad54-d25c46db84e9"
 
 [[outputs]]
 id = "wiG-1U99As6jiE8tCgFTz"
 uri = "file://exports/bug-audit-skill.zip"
 type = "unspecified"
 title = "Bug-Audit Skill"
+logical_id = "3b7655d7-bb18-4957-9e8e-89f598e07eb5"
 
 [[outputs]]
 id = "L34sPG5nmSf6kq5w8Flfu"
 uri = "file://bug-audit-report.md"
 type = "text"
 title = "Bug & Error Audit Report — BathyScan"
+logical_id = "2baec992-167e-471f-9fd0-e5db7393dccd"
 
 [[outputs]]
 id = "78itKheEA2qJhzX5EuC73"
 uri = "file://.agents/skills/validation-tiers/SKILL.md"
 type = "text"
 title = "validation-tiers skill"
+logical_id = "38943a1a-a657-4c74-b605-a1e80b1ef88a"
 
 [[outputs]]
 id = "VH262b5aB8QtFemw7vfiM"
 uri = "file://.agents/skills/GoPoe-or-GoHome/SKILL.md"
 type = "text"
 title = "GoPoe-or-GoHome skill (updated)"
+logical_id = "8ef698b1-967e-46dd-905a-8fbff035e594"
 
 [[outputs]]
 id = "0u8VubUptAZSAhP64fs9-"
 uri = "file://.agents/skills/Port-Authority/SKILL.md"
 type = "text"
 title = "Port-Authority SKILL.md"
+logical_id = "ddac7fe5-eb4d-4bd0-bddb-3abced6a85bd"
 
 [[outputs]]
 id = "lMrqDGd-JkGO5qJGnqnA7"
 uri = "file://.agents/skills/Port-Authority-Heavy/SKILL.md"
 type = "text"
 title = "Port-Authority-Heavy SKILL.md"
+logical_id = "16934292-77d1-4fb5-8416-f73e9e1b62f5"
 
 [[outputs]]
 id = "-VoSsGRoF6SIEVHcKKGlk"
 uri = "file://port-authority-skills.zip"
 type = "unspecified"
 title = "Port Authority Skills (both)"
+logical_id = "2d3b9030-d140-42f6-b71e-de65f7291b79"
 
 [[outputs]]
 id = "DvSBBEXtcuVYH8C1FNK9F"
@@ -78,6 +86,7 @@ uri = "file://task-triage-skill.zip"
 type = "unspecified"
 title = "Task Triage SKILL.md"
 description = "Zipped SKILL.md for the Task Triage skill."
+logical_id = "96e9281f-34fd-48f6-8ff1-48505507269e"
 
 [[outputs]]
 id = "59L0NvQ1Aw5Kgz5LmyS5r"
@@ -85,6 +94,7 @@ uri = "file://failure-gate-skill.zip"
 type = "unspecified"
 title = "Failure Gate SKILL.md"
 description = "Zipped SKILL.md for the Failure Gate skill."
+logical_id = "9db46845-e63a-4b97-9b59-68323c5688bb"
 
 [[outputs]]
 id = "iSzY6YJd8_VmiWOGIgVxd"
@@ -92,6 +102,7 @@ uri = "file://exports/failure-gate.zip"
 type = "unspecified"
 title = "Failure Gate Skill (updated)"
 description = "Single SKILL.md at the root — rename the file to failure-gate/SKILL.md after extracting, or drop it straight into .agents/skills/failure-gate/."
+logical_id = "ca59ec5e-6ae8-430d-a263-55ad280bcf03"
 
 [[outputs]]
 id = "FSalpYkaizkimC0VKhG1z"
@@ -99,6 +110,7 @@ uri = "file://exports/task-sorting.zip"
 type = "unspecified"
 title = "Task Sorting Skill"
 description = "The Task Sorting SKILL.md packaged as a zip — drop the task-sorting/ folder into .agents/skills/ in any Replit project to install it."
+logical_id = "6ac0ddf0-6c31-45be-85de-383f3821e56e"
 
 [[outputs]]
 id = "r4pwEWWAsQSkUgmd0rOlV"
@@ -106,6 +118,7 @@ uri = "file://skill-mirror-sync.zip"
 type = "unspecified"
 title = "skill-mirror-sync SKILL.md"
 description = "Zipped skill file for the skill-mirror-sync skill."
+logical_id = "bbd6169a-8805-45b0-8c81-4c98fc0128e6"
 
 [[outputs]]
 id = "H-mCSWsJ1d9V5c9ls3pC1"
@@ -113,6 +126,7 @@ uri = "file://harden-bug-fixes-skill.zip"
 type = "unspecified"
 title = "Harden Bug Fixes (Regression Guard) SKILL.md"
 description = "Zipped SKILL.md for the Harden Bug Fixes / Regression Guard skill."
+logical_id = "a9752ce0-9c02-4d75-8d3c-8b76a6f87b6b"
 
 [[outputs]]
 id = "KVEN8qh7Eeo8qIUZrzQpP"
@@ -120,6 +134,7 @@ uri = "file://task-sorting-skill.zip"
 type = "unspecified"
 title = "Task Sorting SKILL.md"
 description = "Zipped SKILL.md for the Task Sorting skill."
+logical_id = "e2618b94-1632-4aac-b010-59d4da95289a"
 
 [[outputs]]
 id = "JxwhH84JiWjRXHUd0dIk2"
@@ -127,6 +142,7 @@ uri = "file://.agents/skills/skill-compression/SKILL.md"
 type = "text"
 title = "Skill Compression"
 description = "Standalone download of the canonical Skill Compression custom skill."
+logical_id = "6619016d-bd98-4cfb-a50b-f1b2b7496d5e"
 
 [[outputs]]
 id = "3Gn0aM0OKFcDjhmHyYOD2"
@@ -134,3 +150,25 @@ uri = "file://downloads/poe-setup-skill.zip"
 type = "unspecified"
 title = "Poe Setup Skill (ZIP)"
 description = "Standalone ZIP containing the canonical Poe Setup skill."
+logical_id = "a0df70f8-cb2a-4747-ac5a-5c8698ed3e9a"
+
+[[outputs]]
+id = "Z5MxuXGrVL1C8stjedZam"
+uri = "file://artifacts/bathyscan/public/failure-gate-skill.zip"
+type = "unspecified"
+title = "Failure Gate skill"
+description = "Canonical Failure Gate skill from .agents/skills, packaged as a ZIP download."
+logical_id = "9c568ec0-14cb-4b40-89e2-244525f24ee8"
+content_hash = "sha256:a703f15ebe31b990476d284f63a4d14fcbe5e66cf9b5e6de9ee9f6f6835e1304"
+size = 3854
+mtime_ms = 1787881448348
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:3cbc8e82-485c-4459-8b4c-d6abbd1a4049/9c568ec0-14cb-4b40-89e2-244525f24ee8/b5328020-1e94-4005-9a7f-c708d54446d8"
+storage_version_token = "1787888650782247"
+content_type = "application/octet-stream"
+
+[[outputs]]
+id = "A76dT5badLvnw6YJiflxW"
+uri = "file://downloads/chunk-it-skill.zip"
+type = "unspecified"
+title = "Chunk-It Skill (Canonical ZIP)"
+description = "Direct download of the canonical Chunk-It skill from .agents/skills, including SKILL.md and its evals."
