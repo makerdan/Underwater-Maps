@@ -193,3 +193,10 @@ uri = "file://exports/ci-validation-parity.zip"
 type = "unspecified"
 title = "CI Validation Parity Skill (ZIP)"
 description = "Canonical CI Validation Parity skill ZIP from .agents/skills."
+
+[[outputs]]
+id = "sxymkR-3e01w2S2Ik_8jw"
+uri = "file://export/skill-mirror-sync.zip"
+type = "unspecified"
+title = "Skill Mirror Sync (Updated Canonical ZIP)"
+description = "Download of the updated canonical Skill Mirror Sync skill from .agents/skills."
