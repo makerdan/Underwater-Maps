@@ -149,3 +149,5 @@
 - [Validation-lock suite aggregation](validation-lock-suite-aggregation.md) — scripts lock tests can hang in the aggregate unit command while isolated retries remain green.
 - [Managed validation task environment](managed-validation-task-env.md) — managed validation workflows may omit TASK_PLAN_FILE; use the resolved tier directly when lock evidence matters.
 - [Test DB circular foreign keys](testdb-circular-foreign-keys.md) — add one side after table creation and validate post-table constraints alongside inline references.
+
+- [Fly-control test camera spawn](fly-controls-test-camera-spawn.md) — snapshot camera displacement after terrain mount so spawn offsets do not look like physics failures.

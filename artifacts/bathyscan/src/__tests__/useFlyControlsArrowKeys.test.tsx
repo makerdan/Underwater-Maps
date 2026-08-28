@@ -14,6 +14,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
 import { renderHook, act } from "@testing-library/react";
 import * as THREE from "three";
+import type { TerrainData } from "@workspace/api-client-react";
 
 // ── Capture the useFrame callback so tests can drive the frame loop ────────
 let capturedFrameCb: ((state: unknown, delta: number) => void) | null = null;
@@ -59,16 +60,18 @@ const makeApiClientMock = vi.hoisted(() => {
 
 vi.mock("@workspace/api-client-react", () => makeApiClientMock());
 
+const appStateValue = {
+  speedIndex: 1,
+  setSpeedIndex: vi.fn(),
+  terrain: null as TerrainData | null,
+  setCameraPos: vi.fn(),
+  realisticMode: false,
+  boatSpeedMph: 5,
+};
+
 vi.mock("@/lib/context", () => ({
   FLY_SPEEDS_MPH: [2.3, 30, 100, 250, 700, 2000],
-  useAppState: () => ({
-    speedIndex: 1,
-    setSpeedIndex: vi.fn(),
-    terrain: null,
-    setCameraPos: vi.fn(),
-    realisticMode: false,
-    boatSpeedMph: 5,
-  }),
+  useAppState: () => appStateValue,
 }));
 
 vi.mock("@/lib/markerGroupRef", () => ({
@@ -94,7 +97,26 @@ vi.mock("@/lib/terrainContextMenu", () => ({
 }));
 
 import { useFlyControls } from "@/hooks/useFlyControls";
+import { useCameraStore } from "@/lib/cameraStore";
+import { useDriftStore } from "@/lib/driftStore";
+import {
+  BOAT_MAX_MPH,
+  BOAT_MIN_MPH,
+  boatMphToWorldUnitsPerSecond,
+  computeMovementMpu,
+} from "@/lib/boatSpeed";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
+
+const realisticTerrain = {
+  minLon: 0,
+  maxLon: 0.01,
+  minLat: 0,
+  maxLat: 0.01,
+  minDepth: 0,
+  maxDepth: 100,
+  resolution: 1,
+  depths: [50],
+} as unknown as TerrainData;
 
 function mountHook() {
   const terrainMeshRef = React.createRef<THREE.Mesh | null>();
@@ -125,6 +147,11 @@ beforeEach(() => {
     ...useSettingsStore.getState(),
     ...DEFAULT_SETTINGS,
   });
+  appStateValue.terrain = null;
+  appStateValue.realisticMode = false;
+  appStateValue.boatSpeedMph = 5;
+  useCameraStore.setState({ turboActive: false });
+  useDriftStore.setState({ driveBoatReverse: false });
 });
 
 afterEach(() => {
@@ -234,6 +261,62 @@ describe("useFlyControls — arrow key camera movement", () => {
     expect(Math.sign(d.x)).toBe(Math.sign(rightOnly.x));
 
     unmount();
+  });
+
+  it("keeps realistic Drive Boat throttle, bounds, and reverse independent of Turbo", () => {
+    appStateValue.terrain = realisticTerrain;
+    appStateValue.realisticMode = true;
+    const delta = 0.5;
+    const mpu = computeMovementMpu(realisticTerrain);
+
+    function driveBoatDisplacement(
+      boatSpeedMph: number,
+      turbo: boolean,
+      reverse = false,
+    ): THREE.Vector3 {
+      appStateValue.boatSpeedMph = boatSpeedMph;
+      useDriftStore.getState().setDriveBoatReverse(reverse);
+      fakeCamera.position.set(0, 0, 0);
+      const { unmount } = mountHook();
+      const before = fakeCamera.position.clone();
+
+      act(() => {
+        useCameraStore.getState().setTurboActive(turbo);
+        window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyW", bubbles: true }));
+      });
+      pumpFrame(delta);
+      act(() => {
+        window.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyW", bubbles: true }));
+      });
+
+      const displacement = fakeCamera.position.clone().sub(before);
+      unmount();
+      return displacement;
+    }
+
+    const selectedMph = 24;
+    const expectedSelectedDistance =
+      boatMphToWorldUnitsPerSecond(selectedMph, mpu) * delta;
+    const forward = driveBoatDisplacement(selectedMph, false);
+    const turboForward = driveBoatDisplacement(selectedMph, true);
+    const reverse = driveBoatDisplacement(selectedMph, true, true);
+
+    expect(forward.length()).toBeCloseTo(expectedSelectedDistance, 8);
+    expect(turboForward.distanceTo(forward)).toBeCloseTo(0, 8);
+    expect(turboForward.length()).toBeCloseTo(expectedSelectedDistance, 8);
+    expect(reverse.distanceTo(forward.clone().negate())).toBeCloseTo(0, 8);
+    expect(reverse.length()).toBeCloseTo(expectedSelectedDistance, 8);
+
+    const minimum = driveBoatDisplacement(BOAT_MIN_MPH, true);
+    const maximum = driveBoatDisplacement(BOAT_MAX_MPH, true);
+    expect(minimum.length()).toBeCloseTo(
+      boatMphToWorldUnitsPerSecond(BOAT_MIN_MPH, mpu) * delta,
+      8,
+    );
+    expect(maximum.length()).toBeCloseTo(
+      boatMphToWorldUnitsPerSecond(BOAT_MAX_MPH, mpu) * delta,
+      8,
+    );
   });
 });
 
