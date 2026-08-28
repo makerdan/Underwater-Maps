@@ -1,0 +1,112 @@
+{
+  "skill_name": "chunk-it",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Our web app lets authenticated users upload 20 GB video files from a browser. We want resumable direct-to-storage parts, virus scanning, progress, and safe recovery after refresh. Design the production workflow and test plan.",
+      "expected_output": "A web upload design that still uses a durable manifest, exact part verification, scoped authority, quarantine, safe serving, cleanup, recovery, and adversarial tests.",
+      "files": [],
+      "expectations": [
+        "The response treats the upload as a durable stateful workflow rather than one request.",
+        "The response covers ownership, integrity, quarantine, cleanup, recovery, and adversarial tests.",
+        "Browser-specific controls are included because this prompt explicitly has a browser."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "A mobile app records long wildlife videos offline and syncs them in chunks when connectivity returns. The device can be killed mid-transfer, and each user's media must remain private. Propose the upload protocol and sync recovery behavior.",
+      "expected_output": "A mobile/offline design using durable resumable state, device/user authorization, checksums, bounded retries, restart recovery, and private approved media.",
+      "files": [],
+      "expectations": [
+        "The response explicitly accounts for mobile offline operation, process termination, reconnect, and local resource limits.",
+        "The response does not require browser UX or HTTP endpoints as universal prerequisites.",
+        "The response specifies exact durable status, integrity checks, ownership, cleanup, and recovery."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "A desktop GIS command-line tool uploads a 500 GB dataset to an internal ingestion pipeline over an unreliable link. It must resume after a laptop reboot, reject tampered chunks, and prevent one team's files from being exposed to another.",
+      "expected_output": "A CLI/desktop and pipeline-neutral design with a durable manifest, authenticated transfer, exact ranges and checksums, reboot recovery, isolation, and operational cleanup.",
+      "files": [],
+      "expectations": [
+        "The response treats CLI, desktop, and worker/data-pipeline components as first-class environments.",
+        "The response includes reboot recovery, bounded transfer behavior, exact byte accounting, and conflicting-retry handling.",
+        "The response addresses tenant isolation, quarantine/processing, retention, and orphan reconciliation."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "An embedded weather sensor drops batches of compressed readings into a gateway filesystem. A worker later imports them into a data lake. Define a safe handoff and failure-recovery design for partial copies, duplicate batches, malicious archives, and gateway restarts.",
+      "expected_output": "An embedded/filesystem handoff design with authenticated staging, atomic claims, durable idempotency, archive defenses, restart reconciliation, and cleanup.",
+      "files": [],
+      "expectations": [
+        "The response accommodates embedded, filesystem-handoff, and worker-based processing without assuming a web client.",
+        "The response distinguishes a completed copy or filename from verified ownership and integrity.",
+        "The response includes archive/parser limits, duplicate handling, quarantine, restart recovery, and cleanup races."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "A nightly batch job sends millions of partition files from an on-prem directory to a remote analytics pipeline. There is no interactive user, but transfers can overlap with cleanup and workers can restart. Review the upload architecture for correctness and abuse resistance.",
+      "expected_output": "A batch/data-pipeline review centered on durable sessions, bounded concurrency, idempotency, lifecycle races, worker recovery, integrity, quotas, and auditability.",
+      "files": [],
+      "expectations": [
+        "The response provides machine-readable or operational recovery even though there is no human-facing upload UI.",
+        "The response covers bounded concurrency, idempotency, exact status, restart boundaries, cleanup races, and audit evidence.",
+        "The response does not invent browser-only requirements as mandatory."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "We need to harden a native desktop uploader that sends encrypted customer backups through a custom TCP transport. It supports pause/resume and can be interrupted during finalization. Audit the design and list the required adversarial tests.",
+      "expected_output": "A desktop/custom-transport audit retaining the full upload safety contract, including authority, integrity, state transitions, atomic finalization, quarantine, recovery, and tests.",
+      "files": [],
+      "expectations": [
+        "The response asks about transport framing, authentication, replay, timeout, ordering, and restart semantics.",
+        "The response retains state-transition, checksum, finalization, quarantine, cleanup, and authorization requirements.",
+        "The adversarial matrix includes interruption during finalization, replay/conflicting retries, substitution, resource exhaustion, and isolation."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Design a resumable upload API for user-submitted documents in a multi-tenant web service. Include signed part URLs, quotas, malware scanning, and a React progress component.",
+      "expected_output": "A conventional web design that makes signed authority narrow and conditional while preserving manifest ownership, verification, quarantine, cleanup, and recovery.",
+      "files": [],
+      "expectations": [
+        "The response treats signed URLs as narrowly scoped authority and independently reconciles completion.",
+        "The response covers multi-tenant authorization, quotas, integrity, quarantine, safe serving, and cleanup.",
+        "The response includes accessible progress and retry/resume behavior for the requested UI."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Our service only downloads large archives from a public data source. Add parallel range requests, local caching, retries, and checksum verification.",
+      "expected_output": "This should not invoke an upload-specific design because the request is download-only.",
+      "files": [],
+      "expectations": [
+        "The upload skill should not be considered applicable to this download-only request."
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Add a small avatar field to an existing profile form. It accepts one image under 2 MB and posts it with the rest of the form; no resume, chunking, processing pipeline, or untrusted-file workflow is needed.",
+      "expected_output": "This should not invoke the chunked-upload skill because it is an ordinary small form input without the specialized upload concerns.",
+      "files": [],
+      "expectations": [
+        "The upload skill should not be considered applicable to this ordinary non-upload workflow."
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Review the Chunk-It skill itself after an edit. Confirm that it is project-neutral, still covers ownership/authentication, integrity, explicit states, quarantine, cleanup, recovery, and adversarial testing, and only makes browser/HTTP/storage/queue mechanisms conditional.",
+      "expected_output": "A skill review that checks the canonical document for portability and preservation of its safety-critical upload contract.",
+      "files": [],
+      "expectations": [
+        "The revised skill names web, mobile, desktop, CLI, embedded, batch, worker, and data-pipeline contexts.",
+        "The revised skill contains durable ownership/authentication, integrity, state transitions, quarantine, cleanup, recovery, and adversarial-test guidance.",
+        "The revised skill labels browser, HTTP, object storage, queue, webhook, and direct-ingest controls as conditional or illustrative where appropriate.",
+        "The revised skill explicitly requires stating infrastructure limitations that prevent a secure production recommendation."
+      ]
+    }
+  ]
+}
