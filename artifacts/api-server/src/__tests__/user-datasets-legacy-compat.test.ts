@@ -101,6 +101,7 @@ vi.mock("@clerk/shared/keys", () => ({
 vi.mock("../lib/catalogSeeder.js", () => ({
   seedDatasetCatalog: vi.fn(async () => {}),
   getCatalogEntries: vi.fn(async () => catalogState.entries),
+  invalidateCatalogCache: vi.fn(),
   searchCatalog: vi.fn(async () => []),
   EXTRA_CATALOG_ENTRIES: [
     { id: "fw-lake-tahoe-ca-nv", waterType: "freshwater" },

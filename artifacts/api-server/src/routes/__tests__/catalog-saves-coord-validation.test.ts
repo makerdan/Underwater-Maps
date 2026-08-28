@@ -76,17 +76,18 @@ vi.mock("../../lib/catalogSeeder.js", () => ({
   scoreEntry: vi.fn().mockReturnValue(1),
 }));
 
-vi.mock("../../lib/terrain.js", () => ({
-  buildTerrainGrid: vi.fn(),
-  buildGebcoTerrainForBbox: vi.fn(),
-  buildNceiTerrainForBbox: vi.fn(),
-  buildUsgs3depTerrainForBbox: vi.fn(),
-  buildGreatLakesTerrainForBbox: vi.fn(),
-  ALL_PRESET_DATASETS: [],
-  PRESET_DATASETS: [],
-  FRESHWATER_PRESET_DATASETS: [],
-  NCEI_DATASET_COVERAGES: [],
-}));
+vi.mock("../../lib/terrain.js", async () => {
+  const { createTerrainMock } = await import(
+    "../../__tests__/helpers/terrainMock.js"
+  );
+  return createTerrainMock({
+    buildTerrainGrid: vi.fn(),
+    buildGebcoTerrainForBbox: vi.fn(),
+    buildNceiTerrainForBbox: vi.fn(),
+    buildUsgs3depTerrainForBbox: vi.fn(),
+    buildGreatLakesTerrainForBbox: vi.fn(),
+  });
+});
 
 vi.mock("../../lib/efhData.js", () => ({
   SALTWATER_EFH_BY_DATASET: {},
@@ -126,13 +127,15 @@ vi.mock("@clerk/express", () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// App factory — mount only the catalog-saves router.
+// App factory — mount both current owners of the routes covered here.
 // ---------------------------------------------------------------------------
+import catalogDiscoveryRouter from "../catalog-discovery.js";
 import catalogSavesRouter from "../catalog-saves.js";
 
 function makeApp() {
   const app = express();
   app.use(express.json());
+  app.use(catalogDiscoveryRouter);
   app.use(catalogSavesRouter);
   return app;
 }
