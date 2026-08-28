@@ -7,7 +7,7 @@
  *   "stale"      — the newest pack exists but its tide data has expired
  *   "none"       — no pack saved (datasets with this status get no badge)
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   listOfflinePacks,
   subscribeOfflinePacks,
@@ -78,15 +78,52 @@ export function rollupPackStatus(statuses: PackStatus[]): PackRollupStatus {
  */
 export function useOfflinePackStatuses(): Map<string, PackStatus> {
   const [statuses, setStatuses] = useState<Map<string, PackStatus>>(() => new Map());
+  const expiryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    let refreshSequence = 0;
+
+    const clearExpiryTimer = () => {
+      if (expiryTimerRef.current !== null) {
+        clearTimeout(expiryTimerRef.current);
+        expiryTimerRef.current = null;
+      }
+    };
+
+    const scheduleExpiryRefresh = (packs: OfflinePack[]) => {
+      clearExpiryTimer();
+
+      const nowMs = Date.now();
+      const nextExpiryMs = packs.reduce<number | null>((earliest, pack) => {
+        const expiryMs = new Date(pack.tidePack.tidalExpiresAt).getTime();
+        if (!Number.isFinite(expiryMs) || expiryMs <= nowMs) return earliest;
+        return earliest === null ? expiryMs : Math.min(earliest, expiryMs);
+      }, null);
+
+      if (nextExpiryMs !== null && !cancelled) {
+        // derivePackStatusMap intentionally expires only once now is past the
+        // boundary, so wait one millisecond beyond it.
+        expiryTimerRef.current = setTimeout(() => {
+          expiryTimerRef.current = null;
+          void refresh();
+        }, Math.max(1, nextExpiryMs - nowMs + 1));
+      }
+    };
+
     const refresh = async () => {
+      const sequence = ++refreshSequence;
       try {
         const packs = await listOfflinePacks();
-        if (!cancelled) setStatuses(derivePackStatusMap(packs));
+        if (!cancelled && sequence === refreshSequence) {
+          setStatuses(derivePackStatusMap(packs));
+          scheduleExpiryRefresh(packs);
+        }
       } catch {
-        if (!cancelled) setStatuses(new Map());
+        if (!cancelled && sequence === refreshSequence) {
+          clearExpiryTimer();
+          setStatuses(new Map());
+        }
       }
     };
     void refresh();
@@ -95,9 +132,11 @@ export function useOfflinePackStatuses(): Map<string, PackStatus> {
     });
     return () => {
       cancelled = true;
+      refreshSequence++;
+      clearExpiryTimer();
       unsubscribe();
     };
-  }, []);
+  }, [expiryTimerRef]);
 
   return statuses;
 }

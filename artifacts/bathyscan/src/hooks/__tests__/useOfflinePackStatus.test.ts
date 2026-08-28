@@ -7,7 +7,7 @@
  *   - useOfflinePackStatuses: initial load, refresh on pack-store notification,
  *     and IDB failure resolving to an empty map
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import {
   derivePackStatusMap,
@@ -68,6 +68,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   listeners.clear();
   mockListOfflinePacks.mockResolvedValue([]);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 // ── derivePackStatusMap ───────────────────────────────────────────────────────
@@ -145,6 +149,31 @@ describe("useOfflinePackStatuses", () => {
     await waitFor(() => expect(result.current.get("b")).toBe("downloaded"));
   });
 
+  it("marks a downloaded pack stale when its tide data expires", async () => {
+    vi.useFakeTimers({ now: NOW });
+    mockListOfflinePacks.mockResolvedValue([
+      pack("expiring", { expiresAt: NOW + 1_000 }),
+    ]);
+    const { result } = renderHook(() => useOfflinePackStatuses());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.get("expiring")).toBe("downloaded");
+
+    await act(async () => {
+      vi.advanceTimersByTime(1_001);
+      await Promise.resolve();
+    });
+    expect(result.current.get("expiring")).toBe("stale");
+
+    await act(async () => {
+      vi.advanceTimersByTime(DAY);
+      await Promise.resolve();
+    });
+    expect(result.current.get("expiring")).toBe("stale");
+  });
+
   it("resolves to an empty map when IDB is unavailable", async () => {
     mockListOfflinePacks.mockRejectedValue(new Error("IDB blocked"));
     const { result } = renderHook(() => useOfflinePackStatuses());
@@ -157,5 +186,25 @@ describe("useOfflinePackStatuses", () => {
     await waitFor(() => expect(listeners.size).toBe(1));
     unmount();
     expect(listeners.size).toBe(0);
+  });
+
+  it("does not refresh after unmount when an expiry timer was scheduled", async () => {
+    vi.useFakeTimers({ now: NOW });
+    mockListOfflinePacks.mockResolvedValue([
+      pack("expiring", { expiresAt: NOW + 1_000 }),
+    ]);
+    const { unmount } = renderHook(() => useOfflinePackStatuses());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockListOfflinePacks).toHaveBeenCalledTimes(1);
+
+    unmount();
+    await act(async () => {
+      vi.advanceTimersByTime(1_001);
+      await Promise.resolve();
+    });
+    expect(mockListOfflinePacks).toHaveBeenCalledTimes(1);
   });
 });
