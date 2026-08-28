@@ -172,3 +172,10 @@ uri = "file://downloads/chunk-it-skill.zip"
 type = "unspecified"
 title = "Chunk-It Skill (Canonical ZIP)"
 description = "Direct download of the canonical Chunk-It skill from .agents/skills, including SKILL.md and its evals."
+
+[[outputs]]
+id = "SHrCg5Bvxm14NSzyju2Hh"
+uri = "file://exports/skill-mirror-sync-skill.zip"
+type = "unspecified"
+title = "Skill Mirror Sync Skill (ZIP)"
+description = "Canonical Skill Mirror Sync skill ZIP from .agents/skills."
