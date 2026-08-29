@@ -1,4 +1,4 @@
-import { Router, type Request, type Response, type NextFunction } from "express";
+import { Router, type Request, type Response, type NextFunction, type RequestHandler } from "express";
 import * as zlib from "zlib";
 import * as fs from "fs";
 import * as path from "path";
@@ -53,8 +53,8 @@ import { routeTarEntries } from "../lib/noaaTarRouter.js";
 import { gunzipBounded } from "../lib/gunzipBounded.js";
 import { isTarBuffer, extractTarBuffer, isTarFile, extractTarFile, isGzipFile } from "../lib/tarDetect.js";
 import { fetchCopernicusDem } from "../lib/copernicusDem.js";
-// fetchSatelliteTile intentionally excluded — satellite-tile route was removed
-// fetchTerrainTile intentionally excluded — terrain-tile route was removed
+import { fetchSatelliteTile } from "../lib/satelliteTile.js";
+import { fetchTerrainTile } from "../lib/terrainTile.js";
 import { datasetZonesCache, readZoneDiskByHash, zoneCacheKey } from "./poe.js";
 import {
   ChunkUploadBodySchema,
@@ -65,6 +65,7 @@ import {
   DatasetsQuerySchema,
   ZonesQuerySchema,
   TerrainLandQuerySchema,
+  TerrainSatelliteQuerySchema,
   TerrainDownloadInfoQuerySchema,
 } from "./schemas.js";
 import { substrateFingerprintForDataset } from "../lib/substrateGrid.js";
@@ -1895,6 +1896,85 @@ datasetTerrainRouter.get("/terrain/land", asyncHandler(async (req, res): Promise
     res.status(502).json({ error: "upstream_error", details: msg });
   }
 }));
+
+type TileFetcher = (
+  bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number },
+  size: number,
+) => Promise<Buffer>;
+
+function createTerrainTileHandler(
+  routePath: "/terrain/satellite-tile" | "/terrain/terrain-tile",
+  fetchTile: TileFetcher,
+  fallbackError: string,
+): RequestHandler {
+  return asyncHandler(async (req, res): Promise<void> => {
+    const parsedQuery = TerrainSatelliteQuerySchema.safeParse(req.query);
+    if (!parsedQuery.success) {
+      logger.warn(
+        {
+          route: `GET /api${routePath}`,
+          issues: parsedQuery.error.issues.map((issue) => ({
+            path: issue.path,
+            code: issue.code,
+          })),
+        },
+        `GET /api${routePath} — Zod query validation failed`,
+      );
+      const details = parsedQuery.error.issues.map((issue) => issue.message).join("; ");
+      res.status(400).json({ error: "invalid_param", details });
+      return;
+    }
+
+    const [minLon, minLat, maxLon, maxLat] = parsedQuery.data.bbox;
+    if (
+      minLon === maxLon ||
+      minLat >= maxLat ||
+      minLon < -180 || minLon > 180 ||
+      maxLon < -180 || maxLon > 180 ||
+      minLat < -90 ||
+      maxLat > 90
+    ) {
+      res.status(400).json({
+        error: "invalid_bbox",
+        details: "bbox values out of range or degenerate",
+      });
+      return;
+    }
+
+    const rawSize = parsedQuery.data.size;
+    const size = Math.max(64, Math.min(1024, Number.isNaN(rawSize) ? 512 : rawSize));
+
+    try {
+      const imageBuffer = await fetchTile({ minLon, minLat, maxLon, maxLat }, size);
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Cache-Control", "public, max-age=86400, immutable");
+      res.setHeader("Content-Length", String(imageBuffer.length));
+      res.end(imageBuffer);
+    } catch (err) {
+      const details = err instanceof Error ? err.message : fallbackError;
+      res.status(502).json({ error: "upstream_error", details });
+    }
+  });
+}
+
+// Public imagery proxies used by the 3D land mesh and Overview Map.
+// Both upstream helpers support antimeridian-crossing bboxes.
+datasetTerrainRouter.get(
+  "/terrain/satellite-tile",
+  createTerrainTileHandler(
+    "/terrain/satellite-tile",
+    fetchSatelliteTile,
+    "Satellite tile fetch failed",
+  ),
+);
+datasetTerrainRouter.get(
+  "/terrain/terrain-tile",
+  createTerrainTileHandler(
+    "/terrain/terrain-tile",
+    fetchTerrainTile,
+    "Terrain tile fetch failed",
+  ),
+);
 
 // ── GET /terrain/download/info ────────────────────────────────────────────────
 // Lightweight preflight for the Overview Map download tool.  Returns the

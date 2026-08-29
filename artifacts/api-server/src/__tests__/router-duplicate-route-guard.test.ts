@@ -310,7 +310,7 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
   it("dataset capability composition retains the complete route inventory exactly once", async () => {
     const { datasetDomain } = await import("../domains/datasets/index.js");
     expect(countRoutes(datasetDiscoveryRouter)).toBe(2);
-    expect(countRoutes(datasetTerrainRouter)).toBe(7);
+    expect(countRoutes(datasetTerrainRouter)).toBe(9);
     expect(countRoutes(uploadIngestionRouter)).toBe(11);
     expect(countRoutesDeep(datasetDomain.router)).toBe(
       countRoutes(datasetDiscoveryRouter) + countRoutes(datasetTerrainRouter),
@@ -346,6 +346,8 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
       "GET /terrain/download",
       "GET /terrain/download/info",
       "GET /terrain/land",
+      "GET /terrain/satellite-tile",
+      "GET /terrain/terrain-tile",
     ]);
     expect(routePairs(uploadIngestionRouter)).toEqual([
       "GET /datasets/upload/chunk/status/:uploadId",

@@ -17,13 +17,7 @@ const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete", "head", "
 // the bundle assertion so prefixed routes cannot silently pass by matching
 // only an unmounted handler.
 const MOUNTED_ROUTE_PREFIXES = ["/poe", "/github"];
-export const DOCUMENTED_BUNDLE_ROUTE_EXCLUSIONS = Object.freeze({
-  // Both tile handlers were intentionally removed from the API router. Their
-  // remaining OpenAPI/client surface needs a separate product decision:
-  // restore the proxy endpoints or remove the stale imagery feature.
-  "GET /terrain/satellite-tile": "handler intentionally removed; stale imagery contract tracked separately",
-  "GET /terrain/terrain-tile": "handler intentionally removed; stale imagery contract tracked separately",
-});
+export const DOCUMENTED_BUNDLE_ROUTE_EXCLUSIONS = Object.freeze({});
 
 /**
  * Return every documented API route from the OpenAPI source of truth. This
