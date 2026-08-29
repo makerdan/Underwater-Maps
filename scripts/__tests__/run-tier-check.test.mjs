@@ -18,15 +18,15 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { runTierLockDryRun } from "../lib/tier-lock-check.mjs";
+import { VALIDATION_COMMANDS } from "../register-validation-commands.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const runTierScript = resolve(__dirname, "..", "run-tier.mjs");
-const replitConfigPath = resolve(__dirname, "..", "..", ".replit");
 
 let sandbox;
 
@@ -151,36 +151,22 @@ describe("unparseable tier-lock output", () => {
   });
 });
 
-describe("registered validation workflow entrypoints", () => {
-  const config = readFileSync(replitConfigPath, "utf8");
-  const workflowNames = [
-    "test-fast",
-    "test-standard",
-    "test-standard-plus",
-    "test-heavy",
-    "test-standard-skip-typecheck",
-    "test-standard-skip-dup-hooks",
-  ];
+describe("registered validation entrypoints", () => {
+  const tierCommands = VALIDATION_COMMANDS.filter(({ name }) => name.startsWith("test-"));
 
-  for (const workflowName of workflowNames) {
-    it(`${workflowName} only opts out when TASK_PLAN_FILE is absent`, () => {
-      const marker = `[[workflows.workflow]]\nname = "${workflowName}"`;
-      const start = config.indexOf(marker);
-      assert.notEqual(start, -1, `missing ${workflowName} workflow`);
-      const next = config.indexOf("[[workflows.workflow]]", start + marker.length);
-      const block = config.slice(start, next === -1 ? undefined : next);
-      const [taskBranch, adHocBranch = ""] = block.split("; else ");
+  it("contains only the four canonical task-locked tiers", () => {
+    assert.deepEqual(
+      tierCommands.map(({ name }) => name),
+      ["test-fast", "test-standard", "test-standard-plus", "test-heavy"],
+    );
+  });
 
-      assert.match(taskBranch, /if \[ -n \\"\$TASK_PLAN_FILE\\" \]/);
+  for (const { name, command } of tierCommands) {
+    it(`${name} remains fail-closed when TASK_PLAN_FILE is absent`, () => {
       assert.doesNotMatch(
-        taskBranch,
+        command,
         /--allow-no-plan/,
-        "task-driven branch must preserve fail-closed tier enforcement",
-      );
-      assert.match(
-        adHocBranch,
-        /--allow-no-plan/,
-        "only the explicit no-plan branch may opt out",
+        "registered task entrypoints must not opt out of tier enforcement",
       );
     });
   }

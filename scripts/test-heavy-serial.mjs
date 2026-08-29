@@ -30,7 +30,7 @@
  * Invoked by the "test-heavy" validation workflow.
  */
 import { spawnSync } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runTierLockDryRun } from "./lib/tier-lock-check.mjs";
@@ -39,6 +39,26 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const lockScript = resolve(root, "scripts/validation-lock.mjs");
 const timeoutScript = resolve(root, "scripts/run-with-timeout.mjs");
 mkdirSync(resolve(root, ".local/tmp"), { recursive: true });
+
+// Keep relocated palette ports in the same source-of-truth registry as the
+// Playwright config. This runner is plain ESM, so read the envPort defaults
+// from tests/e2e/ports.ts rather than duplicating numeric literals here.
+function resolvePortRegistryDefaults() {
+  const source = readFileSync(resolve(root, "tests/e2e/ports.ts"), "utf8");
+  const read = (name) => {
+    const value = process.env[name];
+    if (value !== undefined && value !== "") return value;
+    const match = source.match(new RegExp(`envPort\\("${name}",\\s*(\\d+)\\)`));
+    if (!match) throw new Error(`Could not resolve ${name} from tests/e2e/ports.ts`);
+    return match[1];
+  };
+  return {
+    web: read("E2E_PALETTE_WEB_PORT"),
+    api: read("E2E_PALETTE_API_PORT"),
+  };
+}
+
+const palettePorts = resolvePortRegistryDefaults();
 
 // --allow-no-plan: when present, a missing TASK_PLAN_FILE reverts to the old
 // warn-and-continue behaviour instead of a hard error.  Intended ONLY for
@@ -217,7 +237,7 @@ const steps = [
       wrapWithTimeout(
         [
           "bash", "-c",
-          "set -o pipefail; E2E_WEB_PORT=3250 E2E_API_PORT=3261 npx playwright test " +
+           `set -o pipefail; E2E_WEB_PORT=${palettePorts.web} E2E_API_PORT=${palettePorts.api} npx playwright test ` +
           "tests/e2e/palette-cross-device-sync.spec.ts " +
           "tests/e2e/onboarding-tour.spec.ts " +
           "tests/e2e/settings-cross-device-sync.spec.ts " +
@@ -259,11 +279,14 @@ const steps = [
  */
 function sweepE2ePorts() {
   const script = resolve(root, "scripts/kill-port-holders.mjs");
-  spawnSync("node", [script, "--e2e", "--include-own-tree"], { stdio: "inherit", cwd: root });
   spawnSync("node", [script, "--e2e", "--include-own-tree"], {
     stdio: "inherit",
     cwd: root,
-    env: { ...process.env, E2E_WEB_PORT: "3250", E2E_API_PORT: "3261" },
+    env: {
+      ...process.env,
+      E2E_WEB_PORT: palettePorts.web,
+      E2E_API_PORT: palettePorts.api,
+    },
   });
 }
 

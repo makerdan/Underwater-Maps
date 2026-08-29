@@ -32,6 +32,10 @@ export const E2E_WEB_PORT = envPort("E2E_WEB_PORT", 3150);
 /** Port the api-server E2E instance listens on during E2E runs. */
 export const E2E_API_PORT = envPort("E2E_API_PORT", 3161);
 
+/** Relocated ports used by the palette subset in the serialized heavy runner. */
+export const E2E_PALETTE_WEB_PORT = envPort("E2E_PALETTE_WEB_PORT", 3250);
+export const E2E_PALETTE_API_PORT = envPort("E2E_PALETTE_API_PORT", 3261);
+
 /**
  * Dummy PORT used when a Vite config must be loaded for a build-only
  * operation (the config hard-throws without PORT, but no server ever

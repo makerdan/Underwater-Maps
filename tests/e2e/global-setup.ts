@@ -109,13 +109,11 @@ function isBuildStale(): boolean {
 // ---------------------------------------------------------------------------
 
 export default function globalSetup() {
-  // NOTE on port cleanup: the stale-port sweep (kill-port-holders.mjs --e2e)
-  // must NOT run here. In Playwright 1.60 plugin setup — which starts the
-  // webServer processes — runs BEFORE globalSetup (createGlobalSetupTasks
-  // orders createPluginSetupTasks first), so a sweep here kills this run's
-  // own freshly-started servers, and every spec then fails with
-  // ECONNREFUSED on the API port. The sweep lives in the `test:e2e` script
-  // (package.json), which runs it before Playwright launches anything.
+  // NOTE on port cleanup: the stale-port sweep must NOT run here. Playwright's
+  // webServer manager starts processes before globalSetup, so a sweep here
+  // would kill this run's freshly-started servers and every spec would fail
+  // with ECONNREFUSED. Cleanup belongs to config evaluation (before Playwright
+  // probes webServer URLs) and to the webServer command itself.
 
   // --- Codegen ---
   if (codegenMissing) {

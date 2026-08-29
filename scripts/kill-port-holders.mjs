@@ -41,6 +41,19 @@ if (process.env.KILL_PORT_HOLDERS_RUNNING === "1") {
   console.log("kill-port-holders: already running in an ancestor process — skipping to avoid recursion.");
   process.exit(0);
 }
+// REPLIT_ENVIRONMENT may be "production" inside development workspaces. The
+// presence of REPLIT_DEV_DOMAIN is the authoritative signal that this is the
+// interactive dev container rather than a published deployment.
+const isDevelopmentWorkspace = Boolean(process.env.REPLIT_DEV_DOMAIN);
+if (
+  !isDevelopmentWorkspace &&
+  (process.env.NODE_ENV === "production" ||
+    process.env.REPLIT_DEPLOYMENT === "1" ||
+    process.env.REPLIT_ENVIRONMENT === "production")
+) {
+  console.error("kill-port-holders: refusing to run in a production environment.");
+  process.exit(2);
+}
 process.env.KILL_PORT_HOLDERS_RUNNING = "1";
 
 // ── Port resolution ─────────────────────────────────────────────────────────
@@ -52,11 +65,13 @@ function resolveE2ePorts() {
     const m = src.match(new RegExp(`envPort\\("${name}",\\s*(\\d+)\\)`));
     const fromEnv = process.env[name];
     const port = fromEnv ? Number(fromEnv) : m ? Number(m[1]) : NaN;
-    if (Number.isInteger(port) && port > 0) ports.push(port);
-  }
-  if (ports.length === 0) {
-    console.error("kill-port-holders: could not resolve E2E ports from tests/e2e/ports.ts");
-    process.exit(2);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      console.error(
+        `kill-port-holders: ${name} must resolve to a decimal integer between 1 and 65535.`,
+      );
+      process.exit(2);
+    }
+    ports.push(port);
   }
   return ports;
 }
@@ -70,14 +85,31 @@ const argv = process.argv.slice(2);
 // fails with "port already used". Only safe BETWEEN steps, when nothing in
 // our tree should legitimately hold the swept ports.
 const includeOwnTree = argv.includes("--include-own-tree");
+const positional = argv.filter((arg) => !arg.startsWith("--"));
+const unknownFlags = argv.filter(
+  (arg) => arg.startsWith("--") && arg !== "--e2e" && arg !== "--include-own-tree",
+);
+if (unknownFlags.length > 0) {
+  console.error(`kill-port-holders: unknown option(s): ${unknownFlags.join(", ")}`);
+  process.exit(2);
+}
 let ports = [];
 if (argv.includes("--e2e")) {
+  if (positional.length > 0) {
+    console.error("kill-port-holders: --e2e cannot be combined with explicit ports.");
+    process.exit(2);
+  }
   ports = resolveE2ePorts();
 } else {
-  ports = argv
-    .filter((a) => /^\d+$/.test(a))
-    .map(Number)
-    .filter((p) => p > 0 && p <= 65535);
+  if (positional.length === 0 || positional.some((arg) => !/^\d+$/.test(arg))) {
+    console.error("kill-port-holders: ports must be decimal integers between 1 and 65535.");
+    process.exit(2);
+  }
+  ports = positional.map(Number);
+  if (ports.some((port) => port < 1 || port > 65535)) {
+    console.error("kill-port-holders: ports must be between 1 and 65535.");
+    process.exit(2);
+  }
 }
 if (ports.length === 0) {
   console.error("Usage: kill-port-holders.mjs <port> [<port>...] | --e2e");

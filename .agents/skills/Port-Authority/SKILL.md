@@ -44,10 +44,11 @@ routinely kill the wrong process or "fix" a port that was never the problem.
   shell ends, or survive as port-holding orphans that break the next run.
 - Anything that runs longer than ~2 minutes belongs in a **named workflow**
   or a **registered validation command**, never an ad-hoc shell.
-  Registered validation commands come in three tiers: `test-fast`
-  (typecheck + lint only), `test-standard` (typecheck + lint + unit +
-  doc checks), and `test-heavy` (full suite including e2e and schema
-  checks). Read the `validation-tiers` skill for the decision table.
+   Registered validation commands come in four tiers: `test-fast`
+   (typecheck + lint only), `test-standard` (typecheck + lint + unit +
+   doc checks), `test-standard-plus` (all static + unit checks without
+   Playwright), and `test-heavy` (full suite including e2e and schema checks).
+   Read the `validation-tiers` skill for the decision table.
   **Never default to `test-heavy` for every task** — it is reserved for
   high-risk changes (new API routes, schema migrations, auth/security
   changes, multi-package refactors).

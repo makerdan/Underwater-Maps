@@ -535,6 +535,58 @@ Every new sign-in is held as **pending** until an admin approves it (`requireApp
 
 ---
 
+## Port Authority operator checklist
+
+Port and validation lifecycle work must use the existing canonical paths below.
+Do not add validation jobs to `.replit`, create ad-hoc workflows, or start
+validation with `nohup`, `setsid`, background shells, or one-off port clones.
+
+### Standard capabilities
+
+- [ ] **Port discovery and cleanup:** `node scripts/kill-port-holders.mjs <port...>`
+  uses `/proc` socket inodes, protects the caller tree, terminates the complete
+  wrapper tree with SIGTERM then SIGKILL escalation, and confirms each port is
+  free. `--e2e` resolves ports from `tests/e2e/ports.ts`.
+- [ ] **Safety fences:** cleanup rejects invalid/unknown arguments, recursive
+  calls, production environments, invisible listeners, and attempts to kill
+  the active caller tree.
+- [ ] **Validation registration:** the only registered validation commands are
+  `test-fast`, `test-standard`, `test-standard-plus`, `test-heavy`, and
+  `audit-marker-bbox`, defined in `scripts/register-validation-commands.mjs`.
+- [ ] **Tier routing:** `scripts/run-tier.mjs` consumes
+  `scripts/validation-steps.mjs`; `codegen`, `unit-cpu`, and `e2e-port` are
+  named resources with priority ordering, reentrancy, stale recovery, and
+  post-lock timing.
+- [ ] **Lock recovery:** `scripts/validation-lock.mjs` and
+  `scripts/clean-stale-validation-locks.mjs` preserve live locks, reclaim dead
+  or stale holders atomically, and report forced takeovers loudly.
+
+### Heavy-runner capabilities
+
+- [ ] **Serialized full validation:** `test-heavy` resolves to
+  `node scripts/run-with-timeout.mjs aggregate -- node scripts/test-heavy-serial.mjs`.
+  The serial runner keeps per-step locks inside the runner and never adds an
+  outer duplicate lock.
+- [ ] **E2E lifecycle:** `playwright.config.ts` performs the stale-port sweep
+  during config evaluation, before Playwright probes `webServer` URLs.
+  `tests/e2e/global-setup.ts` does codegen/build freshness only, and all
+  relocated palette ports and output directories come from `tests/e2e/ports.ts`.
+- [ ] **Repeatability:** run the task-authorized validation command twice
+  back-to-back, without manually killing processes, clearing ports, or
+  creating another workflow. A second run must start cleanly on its own.
+
+### Canonical verification evidence
+
+- `pnpm run check:ports`
+- `node --test scripts/__tests__/port-authority-config.test.mjs`
+- `node --test scripts/src/validation-lock.test.mjs scripts/__tests__/clean-stale-validation-locks.test.mjs`
+- `TASK_PLAN_FILE=.local/tasks/task-4640.md node scripts/run-with-timeout.mjs aggregate -- node scripts/test-heavy-serial.mjs`
+- Repeat the same `test-heavy` command immediately afterward without manual
+  cleanup. Record any listed baseline failures separately; do not widen the
+  validation tier to make them disappear.
+
+---
+
 ### Progressive Web App (Offline Support)
 
 - Built with `vite-plugin-pwa` + Workbox.

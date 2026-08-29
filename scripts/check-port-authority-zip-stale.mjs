@@ -29,11 +29,23 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 
 const SKILL_PATH = resolve(root, ".agents/skills/Port-Authority/SKILL.md");
-const ZIP_PATH = resolve(root, "artifacts/bathyscan/public/port-authority-skill.zip");
-const ZIP_ENTRY = "Port-Authority/SKILL.md";
+const ZIP_TARGETS = [
+  {
+    path: resolve(root, "artifacts/bathyscan/public/port-authority-skill.zip"),
+    entry: "Port-Authority/SKILL.md",
+  },
+  {
+    path: resolve(root, "exports/port-authority-skills.zip"),
+    entry: "Port-Authority/SKILL.md",
+  },
+  {
+    path: resolve(root, "port-authority-skills.zip"),
+    entry: ".agents/skills/Port-Authority/SKILL.md",
+  },
+];
 
 const REGEN_HINT =
-  "  Regenerate: (cd .agents/skills && zip ../../artifacts/bathyscan/public/port-authority-skill.zip Port-Authority/SKILL.md)";
+  "  Regenerate the published Port Authority zip assets from .agents/skills.";
 
 // ---------------------------------------------------------------------------
 // Existence checks
@@ -47,7 +59,8 @@ if (!existsSync(SKILL_PATH)) {
   process.exit(1);
 }
 
-if (!existsSync(ZIP_PATH)) {
+const existingTargets = ZIP_TARGETS.filter(({ path }) => existsSync(path));
+if (existingTargets.length === 0) {
   // No zip published yet — nothing to validate. This is the expected state
   // until a downloadable copy is intentionally published under
   // artifacts/bathyscan/public/port-authority-skill.zip.
@@ -57,44 +70,28 @@ if (!existsSync(ZIP_PATH)) {
   process.exit(0);
 }
 
-// ---------------------------------------------------------------------------
-// Extract the entry from the zip and compare
-// ---------------------------------------------------------------------------
-
-// unzip -p writes entry contents to stdout — no on-disk temp directory is needed.
-const result = spawnSync(
-  "unzip",
-  ["-p", ZIP_PATH, ZIP_ENTRY],
-  { encoding: "buffer" },
-);
-
-if (result.status !== 0) {
-  console.error(
-    `[check-port-authority-zip-stale] FAIL: could not extract '${ZIP_ENTRY}' from ${ZIP_PATH}`,
-  );
-  const stderr = result.stderr?.toString("utf8").trim();
-  if (stderr) console.error(`  unzip error: ${stderr}`);
-  console.error(REGEN_HINT);
-  process.exit(1);
-}
-
-const inZip = result.stdout;
 const onDisk = readFileSync(SKILL_PATH);
-
-if (!inZip.equals(onDisk)) {
-  console.error(
-    `[check-port-authority-zip-stale] FAIL: port-authority-skill.zip is stale`,
-  );
-  console.error(
-    `  The zip entry '${ZIP_ENTRY}' does not match .agents/skills/Port-Authority/SKILL.md.`,
-  );
-  console.error(
-    `  This means the skill was edited after the zip was last generated.`,
-  );
-  console.error(REGEN_HINT);
-  process.exit(1);
+for (const { path: zipPath, entry } of existingTargets) {
+  const result = spawnSync("unzip", ["-p", zipPath, entry], { encoding: "buffer" });
+  if (result.status !== 0) {
+    console.error(
+      `[check-port-authority-zip-stale] FAIL: could not extract '${entry}' from ${zipPath}`,
+    );
+    const stderr = result.stderr?.toString("utf8").trim();
+    if (stderr) console.error(`  unzip error: ${stderr}`);
+    console.error(REGEN_HINT);
+    process.exit(1);
+  }
+  if (!result.stdout.equals(onDisk)) {
+    console.error(`[check-port-authority-zip-stale] FAIL: ${zipPath} is stale`);
+    console.error(
+      `  The zip entry '${entry}' does not match .agents/skills/Port-Authority/SKILL.md.`,
+    );
+    console.error(REGEN_HINT);
+    process.exit(1);
+  }
 }
 
 console.log(
-  "[check-port-authority-zip-stale] OK — port-authority-skill.zip is up to date",
+  `[check-port-authority-zip-stale] OK — ${existingTargets.length} published zip asset(s) are up to date`,
 );

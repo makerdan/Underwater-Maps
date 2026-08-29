@@ -122,11 +122,10 @@ export default defineConfig({
   // exercise real auth-gated routes end-to-end.
   webServer: [
     {
-      // ORDERING CONTRACT: globalSetup (above) always runs before Playwright
-      // starts any webServer process. global-setup.ts calls `node ./build.mjs`
-      // with DIST_DIR=dist-e2e, ensuring dist-e2e/index.mjs exists before
-      // `start:e2e` is invoked. Do not remove or move the globalSetup
-      // registration without also making `start:e2e` build-aware.
+      // ORDERING CONTRACT: Playwright's webServer manager starts these
+      // processes before globalSetup. The config-load sweep above therefore
+      // handles stale ports before Playwright probes these URLs. global-setup.ts
+      // handles codegen and build freshness; keep this command build-aware too.
       //
       // Belt-and-suspenders: `build:e2e` runs inline here as a safety net so
       // that even if globalSetup fails silently the webServer still gets a

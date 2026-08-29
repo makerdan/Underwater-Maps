@@ -2,7 +2,7 @@ import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
-import { execSync, exec, spawn } from "child_process";
+import { execSync, spawn } from "child_process";
 import fs from "fs";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { VitePWA } from "vite-plugin-pwa";
@@ -183,15 +183,39 @@ function devApiRestartPlugin(): Plugin {
   const API_SERVER_PORT = 8080; // matches artifacts/api-server localPort
   const RESTART_LOG = "/tmp/api-server-dev-restart.log";
   const workspaceRoot = path.resolve(import.meta.dirname, "..", "..");
+  const portCleanupScript = path.resolve(workspaceRoot, "scripts", "kill-port-holders.mjs");
 
   function killApiServerOnPort(): Promise<void> {
-    return new Promise((resolve) => {
-      // Kill by port so we catch both workflow-started and previously
-      // restart-spawned instances. Errors (nothing listening) are ignored.
-      exec(
-        `pids=$(lsof -ti tcp:${API_SERVER_PORT} 2>/dev/null); [ -n "$pids" ] && kill $pids 2>/dev/null; exit 0`,
-        () => setTimeout(resolve, 300),
+    return new Promise((resolve, reject) => {
+      // Use the workspace's guarded /proc cleanup path. --include-own-tree is
+      // intentional here because a server started by an earlier button click
+      // remains a descendant of this Vite process until it exits.
+      const cleanup = spawn(
+        process.execPath,
+        [portCleanupScript, "--include-own-tree", String(API_SERVER_PORT)],
+        {
+          cwd: workspaceRoot,
+          stdio: ["ignore", "ignore", "pipe"],
+          env: process.env,
+        },
       );
+      let stderr = "";
+      cleanup.stderr.setEncoding("utf8");
+      cleanup.stderr.on("data", (chunk: string) => {
+        stderr += chunk;
+      });
+      cleanup.once("error", reject);
+      cleanup.once("close", (code) => {
+        if (code === 0) {
+          resolve();
+          return;
+        }
+        reject(
+          new Error(
+            `Port cleanup failed with exit code ${code ?? "unknown"}${stderr ? `: ${stderr.trim()}` : ""}`,
+          ),
+        );
+      });
     });
   }
 
