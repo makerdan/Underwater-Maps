@@ -4,7 +4,7 @@ BathyScan turns raw bathymetry (seafloor and lake-bed depth data) into an intera
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/api-server run dev` — run the API server (port 8080)
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
@@ -60,7 +60,7 @@ checks, and redundant targeted unit/browser executions.
 .
 ├── artifacts/
 │   ├── bathyscan/        # React + Vite + R3F PWA (the web app)
-│   ├── api-server/       # Express 5 API on port 5000
+│   ├── api-server/       # Express 5 API on port 8080
 │   └── mockup-sandbox/   # Canvas component preview server (not deployed)
 ├── lib/
 │   ├── api-spec/         # openapi.yaml + Orval codegen (source of truth)

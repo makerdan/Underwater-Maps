@@ -578,7 +578,7 @@ BathyScan is a full Progressive Web App built with `vite-plugin-pwa` and Workbox
 │   │   │   ├── hooks/       # useTidalData, useSurfaceTemperature, etc.
 │   │   │   └── lib/         # Zustand stores, drift physics, dev-auth bypass
 │   │   └── tests/e2e/       # Playwright end-to-end specs
-│   ├── api-server/          # Express 5 API on port 5000
+│   ├── api-server/          # Express 5 API on port 8080
 │   │   └── src/
 │   │       ├── routes/      # One file per route domain
 │   │       ├── lib/         # parseWorker, cacheRegistry, bucketMonitor, etc.
