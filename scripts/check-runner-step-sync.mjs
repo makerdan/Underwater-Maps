@@ -122,6 +122,9 @@ export const GITHUB_CI_COVERAGE = {
   "check:ci-validation-parity-skill": {
     tokens: ["pnpm run check:ci-validation-parity-skill"],
   },
+  "check:skill-compression-contract": {
+    tokens: ["pnpm run check:skill-compression-contract"],
+  },
   "fix:failure-gate-stubs": {
     excluded: "Mutates Agent task plans under gitignored .local/tasks/, which GitHub Actions must not create or repair.",
     dependency: "task-plan-context",

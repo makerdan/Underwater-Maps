@@ -160,6 +160,9 @@ jobs:
       - name: 'check:ci-validation-parity-skill'
         run: pnpm run check:ci-validation-parity-skill
 
+      - name: 'check:skill-compression-contract'
+        run: pnpm run check:skill-compression-contract
+
       - name: 'verify: failure-gate + regression-guard'
         run: pnpm run verify
 

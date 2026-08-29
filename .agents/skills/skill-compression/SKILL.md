@@ -267,7 +267,7 @@ contradiction that cannot be resolved from `B0`.
 If either review fails, retain the strongest safe earlier candidate and report
 the failed check. Do not reopen completed passes or invent a fourth pass.
 
-## 11. Preview, approval, and safe application
+## 11. Preview, durable retention, approval, and safe application
 
 The default response is a preview with this exact content:
 
@@ -280,6 +280,45 @@ The default response is a preview with this exact content:
    or `Retain baseline`, with a short reason.
 5. **Change list** — the itemized report required in the next section.
 
+Treat every preview as a user deliverable, not chat-only output. Before
+finishing, save the full preview package to a user-designated or
+project-designated durable destination. If neither exists, propose a clearly
+named fallback such as
+`skill-previews/<target-slug>/<unique-candidate-id>.md`, but first verify that
+the destination is not ignored, temporary, an ignored runtime mirror, or the
+canonical target file. Ask before creating a surprising tracked file. Never
+overwrite an earlier preview; use a unique candidate ID for every new package.
+Chat history and a task completion result are not durable storage.
+
+The persisted preview must contain, in addition to the complete candidate text:
+
+- `B0 — Baseline`, the canonical source identity, and the baseline/source
+  identity used for the candidate;
+- meaningful diffs from `B0` and the preceding candidate;
+- risks, findings, rejected alternatives, stop conditions, and recommendation;
+- the complete **Accepted changes**, **Materially shorter rejected
+  alternatives**, **Retained wording**, **Unresolved wording and findings**,
+  and **Scope and source status** change-list categories; and
+- the handoff information below, including the candidate label, exact path,
+  canonical source, and baseline identity.
+
+Label the inline candidate unambiguously as **P3 — Complete candidate**. If
+Pass 3 is a no-op, label the strongest retained candidate
+**Retained strongest candidate — Pass 3 no-op** and say why it was retained.
+Return the complete candidate under that label and report the exact saved path.
+If response transport limits prevent complete inline delivery, say that the
+response is incomplete and direct the user to the verified durable file; do
+not claim that the preview was fully returned.
+
+After saving, perform a read-back verification before presenting the
+recommendation. Confirm that the path is outside `.local/`, temporary
+directories, ignored runtime mirrors, and the canonical target, that the file
+exists and is readable, that the complete candidate appears under its required
+label, and that the persisted text matches the candidate and report exactly.
+Treat any write, path-validation, read-back, truncation, or content-mismatch
+failure as incomplete work. Preserve the authoritative target and report the
+failure; never silently fall back to an ephemeral response.
+
 Ask for explicit approval before writing. Approval must clearly identify the
 candidate to apply; silence, a request for preview, or an ambiguous response
 is not approval. If the user rejects it, do not write. If the user requests
@@ -291,6 +330,17 @@ source. Preserve metadata and all referenced resources or executable behavior
 outside the approved scope. Re-read the source, verify that it equals the
 approved candidate within the approved scope, and report any write mismatch
 as a failure rather than silently retrying on another file.
+
+When user-visible project tasks are available, create a separate proposed
+follow-up apply task only after the preview file passes read-back verification.
+The handoff must point to the exact durable preview path and identify its
+candidate label, canonical source, and baseline identity. It must remain
+proposed: never auto-accept, auto-start, or auto-apply it. The follow-up task
+must require explicit approval of the named candidate, recheck the canonical
+source against the preview baseline before writing, and block or regenerate
+the preview if the source changed. When no project-task system exists, put this
+same ready-to-use apply-task specification in the durable preview and final
+response rather than pretending a task was created.
 
 ## 12. Report every proposed change
 
@@ -332,6 +382,15 @@ Before presenting the recommendation or applying an approved candidate, verify:
 - all six adversarial check categories were addressed;
 - Final Review checked semantic fidelity before general language;
 - the preview includes complete text, diff, risks, and recommendation;
+- the complete P3 candidate, or clearly labeled retained strongest candidate,
+  is present in the response and the durable preview;
+- the durable preview path passed prohibited-location and read-back checks and
+  its persisted text matches the reported candidate;
+- the exact saved path, candidate label, canonical source, and baseline identity
+  are present in the handoff;
+- a project-task handoff, when available, is separate and proposed rather than
+  accepted or applied, and it requires approval plus source-baseline
+  revalidation; otherwise the equivalent task specification is present;
 - explicit approval gates every write to the authoritative source;
 - the final change list covers accepted, rejected, retained, and unresolved
   wording; and
