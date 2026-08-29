@@ -203,6 +203,14 @@ describe("drawArrow cardinal directions", () => {
     drawArrow(ctx, 0, 0, heading);
     expect(ctx.rotate).toHaveBeenCalledWith(expected);
   });
+
+  it("uses bright purple for the boat fill and glow", () => {
+    const ctx = makeCtx();
+    drawArrow(ctx, 0, 0, 0);
+
+    expect(ctx.fillStyle).toBe("#d946ef");
+    expect(ctx.shadowColor).toBe("#d946ef");
+  });
 });
 
 describe("drawHeatmap — full palette domain", () => {
