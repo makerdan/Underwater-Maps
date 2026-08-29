@@ -214,3 +214,10 @@ uri = "file://exports/failure-gate-skill.zip"
 type = "unspecified"
 title = "Failure Gate Skill (ZIP)"
 description = "Direct download of the canonical Failure Gate skill from .agents/skills."
+
+[[outputs]]
+id = "fKLQihg4JTReJK-losZBr"
+uri = "file://exports/skill-compression-skill.zip"
+type = "unspecified"
+title = "Skill Compression skill ZIP"
+description = "Direct download of the canonical Skill Compression skill packaged from .agents/skills/skill-compression/SKILL.md. The archived SKILL.md was verified byte-for-byte against the canonical source."
