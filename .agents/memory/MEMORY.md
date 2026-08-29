@@ -152,3 +152,4 @@
 
 - [Fly-control test camera spawn](fly-controls-test-camera-spawn.md) — snapshot camera displacement after terrain mount so spawn offsets do not look like physics failures.
 - [Deterministic collection E2E fixtures](e2e-collection-fixtures.md) — create ready upload-backed members in the test and clean them up; never skip based on persisted E2E-library contents.
+- [Multi-result save test mocks](multi-result-save-test-mocks.md) — multi-card save tests need cardinality-safe waits and refetch mocks that publish successful IDs.

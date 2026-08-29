@@ -22,7 +22,7 @@
 
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { act, waitFor, fireEvent, screen } from "@testing-library/react";
+import { act, waitFor, fireEvent, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderWithProviders } from "./setup";
 import { useTerrainStore } from "@/lib/terrainStore";
@@ -186,6 +186,12 @@ const BOX_SELECT_CATALOG_RESULT = {
   relevanceScore: 1,
 };
 
+const BOX_SELECT_NEIGHBOR_RESULT = {
+  ...BOX_SELECT_CATALOG_RESULT,
+  id: "box-select-neighbor",
+  name: "Neighboring Box Select Survey",
+};
+
 /** Shared store setup used by both describe blocks. */
 function setupStores() {
   Object.defineProperty(window, "innerWidth",  { value: CANVAS_W, configurable: true });
@@ -243,10 +249,10 @@ async function waitForCameraArrow(): Promise<Element> {
   );
 }
 
-async function openBoxSelectResult() {
+async function openBoxSelectResult(catalogResults = [BOX_SELECT_CATALOG_RESULT]) {
   setupStores();
   mockConfig.bboxQueryMutation.mockResolvedValue({
-    datasets: [BOX_SELECT_CATALOG_RESULT],
+    datasets: catalogResults,
   });
 
   await act(async () => {
@@ -279,7 +285,7 @@ async function openBoxSelectResult() {
   await act(async () => {
     fireEvent.click(screen.getByTestId("overview-bbox-request"));
   });
-  await waitFor(() => expect(screen.getByTestId("overview-bbox-result-card")).toBeInTheDocument());
+  await waitFor(() => expect(screen.getAllByTestId("overview-bbox-result-card")).not.toHaveLength(0));
 }
 
 describe("OverviewMap — Box Select save feedback", () => {
@@ -331,6 +337,66 @@ describe("OverviewMap — Box Select save feedback", () => {
       expect(screen.getByTestId("overview-bbox-save")).toHaveTextContent("✓ SAVED");
     });
     expect(screen.queryByTestId("overview-bbox-save-error-box-select-catalog")).toBeNull();
+  });
+
+  it("isolates one failed save from a neighboring result and preserves both across retry", async () => {
+    mockConfig.saveMutation
+      .mockRejectedValueOnce({
+        data: { detail: "The first dataset could not be saved." },
+      })
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined);
+    const savedCatalogIds: string[] = [];
+    mockConfig.refetchMySaves.mockImplementation(async () => {
+      const lastSave = mockConfig.saveMutation.mock.calls.at(-1)?.[0] as { id?: string } | undefined;
+      if (lastSave?.id && !savedCatalogIds.includes(lastSave.id)) {
+        savedCatalogIds.push(lastSave.id);
+      }
+      mockConfig.mySaves = savedCatalogIds.map((catalogId) => ({ catalogId }));
+    });
+
+    await openBoxSelectResult([BOX_SELECT_CATALOG_RESULT, BOX_SELECT_NEIGHBOR_RESULT]);
+
+    const failedCard = screen
+      .getByText(BOX_SELECT_CATALOG_RESULT.name)
+      .closest('[data-testid="overview-bbox-result-card"]');
+    const neighboringCard = screen
+      .getByText(BOX_SELECT_NEIGHBOR_RESULT.name)
+      .closest('[data-testid="overview-bbox-result-card"]');
+    expect(failedCard).not.toBeNull();
+    expect(neighboringCard).not.toBeNull();
+
+    const failedSaveButton = within(failedCard!).getByTestId("overview-bbox-save");
+    const neighboringSaveButton = within(neighboringCard!).getByTestId("overview-bbox-save");
+    expect(failedSaveButton).toBeEnabled();
+    expect(neighboringSaveButton).toBeEnabled();
+
+    await act(async () => { fireEvent.click(failedSaveButton); });
+
+    expect(await within(failedCard!).findByTestId("overview-bbox-save-error-box-select-catalog"))
+      .toHaveTextContent(
+        "Could not save this dataset: The first dataset could not be saved. Please try again.",
+      );
+    expect(within(neighboringCard!).queryByRole("alert")).toBeNull();
+    expect(neighboringSaveButton).toBeEnabled();
+    expect(neighboringSaveButton).toHaveTextContent("+ SAVE");
+
+    await act(async () => { fireEvent.click(neighboringSaveButton); });
+    await waitFor(() => expect(neighboringSaveButton).toHaveTextContent("✓ SAVED"));
+    expect(screen.getByText(BOX_SELECT_CATALOG_RESULT.name)).toBeInTheDocument();
+    expect(within(failedCard!).getByTestId("overview-bbox-save")).toHaveTextContent("+ SAVE");
+
+    await act(async () => { fireEvent.click(failedSaveButton); });
+    await waitFor(() => expect(failedSaveButton).toHaveTextContent("✓ SAVED"));
+
+    expect(screen.getByText(BOX_SELECT_NEIGHBOR_RESULT.name)).toBeInTheDocument();
+    expect(within(neighboringCard!).getByTestId("overview-bbox-save")).toHaveTextContent("✓ SAVED");
+    expect(within(failedCard!).queryByRole("alert")).toBeNull();
+    expect(mockConfig.saveMutation.mock.calls).toEqual([
+      [{ id: BOX_SELECT_CATALOG_RESULT.id }],
+      [{ id: BOX_SELECT_NEIGHBOR_RESULT.id }],
+      [{ id: BOX_SELECT_CATALOG_RESULT.id }],
+    ]);
   });
 });
 
