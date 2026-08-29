@@ -555,13 +555,29 @@ router.delete("/user/collections/:id/members/:memberId", requireAuth, dataMutati
     return;
   }
 
-  const deleted = await db
-    .delete(datasetCollectionMembersTable)
-    .where(and(
-      eq(datasetCollectionMembersTable.id, memberId),
-      eq(datasetCollectionMembersTable.collectionId, collectionId),
-    ))
-    .returning({ id: datasetCollectionMembersTable.id });
+  const deleted = await db.transaction(async (tx) => {
+    const rows = await tx
+      .delete(datasetCollectionMembersTable)
+      .where(and(
+        eq(datasetCollectionMembersTable.id, memberId),
+        eq(datasetCollectionMembersTable.collectionId, collectionId),
+      ))
+      .returning({ id: datasetCollectionMembersTable.id });
+    if (!rows.length) return rows;
+
+    // A default points at the membership row, so removing that row must
+    // restore automatic first-available selection rather than leave a
+    // dangling preference that only fails later during collection loading.
+    await tx
+      .update(datasetCollectionsTable)
+      .set({ defaultMemberId: null, updatedAt: new Date() })
+      .where(and(
+        eq(datasetCollectionsTable.id, collectionId),
+        eq(datasetCollectionsTable.defaultMemberId, memberId),
+      ))
+      .returning({ id: datasetCollectionsTable.id });
+    return rows;
+  });
   if (deleted.length === 0) {
     res.status(404).json({ error: "not_found", details: "Member not found" });
     return;

@@ -137,6 +137,32 @@ async function installCollectionRoutes(page: Page): Promise<CollectionFixture[]>
     await route.continue();
   });
 
+  await page.route("**/api/user/collections/*/members/*", async (route) => {
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
+    const match = pathname.match(/\/api\/user\/collections\/([^/]+)\/members\/([^/]+)$/);
+    if (request.method() === "DELETE" && match) {
+      const collection = collections.find((item) => item.id === match[1]);
+      if (!collection) {
+        await route.fulfill({ status: 404, json: { error: "not_found" } });
+        return;
+      }
+      const memberId = match[2];
+      const memberIndex = collection.members.findIndex((member) => member.id === memberId);
+      if (memberIndex < 0) {
+        await route.fulfill({ status: 404, json: { error: "not_found" } });
+        return;
+      }
+      collection.members.splice(memberIndex, 1);
+      if (collection.defaultMemberId === memberId) collection.defaultMemberId = null;
+      collection.updatedAt = new Date().toISOString();
+      await route.fulfill({ status: 204 });
+      return;
+    }
+
+    await route.continue();
+  });
+
   await page.route("**/api/user/datasets", (route) =>
     route.fulfill({
       status: 200,
@@ -208,6 +234,12 @@ async function expectDefault(
   await page.getByTestId(`btn-close-collection-settings-${collectionId}`).click({ force: true });
 }
 
+async function removeMember(page: Page, collectionId: string, memberId: string): Promise<void> {
+  await page.getByTestId(`btn-expand-collection-${collectionId}`).click();
+  await page.getByTestId(`btn-remove-member-${memberId}`).click();
+  await expect(page.getByTestId(`collection-member-${memberId}`)).toBeHidden();
+}
+
 async function expectPrimaryDataset(page: Page, datasetId: string): Promise<void> {
   await expect
     .poll(
@@ -264,8 +296,8 @@ test.describe("collection default member reload persistence", () => {
     await expectPrimaryDataset(page, CATALOG_DATASET_IDS[1]);
     await closeOverview(page);
 
-    await chooseDefault(page, STANDARD_COLLECTION_ID, "");
-    await chooseDefault(page, SPECIAL_COLLECTION_ID, "");
+    await removeMember(page, STANDARD_COLLECTION_ID, "upload-member-second");
+    await removeMember(page, SPECIAL_COLLECTION_ID, "catalog-member-second");
 
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("collections-section")).toBeVisible({ timeout: 12_000 });

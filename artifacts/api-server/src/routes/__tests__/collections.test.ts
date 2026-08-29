@@ -238,7 +238,14 @@ vi.mock("@workspace/db", async () => {
 
   return {
     ...base,
-    db: { select, insert, update, delete: del },
+    db: {
+      select,
+      insert,
+      update,
+      delete: del,
+      transaction: async <T>(cb: (tx: unknown) => Promise<T>) =>
+        cb({ select, insert, update, delete: del }),
+    },
     datasetCollectionsTable,
     datasetCollectionMembersTable,
     customDatasetsTable,
@@ -591,6 +598,18 @@ describe("DELETE /api/user/collections/:id/members/:memberId", () => {
     expect(res.status).toBe(204);
     expect(state.members).toHaveLength(0);
     expect(state.datasets).toHaveLength(1);
+  });
+
+  it("clears the collection default when the selected member is removed", async () => {
+    const cid = seedCollection("user-a", "Trip");
+    const dsId = seedDataset("user-a", "Preferred");
+    const memberId = seedMember(cid, { datasetId: dsId });
+    state.collections.find((collection) => collection["id"] === cid)!["defaultMemberId"] = memberId;
+
+    const res = await request(app).delete(`/api/user/collections/${cid}/members/${memberId}`);
+
+    expect(res.status).toBe(204);
+    expect(state.collections.find((collection) => collection["id"] === cid)!["defaultMemberId"]).toBeNull();
   });
 
   it("404s for a member id that belongs to a different collection", async () => {
