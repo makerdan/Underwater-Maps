@@ -119,6 +119,9 @@ export const GITHUB_CI_COVERAGE = {
   "check:deps-suppression": { tokens: ["pnpm run check:deps-suppression"] },
   "check:duplicate-hooks-registry": { tokens: ["pnpm run check:duplicate-hooks-registry"] },
   "check:runner-step-sync": { tokens: ["pnpm run check:runner-step-sync"] },
+  "check:ci-validation-parity-skill": {
+    tokens: ["pnpm run check:ci-validation-parity-skill"],
+  },
   "fix:failure-gate-stubs": {
     excluded: "Mutates Agent task plans under gitignored .local/tasks/, which GitHub Actions must not create or repair.",
     dependency: "task-plan-context",

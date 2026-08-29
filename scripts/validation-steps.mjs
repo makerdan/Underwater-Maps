@@ -99,6 +99,8 @@ export function getValidationSteps(logPrefix) {
     { name: "check:duplicate-hooks-registry", resource: null, cmd: "pnpm run check:duplicate-hooks-registry", tiers: FAST },
     // no resource: CI coverage meta-check for check:* scripts, sub-second
     { name: "check:runner-step-sync", resource: null, cmd: "pnpm run check:runner-step-sync", tiers: FAST },
+    // no resource: semantic contract guard for CI Validation Parity guidance, sub-second
+    { name: "check:ci-validation-parity-skill", resource: null, cmd: "pnpm run check:ci-validation-parity-skill", tiers: FAST },
     // no resource: auto-remediates missing stubs before the strict check runs, sub-second file-write only.
     { name: "fix:failure-gate-stubs", resource: null, cmd: "node scripts/check-failure-gate.mjs --fix-stub --skip-if-no-task", tiers: FAST },
     // no resource: failure-gate full lint (plan files in .local/tasks/), sub-second.

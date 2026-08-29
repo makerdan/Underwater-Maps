@@ -157,6 +157,9 @@ jobs:
       - name: 'check:runner-step-sync'
         run: pnpm run check:runner-step-sync
 
+      - name: 'check:ci-validation-parity-skill'
+        run: pnpm run check:ci-validation-parity-skill
+
       - name: 'verify: failure-gate + regression-guard'
         run: pnpm run verify
 
