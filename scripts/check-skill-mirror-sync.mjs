@@ -29,7 +29,14 @@
  * Usage:
  *   node scripts/check-skill-mirror-sync.mjs
  */
-import { readFileSync, writeFileSync, copyFileSync, existsSync, readdirSync, statSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  copyFileSync,
+  existsSync,
+  readdirSync,
+  statSync,
+} from "node:fs";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
@@ -99,8 +106,8 @@ export function findLocalSkillDirectory(localDir, canonicalName) {
 
 function repairMirror(canonicalSkillMd, localSkillMd, fingerprintPath) {
   try {
-    copyFileSync(canonicalSkillMd, localSkillMd);
     const actualMd5 = md5OfFile(canonicalSkillMd);
+    copyFileSync(canonicalSkillMd, localSkillMd);
     writeFileSync(fingerprintPath, actualMd5 + "\n", "utf8");
     return true;
   } catch (err) {
@@ -151,7 +158,12 @@ export function runSkillMirrorCheck({
     const localSkillMd = join(localDir, localName, "SKILL.md");
 
     if (!existsSync(canonicalSkillMd)) {
-      // Canonical skill dir exists but has no SKILL.md — skip silently.
+      // A canonical directory without its source file is an invalid source
+      // tree, not an out-of-scope missing runtime counterpart.
+      logger.error(
+        `[check-skill-mirror-sync] ERROR — canonical skill "${canonicalName}" is missing SKILL.md: ${canonicalSkillMd}`,
+      );
+      hardFailures.push(canonicalName);
       continue;
     }
 
@@ -161,15 +173,23 @@ export function runSkillMirrorCheck({
     let needsRepair = false;
     let repairReason = "";
 
-    if (!existsSync(fingerprintPath)) {
+    if (!existsSync(localSkillMd)) {
+      needsRepair = true;
+      repairReason = "missing local SKILL.md";
+    } else if (!existsSync(fingerprintPath)) {
       needsRepair = true;
       repairReason = "missing .fingerprint";
     } else {
-      const storedFingerprint = readFileSync(fingerprintPath, "utf8").trim();
-      const actualMd5 = md5OfFile(canonicalSkillMd);
-      if (storedFingerprint !== actualMd5) {
+      try {
+        const storedFingerprint = readFileSync(fingerprintPath, "utf8").trim();
+        const actualMd5 = md5OfFile(canonicalSkillMd);
+        if (storedFingerprint !== actualMd5) {
+          needsRepair = true;
+          repairReason = `fingerprint mismatch (stored=${storedFingerprint.slice(0, 8)}… actual=${actualMd5.slice(0, 8)}…)`;
+        }
+      } catch (err) {
         needsRepair = true;
-        repairReason = `fingerprint mismatch (stored=${storedFingerprint.slice(0, 8)}… actual=${actualMd5.slice(0, 8)}…)`;
+        repairReason = `could not read source or fingerprint (${err.message})`;
       }
     }
 
