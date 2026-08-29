@@ -41,6 +41,10 @@ import type { TerrainData } from "@workspace/api-client-react";
 // ---------------------------------------------------------------------------
 const mockConfig = vi.hoisted(() => ({
   efhData: undefined as unknown,
+  bboxQueryMutation: vi.fn(),
+  saveMutation: vi.fn(),
+  refetchMySaves: vi.fn(),
+  mySaves: [] as unknown[],
 }));
 
 // Self-maintaining Proxy API client mock (same pattern as other OverviewMap tests).
@@ -90,10 +94,10 @@ vi.mock("@workspace/api-client-react", () =>
     getTrailsIdPoints: vi.fn(),
     useGetDatasets: () => ({ data: [{ id: "test-ds", hasEfh: false }] }),
     getGetDatasetsQueryKey: (p: unknown) => ["datasets", p],
-    usePostDatasetsBboxQuery: () => ({ mutateAsync: vi.fn() }),
-    useGetDatasetsMySaves: () => ({ data: [], refetch: vi.fn() }),
+    usePostDatasetsBboxQuery: () => ({ mutateAsync: mockConfig.bboxQueryMutation }),
+    useGetDatasetsMySaves: () => ({ data: mockConfig.mySaves, refetch: mockConfig.refetchMySaves }),
     getGetDatasetsMySavesQueryKey: () => ["my-saves"],
-    usePostDatasetsCatalogIdSave: () => ({ mutateAsync: vi.fn() }),
+    usePostDatasetsCatalogIdSave: () => ({ mutateAsync: mockConfig.saveMutation }),
     // useGetEfh reads from the mutable mockConfig so per-test overrides work
     useGetEfh: () => ({ data: mockConfig.efhData, isLoading: false, isError: false, refetch: vi.fn() }),
     getGetEfhQueryKey: (p: unknown) => ["efh", p],
@@ -113,6 +117,17 @@ function withQuery(node: React.ReactElement): React.ReactElement {
   });
   return React.createElement(QueryClientProvider, { client }, node);
 }
+
+function resetBoxSelectMocks() {
+  mockConfig.bboxQueryMutation.mockReset();
+  mockConfig.saveMutation.mockReset();
+  mockConfig.refetchMySaves.mockReset().mockResolvedValue(undefined);
+  mockConfig.mySaves = [];
+}
+
+beforeEach(() => {
+  resetBoxSelectMocks();
+});
 
 function makeOverviewGrid(): TerrainData {
   const N = 4;
@@ -159,6 +174,17 @@ function makeEfhFeature() {
     },
   };
 }
+
+const BOX_SELECT_CATALOG_RESULT = {
+  id: "box-select-catalog",
+  name: "Box Select Survey",
+  sourceAgency: "Test Hydrographic Office",
+  dataType: "bathymetry",
+  coverageBbox: { minLon: -121.5, minLat: 47.5, maxLon: -120, maxLat: 48.5 },
+  waterType: "saltwater",
+  createdAt: "2024-01-01",
+  relevanceScore: 1,
+};
 
 /** Shared store setup used by both describe blocks. */
 function setupStores() {
@@ -216,6 +242,97 @@ async function waitForCameraArrow(): Promise<Element> {
     { timeout: 4000 },
   );
 }
+
+async function openBoxSelectResult() {
+  setupStores();
+  mockConfig.bboxQueryMutation.mockResolvedValue({
+    datasets: [BOX_SELECT_CATALOG_RESULT],
+  });
+
+  await act(async () => {
+    renderWithProviders(withQuery(React.createElement(OverviewMap)));
+  });
+
+  const toolsToggle = screen.getByTestId("overview-tools-toggle");
+  await act(async () => { fireEvent.click(toolsToggle); });
+  await act(async () => {
+    fireEvent.click(screen.getByTestId("overview-select-area-toggle"));
+  });
+
+  const canvas = screen.getByTestId("overview-map-canvas");
+  canvas.getBoundingClientRect = () =>
+    ({
+      left: 0, top: 0,
+      right: CANVAS_W, bottom: CANVAS_H,
+      width: CANVAS_W, height: CANVAS_H,
+      x: 0, y: 0,
+      toJSON: () => ({}),
+    }) as DOMRect;
+
+  await act(async () => {
+    fireEvent.mouseDown(canvas, { clientX: 200, clientY: 200, button: 0 });
+    fireEvent.mouseMove(window, { clientX: 600, clientY: 500 });
+    fireEvent.mouseUp(window);
+  });
+
+  await waitFor(() => expect(screen.getByTestId("overview-bbox-panel")).toBeInTheDocument());
+  await act(async () => {
+    fireEvent.click(screen.getByTestId("overview-bbox-request"));
+  });
+  await waitFor(() => expect(screen.getByTestId("overview-bbox-result-card")).toBeInTheDocument());
+}
+
+describe("OverviewMap — Box Select save feedback", () => {
+  it("shows a useful error, keeps the result available, and retries successfully", async () => {
+    mockConfig.saveMutation.mockRejectedValueOnce({
+      data: { detail: "The library service is temporarily unavailable." },
+    });
+
+    await openBoxSelectResult();
+    const saveButton = screen.getByTestId("overview-bbox-save");
+
+    await act(async () => { fireEvent.click(saveButton); });
+
+    const error = await screen.findByTestId("overview-bbox-save-error-box-select-catalog");
+    expect(error).toHaveTextContent(
+      "Could not save this dataset: The library service is temporarily unavailable. Please try again.",
+    );
+    expect(screen.getByTestId("overview-bbox-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("overview-bbox-result-card")).toBeInTheDocument();
+    expect(saveButton).toBeEnabled();
+    expect(saveButton).toHaveTextContent("+ SAVE");
+
+    mockConfig.saveMutation.mockResolvedValueOnce(undefined);
+    mockConfig.refetchMySaves.mockImplementationOnce(async () => {
+      mockConfig.mySaves = [{ catalogId: BOX_SELECT_CATALOG_RESULT.id }];
+    });
+
+    await act(async () => { fireEvent.click(saveButton); });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("overview-bbox-save")).toHaveTextContent("✓ SAVED");
+    });
+    expect(screen.queryByTestId("overview-bbox-save-error-box-select-catalog")).toBeNull();
+    expect(mockConfig.saveMutation).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps successful saves in the SAVED state", async () => {
+    mockConfig.saveMutation.mockResolvedValueOnce(undefined);
+    mockConfig.refetchMySaves.mockImplementationOnce(async () => {
+      mockConfig.mySaves = [{ catalogId: BOX_SELECT_CATALOG_RESULT.id }];
+    });
+
+    await openBoxSelectResult();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("overview-bbox-save"));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("overview-bbox-save")).toHaveTextContent("✓ SAVED");
+    });
+    expect(screen.queryByTestId("overview-bbox-save-error-box-select-catalog")).toBeNull();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // 1. Camera heading → SVG camera-arrow rotation

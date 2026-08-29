@@ -25,6 +25,38 @@ type ResultCandidate = {
   priority: number;
 };
 
+type SaveErrorShape = {
+  data?: {
+    detail?: unknown;
+    details?: unknown;
+    error?: unknown;
+  };
+  detail?: unknown;
+  details?: unknown;
+  error?: unknown;
+  message?: unknown;
+};
+
+/**
+ * Keep Box Select save failures actionable even when the generated API client
+ * wraps the server response in `data`.
+ */
+export function getOverviewBboxSaveErrorMessage(error: unknown): string {
+  const candidate = error as SaveErrorShape | null;
+  const detail = [
+    candidate?.data?.details,
+    candidate?.data?.detail,
+    candidate?.data?.error,
+    candidate?.details,
+    candidate?.detail,
+    candidate?.error,
+    candidate?.message,
+  ].find((value): value is string => typeof value === "string" && value.trim().length > 0);
+
+  if (!detail) return "Could not save this dataset. Please try again.";
+  return `Could not save this dataset: ${detail.trim()} Please try again.`;
+}
+
 const toBounds = (bbox: Bbox | UserDatasetMeta["bbox"]): Bounds | null => {
   if (!bbox) return null;
   const bounds = "north" in bbox

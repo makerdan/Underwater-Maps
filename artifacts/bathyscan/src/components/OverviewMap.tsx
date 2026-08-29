@@ -142,7 +142,11 @@ import { approxBboxForRadius } from "@/lib/coordinateParser";
 import { useSubstrateCoverageToast } from "@/hooks/useSubstrateCoverageToast";
 import { useIntertidal } from "@/lib/useIntertidal";
 import { IntertidalBandLegend } from "@/components/IntertidalBandLegend";
-import { buildOverviewBboxResults, type OverviewBboxResult } from "@/lib/overviewBboxResults";
+import {
+  buildOverviewBboxResults,
+  getOverviewBboxSaveErrorMessage,
+  type OverviewBboxResult,
+} from "@/lib/overviewBboxResults";
 import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { usePuzzleStore, type PuzzleTransform } from "@/lib/puzzleStore";
 import { useSpecialCollectionStore } from "@/lib/specialCollectionStore";
@@ -1537,15 +1541,21 @@ export const OverviewMap: React.FC = () => {
     [mySaves],
   );
   const [bboxSavingIds, setBboxSavingIds] = useState<Set<string>>(new Set());
+  const [bboxSaveErrors, setBboxSaveErrors] = useState<Map<string, string>>(new Map());
 
   const handleBboxSave = useCallback(
     async (id: string) => {
+      setBboxSaveErrors((errors) => {
+        const next = new Map(errors);
+        next.delete(id);
+        return next;
+      });
       setBboxSavingIds((s) => new Set(s).add(id));
       try {
         await saveMutation.mutateAsync({ id });
         await refetchMySaves();
       } catch (err) {
-        void err;
+        setBboxSaveErrors((errors) => new Map(errors).set(id, getOverviewBboxSaveErrorMessage(err)));
       } finally {
         setBboxSavingIds((s) => {
           const n = new Set(s);
@@ -6902,6 +6912,7 @@ export const OverviewMap: React.FC = () => {
           onLoad={handleBboxLoad}
           savedIds={savedCatalogIds}
           savingIds={bboxSavingIds}
+          saveErrors={bboxSaveErrors}
         />
       )}
 
@@ -7542,6 +7553,7 @@ interface BboxQueryPanelProps {
   onLoad: (entry: OverviewBboxResult) => void;
   savedIds: Set<string>;
   savingIds: Set<string>;
+  saveErrors: ReadonlyMap<string, string>;
 }
 
 const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
@@ -7556,6 +7568,7 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
   onLoad,
   savedIds,
   savingIds,
+  saveErrors,
 }) => {
   const [filters, setFilters] = useState<CatalogFilters>(EMPTY_CATALOG_RESULT_FILTERS);
   const filteredResults = useMemo(
@@ -7728,6 +7741,7 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
           const saveApplicable = entry.resultKind === "catalog";
           const saved = saveApplicable && savedIds.has(entry.id);
           const saving = saveApplicable && savingIds.has(entry.id);
+          const saveError = saveApplicable ? saveErrors.get(entry.id) : undefined;
           return (
             <div
               key={`${entry.resultKind}:${entry.loadDatasetId}:${entry.catalogSaveId ?? ""}`}
@@ -7783,6 +7797,20 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
                     : saved ? "✓ SAVED" : saving ? "SAVING…" : "+ SAVE"}
                 </button>
               </div>
+              {saveError && (
+                <div
+                  data-testid={`overview-bbox-save-error-${entry.id}`}
+                  role="alert"
+                  style={{
+                    marginTop: 6,
+                    color: "#fca5a5",
+                    fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {saveError}
+                </div>
+              )}
             </div>
           );
         })}
