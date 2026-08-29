@@ -207,3 +207,10 @@ uri = "file://exports/install-github-actions-skill.zip"
 type = "unspecified"
 title = "Install GitHub Actions Skill (ZIP)"
 description = "Direct download of the canonical Install GitHub Actions skill from .agents/skills."
+
+[[outputs]]
+id = "VcDmPiOcuHP3q1PILJicH"
+uri = "file://exports/failure-gate-skill.zip"
+type = "unspecified"
+title = "Failure Gate Skill (ZIP)"
+description = "Direct download of the canonical Failure Gate skill from .agents/skills."
