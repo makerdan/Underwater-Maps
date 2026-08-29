@@ -258,7 +258,7 @@ const CollectionRow: React.FC<{
   onOpenSettings?: () => void;
   /** Special collections only: load members + enter puzzle mode + restore layout. */
   onActivate?: () => void;
-  /** Load resolvable members into the 3D Explore view without puzzle mode. */
+  /** Open resolvable members together in the canonical Overview layout. */
   onLoad?: () => void;
   /** Retry members that were unavailable during the last ordinary load. */
   onRetry?: () => void;
@@ -395,12 +395,12 @@ const CollectionRow: React.FC<{
             {onLoad && (
               <button
                 data-testid={`btn-load-collection-${collection.id}`}
-                aria-label={`Load collection "${collection.name}" into 3D Explore`}
-                title={collection.members.length === 0 ? "This collection has no datasets to load" : "Load member datasets into 3D Explore"}
+                aria-label={`Open collection "${collection.name}" in Overview`}
+                title={collection.members.length === 0 ? "This collection has no datasets to open" : "Open every available member in Overview"}
                 disabled={activating || collection.members.length === 0}
                 onClick={onLoad}
                 style={{ background: "rgba(0,229,255,0.08)", border: "1px solid rgba(0,229,255,0.35)", borderRadius: 3, color: "#67e8f9", cursor: activating ? "wait" : collection.members.length === 0 ? "not-allowed" : "pointer", fontSize: "calc(10.5px * var(--bs-font-scale, 1))", padding: "1px 7px", flexShrink: 0, letterSpacing: "0.05em", whiteSpace: "nowrap", opacity: collection.members.length === 0 ? 0.5 : 1 }}
-              >{activating ? "Loading…" : "Load"}</button>
+              >{activating ? "Opening…" : "Overview"}</button>
             )}
             {onOpenSettings && (
               <button
@@ -667,7 +667,6 @@ export const CollectionsSection: React.FC = () => {
   const [settingsForId, setSettingsForId] = useState<string | null>(null);
   const [activatingId, setActivatingId] = useState<string | null>(null);
   const activatingRef = useRef<string | null>(null);
-  const pendingPrimaryLoadRef = useRef<{ collectionId: string; datasetId: string } | null>(null);
   const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
   const [verificationErrors, setVerificationErrors] = useState<Record<string, string>>({});
   const [recoveryCandidates, setRecoveryCandidates] = useState<Record<string, RecoveryCandidatesByName>>({});
@@ -677,8 +676,6 @@ export const CollectionsSection: React.FC = () => {
   const [createdFallback, setCreatedFallback] = useState<DatasetCollection | null>(null);
   const collectionLoadNotice = useUiStore((s) => s.collectionLoadNotice);
   const setCollectionLoadNotice = useUiStore((s) => s.setCollectionLoadNotice);
-  const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
-  const datasetFetchErrorIds = useTerrainStore((s) => s.datasetFetchErrorIds);
   const collectionScopeId = useTerrainStore((s) => s.collectionScopeId);
 
   useEffect(() => { if (creating) createInputRef.current?.focus(); }, [creating]);
@@ -930,9 +927,7 @@ export const CollectionsSection: React.FC = () => {
   }, [resolveCollectionMembers, setCollectionLoadNotice]);
 
   /**
-   * Load a collection into the normal multi-dataset 3D view. This deliberately
-   * shares member resolution with Puzzle activation, but never opens Overview
-   * or restores puzzle state.
+   * Open a standard collection as a complete canonical Overview set.
    */
   const handleLoad = useCallback(async (
     c: DatasetCollection,
@@ -968,19 +963,15 @@ export const CollectionsSection: React.FC = () => {
       const terrainStore = useTerrainStore.getState();
       const terrainEntries = entries.map(({ datasetId, source }) => ({ datasetId, source }));
       entries.forEach((entry) => terrainStore.setDatasetFetchError(entry.datasetId, false));
-      pendingPrimaryLoadRef.current = {
-        collectionId: c.id,
-        datasetId: entries[0]!.datasetId,
-      };
       terrainStore.setCollectionScope(c.id, entries.map((entry) => entry.datasetId));
       terrainStore.activateCollection(terrainEntries);
-      // A normal collection load replaces any puzzle overlay/layout and must
-      // not leave the user in the Overview-only presentation.
+      // Standard collections use canonical placement rather than a saved
+      // special-collection puzzle layout.
       useSpecialCollectionStore.getState().deactivate();
-      useUiStore.getState().setOverviewOpen(false);
-      useUiStore.getState().setSidebarMode("explore");
+      useUiStore.getState().setOverviewOpen(true);
+      activatingRef.current = null;
+      setActivatingId(null);
     } catch (err) {
-      pendingPrimaryLoadRef.current = null;
       if (err instanceof CollectionVerificationError) {
         setVerificationErrors((errors) => ({ ...errors, [c.id]: err.message }));
       } else {
@@ -995,31 +986,6 @@ export const CollectionsSection: React.FC = () => {
       }
     }
   }, [resolveCollectionMembers, setCollectionLoadNotice]);
-
-  // Finish an ordinary collection load only when its first member can become
-  // the visible 3D scene primary. The loader also reports a definitive terrain
-  // or overview failure through the terrain store, allowing this row to recover
-  // instead of leaving the control in a perpetual loading state.
-  useEffect(() => {
-    const pending = pendingPrimaryLoadRef.current;
-    if (!pending || activatingId !== pending.collectionId) return;
-    const primary = visibleDatasets.find((entry) => entry.datasetId === pending.datasetId);
-    if (datasetFetchErrorIds.includes(pending.datasetId)) {
-      pendingPrimaryLoadRef.current = null;
-      useTerrainStore.getState().clearPendingPrimaryHandoff();
-      activatingRef.current = null;
-      setActivatingId(null);
-      setLoadErrors((errors) => ({
-        ...errors,
-        [pending.collectionId]: "Could not load the primary dataset into 3D Explore. Try again.",
-      }));
-      return;
-    }
-    if (!primary?.activeGrid) return;
-    pendingPrimaryLoadRef.current = null;
-    activatingRef.current = null;
-    setActivatingId(null);
-  }, [activatingId, visibleDatasets, datasetFetchErrorIds]);
 
   const handleRetry = useCallback(async (c: DatasetCollection) => {
     if (activatingRef.current) return;
@@ -1112,7 +1078,6 @@ export const CollectionsSection: React.FC = () => {
   useEffect(() => {
     if (!activatingRef.current || activatingRef.current === collectionScopeId) return;
     activatingRef.current = null;
-    pendingPrimaryLoadRef.current = null;
     setActivatingId(null);
   }, [collectionScopeId]);
 

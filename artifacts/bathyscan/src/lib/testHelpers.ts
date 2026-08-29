@@ -898,7 +898,21 @@ export interface BathyTestApi {
     collectionId: string | null;
     datasetIds: string[] | null;
     loadedDatasetIds: string[];
+    fullTerrainDatasetIds: string[];
+    primaryDatasetId: string | null;
   };
+  getCollectionOverviewSnapshot: () => {
+    transform: { scale: number; offsetX: number; offsetY: number; pxPerDeg: number };
+    worldGrid: { minLon: number; maxLon: number; minLat: number; maxLat: number };
+    tiles: Array<{
+      datasetId: string;
+      minLon: number;
+      maxLon: number;
+      minLat: number;
+      maxLat: number;
+      transform: { tx: number; ty: number; angleDeg: number; flipH?: boolean; flipV?: boolean };
+    }>;
+  } | null;
 }
 
 declare global {
@@ -1786,13 +1800,53 @@ export function installTestHelpers(): void {
       };
     },
     getCollectionScope: () => {
-      const { collectionScopeId, collectionScopeIds, visibleDatasets } = useTerrainStore.getState();
+      const {
+        collectionScopeId,
+        collectionScopeIds,
+        visibleDatasets,
+        primaryDatasetId,
+      } = useTerrainStore.getState();
       return {
         collectionId: collectionScopeId,
         datasetIds: collectionScopeIds,
         loadedDatasetIds: visibleDatasets
           .filter((dataset) => dataset.activeGrid !== null || dataset.overviewGrid !== null)
           .map((dataset) => dataset.datasetId),
+        fullTerrainDatasetIds: visibleDatasets
+          .filter((dataset) => dataset.activeGrid !== null)
+          .map((dataset) => dataset.datasetId),
+        primaryDatasetId,
+      };
+    },
+    getCollectionOverviewSnapshot: () => {
+      const { overviewTransform, worldGrid, puzzleTransforms } = usePuzzleStore.getState();
+      if (!overviewTransform || !worldGrid) return null;
+      return {
+        transform: { ...overviewTransform },
+        worldGrid: {
+          minLon: worldGrid.minLon,
+          maxLon: worldGrid.maxLon,
+          minLat: worldGrid.minLat,
+          maxLat: worldGrid.maxLat,
+        },
+        tiles: useTerrainStore.getState().visibleDatasets.flatMap((dataset) => {
+          const grid = dataset.overviewGrid;
+          if (!grid) return [];
+          return [{
+            datasetId: dataset.datasetId,
+            minLon: grid.minLon,
+            maxLon: grid.maxLon,
+            minLat: grid.minLat,
+            maxLat: grid.maxLat,
+            transform: {
+              tx: puzzleTransforms[dataset.datasetId]?.tx ?? 0,
+              ty: puzzleTransforms[dataset.datasetId]?.ty ?? 0,
+              angleDeg: puzzleTransforms[dataset.datasetId]?.angleDeg ?? 0,
+              flipH: puzzleTransforms[dataset.datasetId]?.flipH,
+              flipV: puzzleTransforms[dataset.datasetId]?.flipV,
+            },
+          }];
+        }),
       };
     },
   };

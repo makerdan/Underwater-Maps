@@ -355,16 +355,16 @@ describe("CollectionsSection", () => {
     expect(screen.getByTestId("collection-members-empty-col-empty")).toBeInTheDocument();
   });
 
-  it("exposes a disabled Load action for empty collections", () => {
+  it("exposes a disabled Overview action for empty collections", () => {
     currentCollections = [COLLECTION_EMPTY];
     renderWithProviders(<CollectionsSection />);
     const load = screen.getByTestId("btn-load-collection-col-empty");
     expect(load).toBeDisabled();
-    expect(load).toHaveAttribute("aria-label", 'Load collection "Empty Collection" into 3D Explore');
-    expect(load).toHaveAttribute("title", "This collection has no datasets to load");
+    expect(load).toHaveAttribute("aria-label", 'Open collection "Empty Collection" in Overview');
+    expect(load).toHaveAttribute("title", "This collection has no datasets to open");
   });
 
-  it("loads standard collections with source-aware members and enters Explore", async () => {
+  it("opens standard collections with source-aware members in Overview", async () => {
     const activateCollection = vi.fn();
     const original = useTerrainStore.getState().activateCollection;
     useTerrainStore.setState({ activateCollection });
@@ -379,10 +379,10 @@ describe("CollectionsSection", () => {
       { datasetId: "ds-1", source: "user" },
       { datasetId: "catalog-1", source: "user" },
     ]));
-    expect(useUiStore.getState().overviewOpen).toBe(false);
-    expect(useUiStore.getState().sidebarMode).toBe("explore");
-    expect(screen.getByTestId("btn-load-collection-col-trip")).toBeDisabled();
-    expect(screen.getByTestId("btn-load-collection-col-trip")).toHaveTextContent("Loading…");
+    expect(useUiStore.getState().overviewOpen).toBe(true);
+    expect(useUiStore.getState().sidebarMode).toBe("plan");
+    expect(screen.getByTestId("btn-load-collection-col-trip")).toBeEnabled();
+    expect(screen.getByTestId("btn-load-collection-col-trip")).toHaveTextContent("Overview");
     useTerrainStore.setState({ activateCollection: original });
   });
 
@@ -538,7 +538,7 @@ describe("CollectionsSection", () => {
     useTerrainStore.setState({ activateCollection: original });
   });
 
-  it("shows a retryable row error when the primary collection dataset fails to load", async () => {
+  it("does not require a primary full-terrain load before opening Overview", async () => {
     const activateCollection = vi.fn();
     const original = useTerrainStore.getState().activateCollection;
     useTerrainStore.setState({ activateCollection });
@@ -550,10 +550,8 @@ describe("CollectionsSection", () => {
     await waitFor(() => expect(activateCollection).toHaveBeenCalled());
     act(() => useTerrainStore.setState({ datasetFetchErrorIds: ["ds-1"] }));
 
-    await waitFor(() => {
-      expect(screen.getByTestId("collection-load-error-col-trip"))
-        .toHaveTextContent("Could not load the primary dataset into 3D Explore");
-    });
+    expect(screen.queryByTestId("collection-load-error-col-trip")).not.toBeInTheDocument();
+    expect(useUiStore.getState().overviewOpen).toBe(true);
     expect(screen.getByTestId("btn-load-collection-col-trip")).toBeEnabled();
     useTerrainStore.setState({ activateCollection: original });
   });
@@ -596,7 +594,7 @@ describe("CollectionsSection", () => {
       { datasetId: "ds-1", source: "user" },
       { datasetId: "catalog-later", source: "user" },
     ]));
-    expect(useUiStore.getState().overviewOpen).toBe(false);
+    expect(useUiStore.getState().overviewOpen).toBe(true);
     expect(screen.queryByTestId("collection-load-warning-col-trip")).not.toBeInTheDocument();
 
     useTerrainStore.setState({ activateCollection: originalActivate, addCollectionMembers: originalAdd });

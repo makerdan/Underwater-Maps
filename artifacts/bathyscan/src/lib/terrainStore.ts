@@ -112,6 +112,13 @@ export interface VisibleDataset {
   geoCorrection?: GeoCorrection | null;
 }
 
+export interface CollectionNavigationRequest {
+  requestId: number;
+  datasetId: string;
+  lon: number;
+  lat: number;
+}
+
 /**
  * Sort a list of VisibleDatasets oldest-first so the newest entry is painted
  * last (on top) in the Overview Map canvas.
@@ -207,6 +214,16 @@ interface TerrainStore {
    */
   collectionScopeId: string | null;
   collectionScopeIds: string[] | null;
+  /** The one collection member currently requested for a 2D → full-terrain handoff. */
+  collectionNavigation: CollectionNavigationRequest | null;
+  /** Actionable failure text for the current collection navigation request. */
+  collectionNavigationError: string | null;
+  /** Monotonic stale-response fence, independent of nullable request state. */
+  collectionNavigationSequence: number;
+  requestCollectionNavigation: (datasetId: string, lon: number, lat: number) => void;
+  retryCollectionNavigation: () => void;
+  completeCollectionNavigation: (requestId: number) => void;
+  failCollectionNavigation: (requestId: number, message: string) => void;
 
   /**
    * True when the user has explicitly opted into side-by-side multi-dataset viewing
@@ -415,6 +432,9 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
   multiDatasetMode: false,
   collectionScopeId: null,
   collectionScopeIds: null,
+  collectionNavigation: null,
+  collectionNavigationError: null,
+  collectionNavigationSequence: 0,
   overviewFetchErrorIds: [],
   datasetFetchErrorIds: [],
 
@@ -429,6 +449,16 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         (overviewGrid && overviewGrid.datasetId) ||
         null;
       const primaryId = explicitId ?? prev.primaryDatasetId;
+      // AppState may publish a late grid from the dataset that was selected
+      // before a collection opened. A legacy writer is not selection intent:
+      // while a collection owns the view, reject non-member grids entirely.
+      if (
+        explicitId &&
+        prev.collectionScopeIds !== null &&
+        !prev.collectionScopeIds.includes(explicitId)
+      ) {
+        return prev;
+      }
       if (!primaryId) {
         // Clearing with no prior primary — wipe the convenience mirrors too.
         return {
@@ -584,6 +614,13 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       return {
         ...prev,
         visibleDatasets: nextVisible,
+        // Any explicit primary selection supersedes an in-flight collection
+        // click. The collection handoff itself performs these writes in one
+        // effect tick after verifying its request fence.
+        collectionScopeId: null,
+        collectionScopeIds: null,
+        collectionNavigation: null,
+        collectionNavigationError: null,
         pendingPrimaryHandoffId: null,
         ...syncPrimaryGrids(nextVisible),
         ...(evictedId !== null ? { evictedId } : {}),
@@ -631,6 +668,8 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
           ...prev,
           collectionScopeId: null,
           collectionScopeIds: null,
+          collectionNavigation: null,
+          collectionNavigationError: null,
           visibleDatasets: nextVisible,
           selectedIds: nextSelectedIds,
           selectedSources: nextSelectedSources,
@@ -644,6 +683,8 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         ...prev,
         collectionScopeId: null,
         collectionScopeIds: null,
+        collectionNavigation: null,
+        collectionNavigationError: null,
         selectedIds: nextSelectedIds,
         selectedSources: nextSelectedSources,
         multiDatasetMode: true,
@@ -675,6 +716,8 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
           ...prev,
           collectionScopeId: null,
           collectionScopeIds: null,
+          collectionNavigation: null,
+          collectionNavigationError: null,
           visibleDatasets: nextVisible,
           selectedIds: nextSelectedIds,
           selectedSources: nextSelectedSources,
@@ -688,6 +731,8 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         ...prev,
         collectionScopeId: null,
         collectionScopeIds: null,
+        collectionNavigation: null,
+        collectionNavigationError: null,
         selectedIds: nextSelectedIds,
         selectedSources: nextSelectedSources,
         multiDatasetMode: true,
@@ -711,7 +756,10 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         return {
           datasetId: entry.datasetId,
           source: entry.source,
-          activeGrid: previous?.activeGrid ?? null,
+          // Collection activation is preview-first. A member that was
+          // previously active must not silently bring full terrain back into
+          // the 3D scene before the user selects it from Overview.
+          activeGrid: null,
           overviewGrid: previous?.overviewGrid ?? null,
           dataUpdatedAt: entry.dataUpdatedAt ?? previous?.dataUpdatedAt ?? null,
           geoCorrection: previous?.geoCorrection ?? null,
@@ -725,7 +773,9 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         ...prev,
         visibleDatasets,
         collectionScopeIds: unique.map((entry) => entry.datasetId),
-        pendingPrimaryHandoffId: unique[0]?.datasetId ?? null,
+        pendingPrimaryHandoffId: null,
+        collectionNavigation: null,
+        collectionNavigationError: null,
         selectedIds,
         selectedSources,
         multiDatasetMode: true,
@@ -745,8 +795,62 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       ...prev,
       collectionScopeId: collectionId,
       collectionScopeIds: scopeIds,
+      collectionNavigation: null,
+      collectionNavigationError: null,
     }));
   },
+
+  requestCollectionNavigation: (datasetId, lon, lat) =>
+    set((prev) => {
+      if (
+        prev.collectionScopeId === null ||
+        !prev.collectionScopeIds?.includes(datasetId) ||
+        !Number.isFinite(lon) ||
+        !Number.isFinite(lat)
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        collectionNavigationSequence: prev.collectionNavigationSequence + 1,
+        collectionNavigation: {
+          requestId: prev.collectionNavigationSequence + 1,
+          datasetId,
+          lon,
+          lat,
+        },
+        collectionNavigationError: null,
+      };
+    }),
+
+  retryCollectionNavigation: () =>
+    set((prev) => {
+      const pending = prev.collectionNavigation;
+      if (!pending) return prev;
+      return {
+        ...prev,
+        collectionNavigationSequence: prev.collectionNavigationSequence + 1,
+        collectionNavigation: {
+          ...pending,
+          requestId: prev.collectionNavigationSequence + 1,
+        },
+        collectionNavigationError: null,
+      };
+    }),
+
+  completeCollectionNavigation: (requestId) =>
+    set((prev) =>
+      prev.collectionNavigation?.requestId === requestId
+        ? { ...prev, collectionNavigation: null, collectionNavigationError: null }
+        : prev,
+    ),
+
+  failCollectionNavigation: (requestId, message) =>
+    set((prev) =>
+      prev.collectionNavigation?.requestId === requestId
+        ? { ...prev, collectionNavigationError: message }
+        : prev,
+    ),
 
   addCollectionMembers: (entries) =>
     set((prev) => {
@@ -900,6 +1004,8 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         ...prev,
         collectionScopeId: null,
         collectionScopeIds: null,
+        collectionNavigation: null,
+        collectionNavigationError: null,
         visibleDatasets: nextVisible,
         pendingPrimaryHandoffId: null,
         selectedIds: [],
@@ -914,7 +1020,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
 
   clear: () => {
     cancelObsoleteProximityRequests([]);
-    set({
+    set((prev) => ({
       visibleDatasets: [],
       primaryDatasetIds: [],
       primaryDatasetId: null,
@@ -928,9 +1034,12 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       multiDatasetMode: false,
       collectionScopeId: null,
       collectionScopeIds: null,
+      collectionNavigation: null,
+      collectionNavigationError: null,
+      collectionNavigationSequence: prev.collectionNavigationSequence + 1,
       overviewFetchErrorIds: [],
       datasetFetchErrorIds: [],
-    });
+    }));
   },
 
   clearEviction: () =>

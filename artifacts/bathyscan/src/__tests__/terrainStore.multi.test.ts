@@ -137,7 +137,7 @@ describe("terrainStore multi-dataset", () => {
     expect(state.visibleDatasets.map((entry) => entry.datasetId)).toEqual(["ordinary-map"]);
   });
 
-  it("records the first collection member for the App primary-terrain handoff", () => {
+  it("waits for an explicit member selection before requesting full terrain", () => {
     useTerrainStore.getState().setSinglePrimary("stale-preset", "preset");
     useTerrainStore.getState().activateCollection([
       { datasetId: "upload-1", source: "user" },
@@ -150,18 +150,61 @@ describe("terrainStore multi-dataset", () => {
       "materialized-save-1",
     ]);
     expect(state.primaryDatasetId).toBe("upload-1");
-    expect(state.pendingPrimaryHandoffId).toBe("upload-1");
+    expect(state.pendingPrimaryHandoffId).toBeNull();
+    expect(state.collectionNavigation).toBeNull();
   });
 
-  it("cancels a collection handoff when a newer primary is selected", () => {
+  it("fences stale collection completion and failure after a rapid repeat selection", () => {
+    useTerrainStore.getState().setCollectionScope("trip", ["upload-1", "materialized-save-1"]);
     useTerrainStore.getState().activateCollection([
       { datasetId: "upload-1", source: "user" },
       { datasetId: "materialized-save-1", source: "user" },
     ]);
-    useTerrainStore.getState().setPrimary("new-preset", "preset");
+    useTerrainStore.getState().requestCollectionNavigation("upload-1", 0.2, 0.3);
+    const first = useTerrainStore.getState().collectionNavigation!;
+    useTerrainStore.getState().requestCollectionNavigation("materialized-save-1", 0.8, 0.7);
+    const second = useTerrainStore.getState().collectionNavigation!;
+    useTerrainStore.getState().failCollectionNavigation(first.requestId, "stale failure");
+    useTerrainStore.getState().completeCollectionNavigation(first.requestId);
 
-    expect(useTerrainStore.getState().pendingPrimaryHandoffId).toBeNull();
-    expect(useTerrainStore.getState().primaryDatasetId).toBe("new-preset");
+    expect(second.requestId).toBeGreaterThan(first.requestId);
+    expect(useTerrainStore.getState().collectionNavigation).toEqual(second);
+    expect(useTerrainStore.getState().collectionNavigationError).toBeNull();
+  });
+
+  it("retries the selected member with a new request fence and clears its error", () => {
+    const store = useTerrainStore.getState();
+    store.setCollectionScope("trip", ["upload-1"]);
+    store.activateCollection([{ datasetId: "upload-1", source: "user" }]);
+    store.requestCollectionNavigation("upload-1", 0.4, 0.6);
+    const firstId = useTerrainStore.getState().collectionNavigation!.requestId;
+    store.failCollectionNavigation(firstId, "Terrain unavailable");
+    store.retryCollectionNavigation();
+
+    expect(useTerrainStore.getState().collectionNavigation).toMatchObject({
+      datasetId: "upload-1",
+      lon: 0.4,
+      lat: 0.6,
+      requestId: firstId + 1,
+    });
+    expect(useTerrainStore.getState().collectionNavigationError).toBeNull();
+  });
+
+  it("ignores legacy grid-writer cancellation while a collection scope is open", () => {
+    const store = useTerrainStore.getState();
+    store.setCollectionScope("trip", ["upload-1"]);
+    store.activateCollection([{ datasetId: "upload-1", source: "user" }]);
+
+    // App may publish a late grid from the previously selected dataset after
+    // collection intent has already opened Overview. The writer is not a new
+    // selection intent and must not cancel that scope.
+    store.setGrids({ activeGrid: makeGrid("stale-preset"), source: "preset" });
+
+    expect(useTerrainStore.getState().collectionScopeId).toBe("trip");
+    expect(useTerrainStore.getState().collectionScopeIds).toEqual(["upload-1"]);
+    expect(useTerrainStore.getState().visibleDatasets.map((entry) => entry.datasetId))
+      .toEqual(["upload-1"]);
+    expect(useTerrainStore.getState().visibleDatasets[0]?.activeGrid).toBeNull();
   });
 
   it("toggleVisible queues datasets beyond MAX_ACTIVE_DATASETS in selectedIds", () => {

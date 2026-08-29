@@ -94,6 +94,51 @@ export function applyPuzzleTransformToLonLat(
 }
 
 /**
+ * Map a rendered canvas point back into a puzzle tile's canonical geographic
+ * frame. Returns null when the point falls outside the transformed tile.
+ */
+export function invertPuzzleTilePoint(
+  canvasX: number,
+  canvasY: number,
+  tileBounds: GeoBbox,
+  transform: PuzzleTransform | undefined,
+  referenceGrid: TerrainData,
+  ovTransform: OverviewTransform,
+): { lon: number; lat: number } | null {
+  const [x0, y0] = lonLatToCanvas(
+    tileBounds.minLon,
+    tileBounds.maxLat,
+    referenceGrid,
+    ovTransform,
+  );
+  const [x1, y1] = lonLatToCanvas(
+    tileBounds.maxLon,
+    tileBounds.minLat,
+    referenceGrid,
+    ovTransform,
+  );
+  const centerX = (x0 + x1) / 2;
+  const centerY = (y0 + y1) / 2;
+  const tx = transform?.tx ?? 0;
+  const ty = transform?.ty ?? 0;
+  const angle = -((transform?.angleDeg ?? 0) * Math.PI) / 180;
+  const dx = canvasX - (centerX + tx);
+  const dy = canvasY - (centerY + ty);
+  const rotatedX = dx * Math.cos(angle) - dy * Math.sin(angle);
+  const rotatedY = dx * Math.sin(angle) + dy * Math.cos(angle);
+  const localX = centerX + (transform?.flipH ? -rotatedX : rotatedX);
+  const localY = centerY + (transform?.flipV ? -rotatedY : rotatedY);
+  const left = Math.min(x0, x1);
+  const right = Math.max(x0, x1);
+  const top = Math.min(y0, y1);
+  const bottom = Math.max(y0, y1);
+  if (localX < left || localX > right || localY < top || localY > bottom) {
+    return null;
+  }
+  return canvasToLonLat(localX, localY, referenceGrid, ovTransform);
+}
+
+/**
  * Compute the geographic centre of a dataset's bbox, used as the tile pivot.
  *
  * For antimeridian-crossing bboxes (minLon > maxLon) the centre is computed

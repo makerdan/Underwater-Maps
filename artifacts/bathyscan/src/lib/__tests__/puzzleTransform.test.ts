@@ -8,6 +8,7 @@ import { describe, it, expect } from "vitest";
 import type { TerrainData } from "@workspace/api-client-react";
 import {
   applyPuzzleTransformToLonLat,
+  invertPuzzleTilePoint,
   rebasePuzzleTransformsForView,
   tileCenterLonLat,
 } from "../puzzleTransform";
@@ -239,5 +240,51 @@ describe("rebasePuzzleTransformsForView", () => {
     expect(rebased.get("tile")).toMatchObject({
       tx: 15, ty: 22.5, angleDeg: 90, flipH: false, flipV: true, locked: true,
     });
+  });
+});
+
+describe("invertPuzzleTilePoint", () => {
+  it("reverses translation, rotation, and both flips", () => {
+    const grid = makeGrid(-10, 10, -10, 10);
+    const t = makeTransform(10);
+    const tile = { minLon: -2, maxLon: 2, minLat: -1, maxLat: 1 };
+    const transform: PuzzleTransform = {
+      tx: 30,
+      ty: -20,
+      angleDeg: 90,
+      flipH: true,
+      flipV: true,
+    };
+    const rendered = applyPuzzleTransformToLonLat(
+      1,
+      0.5,
+      0,
+      0,
+      transform,
+      grid,
+      t,
+    );
+    const [canvasX, canvasY] = [
+      (rendered.lon - grid.minLon) * t.pxPerDeg * t.scale + t.offsetX,
+      (grid.maxLat - rendered.lat) * t.pxPerDeg * t.scale + t.offsetY,
+    ];
+
+    const result = invertPuzzleTilePoint(canvasX, canvasY, tile, transform, grid, t);
+
+    expect(result?.lon).toBeCloseTo(1, 5);
+    expect(result?.lat).toBeCloseTo(0.5, 5);
+  });
+
+  it("returns null outside the transformed tile", () => {
+    const grid = makeGrid(-10, 10, -10, 10);
+    const t = makeTransform(10);
+    expect(invertPuzzleTilePoint(
+      -1000,
+      -1000,
+      { minLon: -2, maxLon: 2, minLat: -1, maxLat: 1 },
+      { tx: 20, ty: 10, angleDeg: 35, flipH: true, flipV: false },
+      grid,
+      t,
+    )).toBeNull();
   });
 });

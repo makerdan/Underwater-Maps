@@ -34,8 +34,14 @@ import {
 } from "@workspace/api-client-react";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useAppState } from "@/lib/context";
+import { useUiStore } from "@/lib/uiStore";
+import { lonLatToWorldXZ } from "@/lib/terrain";
 
-const PresetDatasetLoader: React.FC<{ datasetId: string }> = ({ datasetId }) => {
+const PresetDatasetLoader: React.FC<{ datasetId: string; loadTerrain: boolean; requestId?: number }> = ({
+  datasetId,
+  loadTerrain,
+  requestId,
+}) => {
   /**
    * Epoch (generation) counter — incremented on mount and whenever datasetId
    * changes. Captured before any async work; if the counter has advanced by
@@ -52,12 +58,15 @@ const PresetDatasetLoader: React.FC<{ datasetId: string }> = ({ datasetId }) => 
     epochRef.current += 1;
   }, [datasetId]);
 
-  const { data: terrain, isError: terrainIsError } = useGetDatasetsIdTerrain(datasetId, undefined, {
+  const { data: terrain, isError: terrainIsError, refetch: refetchTerrain } = useGetDatasetsIdTerrain(datasetId, undefined, {
     query: {
-      enabled: !!datasetId,
+      enabled: !!datasetId && loadTerrain,
       queryKey: getGetDatasetsIdTerrainQueryKey(datasetId),
     },
   });
+  useEffect(() => {
+    if (loadTerrain && requestId !== undefined) void refetchTerrain();
+  }, [loadTerrain, requestId, refetchTerrain]);
   const { data: overview, isError: overviewIsError } = useGetDatasetsIdOverview(datasetId, {
     query: {
       enabled: !!datasetId,
@@ -78,18 +87,26 @@ const PresetDatasetLoader: React.FC<{ datasetId: string }> = ({ datasetId }) => 
   useEffect(() => {
     useTerrainStore.getState().setDatasetFetchError(
       datasetId,
-      terrainIsError || overviewIsError,
+      (loadTerrain && terrainIsError) || overviewIsError,
     );
     return () => {
       useTerrainStore.getState().setDatasetFetchError(datasetId, false);
     };
-  }, [datasetId, terrainIsError, overviewIsError]);
+  }, [datasetId, loadTerrain, terrainIsError, overviewIsError]);
 
   useEffect(() => {
-    if (!terrain || !overview) return;
-    if (terrain.datasetId !== datasetId || overview.datasetId !== datasetId) {
-      return;
-    }
+    if (!overview || overview.datasetId !== datasetId) return;
+    useTerrainStore.getState().setDatasetGrids(datasetId, { overviewGrid: overview });
+  }, [datasetId, overview]);
+
+  useEffect(() => {
+    if (
+      !loadTerrain ||
+      !terrain ||
+      !overview ||
+      terrain.datasetId !== datasetId ||
+      overview.datasetId !== datasetId
+    ) return;
     // Epoch guard: capture the epoch at effect-run time. If the epoch has
     // advanced (because datasetId changed or the component remounted) by the
     // time this closure executes any async follow-up work, the write is
@@ -100,18 +117,21 @@ const PresetDatasetLoader: React.FC<{ datasetId: string }> = ({ datasetId }) => 
     let stale = false;
     useTerrainStore.getState().setDatasetGrids(datasetId, {
       activeGrid: terrain,
-      overviewGrid: overview,
     });
     return () => {
       stale = true;
       void myEpoch; void stale; // referenced so the guard is not tree-shaken
     };
-  }, [datasetId, terrain, overview]);
+  }, [datasetId, loadTerrain, terrain, overview]);
 
   return null;
 };
 
-const UserDatasetLoader: React.FC<{ datasetId: string }> = ({ datasetId }) => {
+const UserDatasetLoader: React.FC<{ datasetId: string; loadTerrain: boolean; requestId?: number }> = ({
+  datasetId,
+  loadTerrain,
+  requestId,
+}) => {
   /**
    * Epoch (generation) counter — same re-add race guard as PresetDatasetLoader.
    * See that component for a full explanation.
@@ -121,12 +141,15 @@ const UserDatasetLoader: React.FC<{ datasetId: string }> = ({ datasetId }) => {
     epochRef.current += 1;
   }, [datasetId]);
 
-  const { data: terrain, isError: terrainIsError } = useGetUserDatasetsIdTerrain(datasetId, {
+  const { data: terrain, isError: terrainIsError, refetch: refetchTerrain } = useGetUserDatasetsIdTerrain(datasetId, {
     query: {
-      enabled: !!datasetId,
+      enabled: !!datasetId && loadTerrain,
       queryKey: getGetUserDatasetsIdTerrainQueryKey(datasetId),
     },
   });
+  useEffect(() => {
+    if (loadTerrain && requestId !== undefined) void refetchTerrain();
+  }, [loadTerrain, requestId, refetchTerrain]);
   const { data: overview, isError: overviewIsError } = useGetUserDatasetsIdOverview(datasetId, {
     query: {
       enabled: !!datasetId,
@@ -147,15 +170,20 @@ const UserDatasetLoader: React.FC<{ datasetId: string }> = ({ datasetId }) => {
   useEffect(() => {
     useTerrainStore.getState().setDatasetFetchError(
       datasetId,
-      terrainIsError || overviewIsError,
+      (loadTerrain && terrainIsError) || overviewIsError,
     );
     return () => {
       useTerrainStore.getState().setDatasetFetchError(datasetId, false);
     };
-  }, [datasetId, terrainIsError, overviewIsError]);
+  }, [datasetId, loadTerrain, terrainIsError, overviewIsError]);
 
   useEffect(() => {
-    if (!terrain || !overview) return;
+    if (!overview || overview.datasetId !== datasetId) return;
+    useTerrainStore.getState().setDatasetGrids(datasetId, { overviewGrid: overview });
+  }, [datasetId, overview]);
+
+  useEffect(() => {
+    if (!loadTerrain || !terrain || !overview) return;
     // Reject responses whose server-returned ID does not match the captured
     // visible-entry ID. Previously this block rebranded the response ID to the
     // captured ID, which allowed a response intended for dataset Y to land in
@@ -169,13 +197,12 @@ const UserDatasetLoader: React.FC<{ datasetId: string }> = ({ datasetId }) => {
     let stale = false;
     useTerrainStore.getState().setDatasetGrids(datasetId, {
       activeGrid: terrain,
-      overviewGrid: overview,
     });
     return () => {
       stale = true;
       void myEpoch; void stale;
     };
-  }, [datasetId, terrain, overview]);
+  }, [datasetId, loadTerrain, terrain, overview]);
 
   return null;
 };
@@ -188,51 +215,78 @@ const UserDatasetLoader: React.FC<{ datasetId: string }> = ({ datasetId }) => {
  */
 export const CollectionPrimaryHandoff: React.FC = () => {
   const visible = useTerrainStore((s) => s.visibleDatasets);
-  const pendingId = useTerrainStore((s) => s.pendingPrimaryHandoffId);
-  const clearPending = useTerrainStore((s) => s.clearPendingPrimaryHandoff);
-  const { datasetId, setDatasetId, setTerrain } = useAppState();
-  const pendingEntry = pendingId
-    ? visible.find((entry) => entry.datasetId === pendingId)
+  const pending = useTerrainStore((s) => s.collectionNavigation);
+  const failedIds = useTerrainStore((s) => s.datasetFetchErrorIds);
+  const { setDatasetId, setTerrain } = useAppState();
+  const pendingEntry = pending
+    ? visible.find((entry) => entry.datasetId === pending.datasetId)
     : undefined;
 
-  // A collection replaces the scene. Clear the old preset context before its
-  // user-owned primary grid returns, preventing stale terrain from appearing
-  // during the handoff.
   useEffect(() => {
-    if (!pendingId) return;
-    if (datasetId !== null) setDatasetId(null);
-    setTerrain(null);
-  }, [pendingId, datasetId, setDatasetId, setTerrain]);
+    if (!pending || !failedIds.includes(pending.datasetId)) return;
+    useTerrainStore.getState().failCollectionNavigation(
+      pending.requestId,
+      "Could not load this terrain. Try again or choose another tile.",
+    );
+  }, [pending, failedIds]);
 
   useEffect(() => {
-    if (!pendingId || !pendingEntry?.activeGrid) return;
-    if (pendingEntry.activeGrid.datasetId !== pendingId) return;
+    if (!pending || !pendingEntry?.activeGrid) return;
+    if (pendingEntry.activeGrid.datasetId !== pending.datasetId) return;
+    const current = useTerrainStore.getState().collectionNavigation;
+    if (current?.requestId !== pending.requestId) return;
+    let target: { x: number; z: number };
+    try {
+      target = lonLatToWorldXZ(pending.lon, pending.lat, pendingEntry.activeGrid);
+    } catch {
+      useTerrainStore.getState().failCollectionNavigation(
+        pending.requestId,
+        "That point is outside the selected terrain. Choose another point.",
+      );
+      return;
+    }
+    useTerrainStore.getState().setPrimary(pending.datasetId, pendingEntry.source);
     setTerrain(pendingEntry.activeGrid);
     setDatasetId(null);
-    clearPending();
-  }, [pendingId, pendingEntry, setDatasetId, setTerrain, clearPending]);
+    useUiStore.getState().setPendingDropIn({ worldX: target.x, worldZ: target.z });
+    useUiStore.getState().setSidebarMode("explore");
+    useUiStore.getState().setOverviewOpen(false);
+    useTerrainStore.getState().completeCollectionNavigation(pending.requestId);
+  }, [pending, pendingEntry, setDatasetId, setTerrain]);
 
   return null;
 };
 
 export const VisibleDatasetsLoader: React.FC = () => {
   const visible = useTerrainStore((s) => s.visibleDatasets);
+  const collectionScopeId = useTerrainStore((s) => s.collectionScopeId);
+  const navigation = useTerrainStore((s) => s.collectionNavigation);
   // Mount a child loader for each entry whose grids haven't arrived yet.
   // Once grids are present (!activeGrid check fails) the child unmounts,
   // keeping React Query subscriptions tidy.
-  const presetNeedsLoad = visible.filter(
-    (v) => v.source === "preset" && (!v.activeGrid || !v.overviewGrid),
-  );
-  const userNeedsLoad = visible.filter(
-    (v) => v.source === "user" && (!v.activeGrid || !v.overviewGrid),
-  );
+  const needsTerrain = (datasetId: string) =>
+    collectionScopeId === null || navigation?.datasetId === datasetId;
+  const presetNeedsLoad = visible.filter((v) =>
+    v.source === "preset" && (!v.overviewGrid || (needsTerrain(v.datasetId) && !v.activeGrid)));
+  const userNeedsLoad = visible.filter((v) =>
+    v.source === "user" && (!v.overviewGrid || (needsTerrain(v.datasetId) && !v.activeGrid)));
   return (
     <>
       {presetNeedsLoad.map((v) => (
-        <PresetDatasetLoader key={v.datasetId} datasetId={v.datasetId} />
+        <PresetDatasetLoader
+          key={v.datasetId}
+          datasetId={v.datasetId}
+          loadTerrain={needsTerrain(v.datasetId)}
+          requestId={navigation?.datasetId === v.datasetId ? navigation.requestId : undefined}
+        />
       ))}
       {userNeedsLoad.map((v) => (
-        <UserDatasetLoader key={v.datasetId} datasetId={v.datasetId} />
+        <UserDatasetLoader
+          key={v.datasetId}
+          datasetId={v.datasetId}
+          loadTerrain={needsTerrain(v.datasetId)}
+          requestId={navigation?.datasetId === v.datasetId ? navigation.requestId : undefined}
+        />
       ))}
     </>
   );

@@ -326,7 +326,11 @@ describe("VisibleDatasetsLoader — user-dataset ID mismatch guard (Bug 2)", () 
 });
 
 describe("VisibleDatasetsLoader — collection handoff", () => {
-  it("loads upload and materialized-save members through user endpoints", async () => {
+  it("loads only overview grids for collection members until one is selected", async () => {
+    useTerrainStore.getState().setCollectionScope("collection-1", [
+      "upload-1",
+      "materialized-save-1",
+    ]);
     useTerrainStore.getState().activateCollection([
       { datasetId: "upload-1", source: "user" },
       { datasetId: "materialized-save-1", source: "user" },
@@ -346,14 +350,13 @@ describe("VisibleDatasetsLoader — collection handoff", () => {
     });
 
     const visible = useTerrainStore.getState().visibleDatasets;
-    expect(visible.map((entry) => entry.activeGrid?.datasetId)).toEqual([
+    expect(visible.map((entry) => entry.overviewGrid?.datasetId)).toEqual([
       "upload-1",
       "materialized-save-1",
     ]);
-    expect(userTerrainRequests).toEqual(expect.arrayContaining([
-      "upload-1",
-      "materialized-save-1",
-    ]));
+    expect(visible.every((entry) => entry.activeGrid === null)).toBe(true);
+    // The hooks remain mounted to obey React's hook rules, but terrain data is
+    // ignored while collection members are overview-only.
     expect(userOverviewRequests).toEqual(expect.arrayContaining([
       "upload-1",
       "materialized-save-1",
@@ -368,12 +371,16 @@ describe("VisibleDatasetsLoader — collection handoff", () => {
     ]));
   });
 
-  it("replaces stale App terrain with the loaded collection primary", async () => {
+  it("hands off only the explicitly selected collection member", async () => {
     const AppTerrainProbe = () => {
       const { terrain, datasetId } = useAppState();
       return <output data-testid="app-terrain">{`${datasetId ?? "user"}:${terrain?.datasetId ?? "none"}`}</output>;
     };
 
+    useTerrainStore.getState().setCollectionScope("collection-1", [
+      "upload-1",
+      "materialized-save-1",
+    ]);
     useTerrainStore.getState().activateCollection([
       { datasetId: "upload-1", source: "user" },
       { datasetId: "materialized-save-1", source: "user" },
@@ -386,6 +393,11 @@ describe("VisibleDatasetsLoader — collection handoff", () => {
       activeGrid: makeGrid("materialized-save-1") as never,
       overviewGrid: makeGrid("materialized-save-1") as never,
     });
+    useTerrainStore.getState().requestCollectionNavigation(
+      "materialized-save-1",
+      0.5,
+      0.5,
+    );
 
     render(
       <AppProvider>
@@ -395,11 +407,10 @@ describe("VisibleDatasetsLoader — collection handoff", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId("app-terrain")).toHaveTextContent("user:upload-1");
+      expect(screen.getByTestId("app-terrain")).toHaveTextContent("user:materialized-save-1");
     });
-    expect(useTerrainStore.getState().pendingPrimaryHandoffId).toBeNull();
-    expect(useTerrainStore.getState().visibleDatasets[1]?.activeGrid?.datasetId)
-      .toBe("materialized-save-1");
+    expect(useTerrainStore.getState().collectionNavigation).toBeNull();
+    expect(useTerrainStore.getState().primaryDatasetId).toBe("materialized-save-1");
   });
 
   it("does not overwrite a newer preset selection when the old collection grid arrives", async () => {
@@ -423,10 +434,12 @@ describe("VisibleDatasetsLoader — collection handoff", () => {
       return ready ? <CollectionPrimaryHandoff /> : null;
     };
 
+    useTerrainStore.getState().setCollectionScope("collection-1", ["upload-1"]);
     useTerrainStore.getState().activateCollection([
       { datasetId: "upload-1", source: "user" },
       { datasetId: "materialized-save-1", source: "user" },
     ]);
+    useTerrainStore.getState().requestCollectionNavigation("upload-1", 0.5, 0.5);
 
     render(
       <AppProvider>

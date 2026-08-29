@@ -55,6 +55,7 @@ import {
   isValidGeoBounds,
 } from "@workspace/shared-types";
 import {
+  invertPuzzleTilePoint,
   puzzleLayoutToGeoCorrections,
   rebasePuzzleTransformsForView,
   type GeoBbox,
@@ -234,6 +235,8 @@ export const OverviewMap: React.FC = () => {
   const collectionScopeIds = useTerrainStore((s) => s.collectionScopeIds);
   const primaryDatasetId = useTerrainStore((s) => s.primaryDatasetId);
   const overviewFetchErrorIds = useTerrainStore((s) => s.overviewFetchErrorIds);
+  const collectionNavigation = useTerrainStore((s) => s.collectionNavigation);
+  const collectionNavigationError = useTerrainStore((s) => s.collectionNavigationError);
   // Refs so the rAF render + DOM event handlers always read the latest store
   // state without forcing the effects to re-run on every store update.
   const visibleDatasetsRef = useRef(visibleDatasets);
@@ -4142,6 +4145,35 @@ export const OverviewMap: React.FC = () => {
       const coordGrid = worldGridRef.current ?? overviewGrid;
       const { lon, lat } = canvasToLonLat(mx, my, coordGrid, t);
 
+      // Collection navigation hit-tests the topmost ready tile and reverses
+      // its translation, rotation, and flips before requesting full terrain.
+      // The overlay remains open until CollectionPrimaryHandoff commits both
+      // the selected grid and camera target.
+      if (useTerrainStore.getState().collectionScopeId !== null) {
+        const sorted = sortByRecency(visibleDatasetsRef.current);
+        for (let i = sorted.length - 1; i >= 0; i--) {
+          const entry = sorted[i];
+          const grid = entry?.overviewGrid;
+          if (!entry || !grid) continue;
+          const point = invertPuzzleTilePoint(
+            mx,
+            my,
+            grid,
+            puzzleTransformsRef.current.get(entry.datasetId),
+            coordGrid,
+            t,
+          );
+          if (!point) continue;
+          useTerrainStore.getState().requestCollectionNavigation(
+            entry.datasetId,
+            point.lon,
+            point.lat,
+          );
+          return;
+        }
+        return;
+      }
+
       // Saved drift ribbons have their own interaction model. A ribbon click
       // selects it and exposes the endpoint affordances; clicking either
       // endpoint flies to the exact persisted waypoint. This runs before
@@ -4780,6 +4812,44 @@ export const OverviewMap: React.FC = () => {
         >
           Choose a dataset from Find Data
         </button>
+      )}
+      {collectionNavigation && (
+        <div
+          data-testid="collection-navigation-status"
+          role={collectionNavigationError ? "alert" : "status"}
+          style={{
+            position: "absolute",
+            left: "50%",
+            bottom: 18,
+            transform: "translateX(-50%)",
+            zIndex: 30,
+            padding: "7px 10px",
+            borderRadius: 4,
+            border: `1px solid ${collectionNavigationError ? "rgba(248,113,113,.55)" : "rgba(0,229,255,.45)"}`,
+            background: "rgba(2,8,24,.94)",
+            color: collectionNavigationError ? "#fca5a5" : "#67e8f9",
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: "calc(12px * var(--bs-font-scale, 1))",
+          }}
+        >
+          {collectionNavigationError ?? "Loading selected terrain…"}
+          {collectionNavigationError && (
+            <button
+              data-testid="collection-navigation-retry"
+              onClick={() => useTerrainStore.getState().retryCollectionNavigation()}
+              style={{
+                marginLeft: 8,
+                border: "1px solid rgba(248,113,113,.45)",
+                borderRadius: 3,
+                background: "rgba(248,113,113,.08)",
+                color: "#fca5a5",
+                cursor: "pointer",
+              }}
+            >
+              Retry
+            </button>
+          )}
+        </div>
       )}
 
       {/* Retry button — appears after the 15 s load-failure timeout so the

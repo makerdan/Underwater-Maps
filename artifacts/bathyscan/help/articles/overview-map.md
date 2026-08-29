@@ -32,6 +32,12 @@ The **Overview Map** is a top-down minimap that shows the entire active dataset,
 
 Hover anywhere on the overview map to see a **lat/lon tooltip** showing the geographic coordinates at that point. This helps you quickly read off the bounding box corners or find the coordinates of a feature you spot on the minimap.
 
+## Navigating a dataset collection
+
+Opening a Dataset Collection shows every available member as an Overview tile, even when the collection is larger than the normal 3D active-dataset limit. Click a point on any tile to load only that dataset's full terrain. The Overview stays open while it loads, then BathyScan switches to Explore and places the camera at the selected geographic point.
+
+Special Collections open with puzzle editing enabled so you can move, rotate, or flip tiles without accidentally entering 3D. Turn **Puzzle** off when you are ready to choose a point; the saved tile arrangement remains in place and the click is mapped back through that tile's transform.
+
 ## Satellite imagery toggle
 
 Inside the overview map panel there is a **Satellite** toggle. When on, the minimap background switches from the flat depth-colormap render to a satellite image tile, giving geographic context (coastlines, land features, water colour). This setting is independent of the 3D scene's satellite imagery setting.
