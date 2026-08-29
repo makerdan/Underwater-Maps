@@ -122,6 +122,24 @@ missing, add a safe stub and stop to repair the plan before validation.
 The plan's `**Command:**` is the validation ceiling.
 </HARD-GATE>
 
+### Task validation versus completion validation
+
+- **Task validation** is the registered command named in the plan's `## Validation`
+  section under **Command:**. It is the agent's required validation ceiling: run
+  exactly that command with the task plan locked, and never escalate above it.
+- **Completion validation** is the platform-managed final check after task work. It
+  may run many registered commands and is not necessarily limited by the plan's
+  task-validation ceiling. For code-changing tasks, it is required even when
+  broad; do not skip it because it exceeds the task-validation ceiling.
+- For an intentionally preview-only, no-file-change task, run task validation
+  first. If completion review is not meaningful, then provide a specific
+  validation-skip reason; a generic "no changes" statement or an omitted check
+  is not success.
+- If completion validation remains **RUNNING** through its polling limit,
+  classify that result as a validation-harness limitation, not a product failure.
+  Do not start or retry another completion validation while the original run
+  remains active.
+
 ### 1. Establish the tier lock
 
 Set the plan path for every task-driven validation run:
