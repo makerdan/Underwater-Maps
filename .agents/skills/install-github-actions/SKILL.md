@@ -151,11 +151,12 @@ secrets or write-capable credentials are reachable, checkout is explicit, and
 the user has approved the risk and GitHub environment configuration. Otherwise
 stop and use `pull_request`.
 
-Pin third-party actions to an approved immutable commit or repository policy
-when the organization requires it; at minimum record the trust decision and
-review major-version references. Do not run arbitrary fork code with a
-maintainer token. Do not allow a validation job to push, open pull requests,
-modify settings, deploy, or recurse by writing workflow files.
+Pin every third-party action to an approved immutable commit. If an
+organization-approved immutable pinning policy provides an equivalent
+mechanism, record that policy and the reviewed trust decision. Do not treat a
+mutable tag or branch as an immutable pin. Do not run arbitrary fork code with
+a maintainer token. Do not allow a validation job to push, open pull
+requests, modify settings, deploy, or recurse by writing workflow files.
 
 ## 4. Make jobs fail closed
 
@@ -244,6 +245,9 @@ Give the user this non-destructive checklist:
 - [ ] Timeouts, concurrency, caching, artifacts, and retries have reasons.
 - [ ] Stable required aggregator names are chosen.
 - [ ] Workflow syntax and local commands have been validated locally.
+- [ ] PR evidence names the exact revision and event, shows every intended job
+      and matrix leg ran and passed, and separately verifies policy status (or
+      marks unavailable evidence as unknown).
 - [ ] User has separately approved any GitHub settings or remote run changes.
 
 ## 7. Troubleshoot without weakening the contract
@@ -302,9 +306,12 @@ Return an evidence-based report with exactly these headings:
 Name each changed file and exact command. State PR, push, schedule, manual, and
 merge-queue scopes; permissions; secrets excluded; service/runtime setup;
 matrix and generated-file handling; local-only dependencies; intentional gaps;
-and any unavailable evidence. Report validation by revision and command, not by
-workflow-file presence. State which branch-protection or ruleset settings still
-require user action. Include a rollback path that removes or disables the new
-workflow only after confirming which stable checks and policy entries reference
-it. Never claim merge protection until active/pass status and remote policy are
-verified independently.
+and any unavailable evidence. For each claimed PR result, name the exact
+revision, event, workflow/job or matrix leg, command, and result; include
+skipped, cancelled, retried, or allowed-to-fail cases. Report validation by
+revision and command, not by workflow-file presence. State which
+branch-protection or ruleset settings still require user action. Include a
+rollback path that removes or disables the new workflow only after confirming
+which stable checks and policy entries reference it. Never claim merge
+protection until active/pass status and remote policy are verified
+independently.
