@@ -200,3 +200,10 @@ uri = "file://export/skill-mirror-sync.zip"
 type = "unspecified"
 title = "Skill Mirror Sync (Updated Canonical ZIP)"
 description = "Download of the updated canonical Skill Mirror Sync skill from .agents/skills."
+
+[[outputs]]
+id = "AkNo0279Cjvh44BK7Mk7l"
+uri = "file://exports/install-github-actions-skill.zip"
+type = "unspecified"
+title = "Install GitHub Actions Skill (ZIP)"
+description = "Direct download of the canonical Install GitHub Actions skill from .agents/skills."
