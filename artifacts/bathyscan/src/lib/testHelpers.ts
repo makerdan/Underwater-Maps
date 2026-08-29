@@ -893,6 +893,12 @@ export interface BathyTestApi {
     transform: { scale: number; offsetX: number; offsetY: number; pxPerDeg: number };
     grid: { minLon: number; maxLon: number; minLat: number; maxLat: number };
   } | null;
+  /** Snapshot the active collection scope used by Overview coverage controls. */
+  getCollectionScope: () => {
+    collectionId: string | null;
+    datasetIds: string[] | null;
+    loadedDatasetIds: string[];
+  };
 }
 
 declare global {
@@ -1777,6 +1783,16 @@ export function installTestHelpers(): void {
           minLat: grid.minLat,
           maxLat: grid.maxLat,
         },
+      };
+    },
+    getCollectionScope: () => {
+      const { collectionScopeId, collectionScopeIds, visibleDatasets } = useTerrainStore.getState();
+      return {
+        collectionId: collectionScopeId,
+        datasetIds: collectionScopeIds,
+        loadedDatasetIds: visibleDatasets
+          .filter((dataset) => dataset.activeGrid !== null || dataset.overviewGrid !== null)
+          .map((dataset) => dataset.datasetId),
       };
     },
   };

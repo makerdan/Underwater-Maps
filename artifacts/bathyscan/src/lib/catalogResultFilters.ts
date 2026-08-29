@@ -41,10 +41,10 @@ export function hasCatalogResultFilters(filters: CatalogResultFilters): boolean 
     || filters.bathymetryOnly || filters.efhOnly);
 }
 
-export function filterCatalogResults(
-  results: DatasetCatalogSearchResult[],
+export function filterCatalogResults<T extends DatasetCatalogSearchResult>(
+  results: T[],
   filters: CatalogResultFilters,
-): DatasetCatalogSearchResult[] {
+): T[] {
   const name = filters.name.trim().toLowerCase();
   const from = boundDate(filters.updatedFrom);
   const to = filters.updatedTo

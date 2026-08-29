@@ -151,3 +151,4 @@
 - [Test DB circular foreign keys](testdb-circular-foreign-keys.md) — add one side after table creation and validate post-table constraints alongside inline references.
 
 - [Fly-control test camera spawn](fly-controls-test-camera-spawn.md) — snapshot camera displacement after terrain mount so spawn offsets do not look like physics failures.
+- [Deterministic collection E2E fixtures](e2e-collection-fixtures.md) — create ready upload-backed members in the test and clean them up; never skip based on persisted E2E-library contents.

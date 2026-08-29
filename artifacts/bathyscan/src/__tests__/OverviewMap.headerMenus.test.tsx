@@ -68,6 +68,8 @@ describe("OverviewMap header folders", () => {
       activeGrid: null,
       primaryDatasetId: overviewGrid.datasetId,
       visibleDatasets: [{ datasetId: overviewGrid.datasetId, source: "preset", overviewGrid, activeGrid: null }],
+      collectionScopeId: null,
+      collectionScopeIds: null,
     });
     useUiStore.setState({
       overviewOpen: true,
@@ -122,6 +124,41 @@ describe("OverviewMap header folders", () => {
     await act(async () => { fireEvent.keyDown(window, { key: "Escape" }); });
     expect(screen.getByTestId("overview-tools-popover")).not.toBeVisible();
     expect(tools).toHaveFocus();
+  });
+
+  it("only exposes GAPS for an active collection scope", () => {
+    renderOverview();
+    fireEvent.click(screen.getByTestId("overview-map-folder-puzzle"));
+    fireEvent.click(screen.getByTestId("overview-puzzle-toggle"));
+    expect(screen.queryByTestId("overview-puzzle-gap-toggle")).not.toBeInTheDocument();
+  });
+
+  it("exposes GAPS for ordinary and special collection scopes", () => {
+    useTerrainStore.setState({ collectionScopeId: "collection-1", collectionScopeIds: ["member-1"] });
+    renderOverview();
+    fireEvent.click(screen.getByTestId("overview-map-folder-puzzle"));
+    fireEvent.click(screen.getByTestId("overview-puzzle-toggle"));
+    expect(screen.getByTestId("overview-puzzle-gap-toggle")).toBeVisible();
+  });
+
+  it("removes GAPS and resets its pressed state when collection scope ends", () => {
+    useTerrainStore.setState({ collectionScopeId: "special-collection", collectionScopeIds: ["member-1"] });
+    renderOverview();
+    fireEvent.click(screen.getByTestId("overview-map-folder-puzzle"));
+    fireEvent.click(screen.getByTestId("overview-puzzle-toggle"));
+    const gaps = screen.getByTestId("overview-puzzle-gap-toggle");
+    fireEvent.click(gaps);
+    expect(gaps).toHaveAttribute("aria-pressed", "true");
+
+    act(() => {
+      useTerrainStore.setState({ collectionScopeId: null, collectionScopeIds: null });
+    });
+    expect(screen.queryByTestId("overview-puzzle-gap-toggle")).not.toBeInTheDocument();
+  });
+
+  it("keeps CLEAR and removes the redundant REDRAW control", () => {
+    renderOverview();
+    expect(screen.queryByTestId("overview-bbox-redraw")).not.toBeInTheDocument();
   });
 
   it("dismisses folders at their outside boundary and keeps narrow panels fixed", async () => {

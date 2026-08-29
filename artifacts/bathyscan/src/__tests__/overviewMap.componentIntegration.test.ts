@@ -30,6 +30,7 @@ import { useUiStore } from "@/lib/uiStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useSpecialCollectionStore } from "@/lib/specialCollectionStore";
+import { usePuzzleStore } from "@/lib/puzzleStore";
 import * as overviewRenderer from "@/lib/overviewRenderer";
 import { POLYGON_LOD_MIN_ZOOM } from "@/lib/overviewRenderer";
 import type { TerrainData } from "@workspace/api-client-react";
@@ -172,6 +173,8 @@ function setupStores() {
     primaryDatasetId: grid.datasetId,
     overviewGrid: grid,
     activeGrid: null,
+    collectionScopeId: null,
+    collectionScopeIds: [],
   });
 
   useUiStore.setState({
@@ -190,6 +193,12 @@ function setupStores() {
     cameraAltitude: 30,
   });
   useSpecialCollectionStore.setState({ active: null, pendingRestore: null });
+  usePuzzleStore.setState({
+    puzzleMode: false,
+    puzzleTransforms: {},
+    overviewTransform: null,
+    worldGrid: null,
+  });
 }
 
 /**
@@ -744,6 +753,7 @@ describe("OverviewMap — null overviewGrid in visibleDatasets does not crash", 
         textAlign: "start" as CanvasTextAlign,
         textBaseline: "alphabetic" as CanvasTextBaseline,
         fillText: vi.fn(),
+        strokeText: vi.fn(),
         measureText: vi.fn(() => ({ width: 50 })),
         drawImage: vi.fn(),
         save: vi.fn(),
@@ -1348,6 +1358,112 @@ describe("OverviewMap — multi-dataset heatmaps drawn at correct canvas positio
     expect(actualDy).toBeGreaterThan(0);
 
     buildSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. Collection-scoped GAPS — only loaded member grids participate
+// ---------------------------------------------------------------------------
+
+describe("OverviewMap — collection-scoped gap drawing", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    usePuzzleStore.setState({
+      puzzleMode: false,
+      puzzleTransforms: {},
+      overviewTransform: null,
+      worldGrid: null,
+    });
+    useTerrainStore.setState({ collectionScopeId: null, collectionScopeIds: [] });
+  });
+
+  it("draws the gap/overlap mask from loaded collection member grids", async () => {
+    const gridA = makeOverviewGrid();
+    const gridB = {
+      ...gridA,
+      datasetId: "test-ds-b",
+      name: "Second Test Dataset",
+    };
+    const mockCtx = new Proxy(
+      {
+        canvas: { width: CANVAS_W, height: CANVAS_H },
+        fillRect: vi.fn(),
+        fillStyle: "",
+        font: "",
+        textAlign: "start",
+        textBaseline: "alphabetic",
+        fillText: vi.fn(),
+        strokeText: vi.fn(),
+        measureText: vi.fn(() => ({ width: 50 })),
+        drawImage: vi.fn(),
+        save: vi.fn(),
+        restore: vi.fn(),
+        beginPath: vi.fn(),
+        closePath: vi.fn(),
+        moveTo: vi.fn(),
+        lineTo: vi.fn(),
+        arc: vi.fn(),
+        stroke: vi.fn(),
+        fill: vi.fn(),
+        translate: vi.fn(),
+        rotate: vi.fn(),
+        scale: vi.fn(),
+        setLineDash: vi.fn(),
+        strokeStyle: "",
+        lineWidth: 1,
+        globalAlpha: 1,
+        imageSmoothingEnabled: true,
+        shadowColor: "",
+        shadowBlur: 0,
+        strokeRect: vi.fn(),
+        roundRect: vi.fn(),
+        clip: vi.fn(),
+        createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+        createImageData: vi.fn((w: number, h: number) => ({
+          data: new Uint8ClampedArray(w * h * 4),
+          width: w,
+          height: h,
+        })),
+        putImageData: vi.fn(),
+      },
+      {
+        set(target: Record<string, unknown>, prop: string, value: unknown) {
+          target[prop] = value;
+          return true;
+        },
+      },
+    );
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockReturnValue(mockCtx as unknown as CanvasRenderingContext2D);
+    vi.spyOn(overviewRenderer, "buildHeatmapBitmap")
+      .mockReturnValue({} as HTMLCanvasElement);
+    const drawGapSpy = vi.spyOn(overviewRenderer, "drawGapOverlap");
+
+    useTerrainStore.setState({
+      visibleDatasets: [
+        { datasetId: gridA.datasetId, source: "preset", overviewGrid: gridA, activeGrid: gridA },
+        { datasetId: gridB.datasetId, source: "preset", overviewGrid: gridB, activeGrid: gridB },
+      ],
+      primaryDatasetId: gridA.datasetId,
+      primaryDatasetIds: [gridA.datasetId, gridB.datasetId],
+      overviewGrid: gridA,
+      activeGrid: gridA,
+      collectionScopeId: "collection-under-test",
+      collectionScopeIds: [gridA.datasetId, gridB.datasetId],
+    });
+
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+    fireEvent.click(screen.getByTestId("overview-puzzle-toggle"));
+    fireEvent.click(screen.getByTestId("overview-puzzle-gap-toggle"));
+
+    await waitFor(() => {
+      expect(drawGapSpy).toHaveBeenCalled();
+    }, { timeout: 4000 });
+    expect(drawGapSpy.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ counts: expect.any(Uint8Array) }),
+    );
   });
 });
 

@@ -33,7 +33,6 @@ import {
   type LayoutRevision,
   type Marker,
   type GpsTrail,
-  type DatasetCatalogSearchResult,
   type SubstrateFeature,
   type SubstrateFeatureCollection,
   type EfhFeature,
@@ -143,6 +142,8 @@ import { approxBboxForRadius } from "@/lib/coordinateParser";
 import { useSubstrateCoverageToast } from "@/hooks/useSubstrateCoverageToast";
 import { useIntertidal } from "@/lib/useIntertidal";
 import { IntertidalBandLegend } from "@/components/IntertidalBandLegend";
+import { buildOverviewBboxResults, type OverviewBboxResult } from "@/lib/overviewBboxResults";
+import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { usePuzzleStore, type PuzzleTransform } from "@/lib/puzzleStore";
 import { useSpecialCollectionStore } from "@/lib/specialCollectionStore";
 import { computeSnapAdjustment, type SnapEdgeSeg, type SnapRect } from "@/lib/puzzleSnap";
@@ -225,6 +226,8 @@ export const OverviewMap: React.FC = () => {
   const overviewGrid = useTerrainStore((s) => s.overviewGrid);
   const { terrain: appTerrain } = useAppState();
   const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
+  const collectionScopeId = useTerrainStore((s) => s.collectionScopeId);
+  const collectionScopeIds = useTerrainStore((s) => s.collectionScopeIds);
   const primaryDatasetId = useTerrainStore((s) => s.primaryDatasetId);
   const overviewFetchErrorIds = useTerrainStore((s) => s.overviewFetchErrorIds);
   // Refs so the rAF render + DOM event handlers always read the latest store
@@ -660,6 +663,12 @@ export const OverviewMap: React.FC = () => {
   const [showGapOverlay, setShowGapOverlay] = useState(false);
   const showGapOverlayRef = useRef(false);
   useEffect(() => { showGapOverlayRef.current = showGapOverlay; dirtyRef.current = true; }, [showGapOverlay]);
+  useEffect(() => {
+    if (collectionScopeId === null) {
+      setShowGapOverlay(false);
+      gapMaskCacheRef.current = null;
+    }
+  }, [collectionScopeId]);
   // Green flash on a just-snapped edge, drawn by the rAF loop until expiry.
   const snapFlashRef = useRef<{ edges: SnapEdgeSeg[]; until: number } | null>(null);
   const lastSnapKeyRef = useRef<string | null>(null);
@@ -1503,10 +1512,22 @@ export const OverviewMap: React.FC = () => {
   useEffect(() => { selectedBboxRef.current = selectedBbox; }, [selectedBbox]);
 
   // --- Box-query hook + Load/Save plumbing (reuses FindDataPanel pattern) ---
+  const { data: userDatasetsForNames } = useGetUserDatasets({
+    query: {
+      queryKey: getGetUserDatasetsQueryKey(),
+      retry: false,
+      staleTime: 60_000,
+    },
+  });
   const bboxQuery = usePostDatasetsBboxQuery();
-  const [bboxResults, setBboxResults] = useState<DatasetCatalogSearchResult[] | null>(null);
+  const [bboxResults, setBboxResults] = useState<OverviewBboxResult[] | null>(null);
   const [bboxError, setBboxError] = useState<string | null>(null);
-  const { setDatasetId, setTerrain } = useAppState();
+  const {
+    setDatasetId,
+    setTerrain,
+    setCatalogSourcedAt,
+    setPendingExternalUserDatasetId,
+  } = useAppState();
   const saveMutation = usePostDatasetsCatalogIdSave();
   const { data: mySaves = [], refetch: refetchMySaves } = useGetDatasetsMySaves(undefined, {
     query: { queryKey: getGetDatasetsMySavesQueryKey() },
@@ -1541,13 +1562,43 @@ export const OverviewMap: React.FC = () => {
     setBboxError(null);
     try {
       const res = await bboxQuery.mutateAsync({ data: selectedBbox });
-      setBboxResults(res.datasets);
+      setBboxResults(buildOverviewBboxResults(
+        selectedBbox,
+        res.datasets,
+        userDatasetsForNames ?? [],
+        mySaves,
+        collectionScopeIds,
+      ));
     } catch (err) {
       const e = err as { details?: string; message?: string };
       setBboxError(e?.details ?? e?.message ?? "Request failed");
       setBboxResults(null);
     }
-  }, [bboxQuery, selectedBbox]);
+  }, [bboxQuery, collectionScopeIds, mySaves, selectedBbox, userDatasetsForNames]);
+
+  const handleBboxLoad = useCallback((entry: OverviewBboxResult) => {
+    void requestDatasetSwitch({
+      datasetId: entry.loadDatasetId,
+      datasetName: entry.name,
+      onConfirm: () => {
+        useUiStore.getState().setOverviewOpen(false);
+        useUiStore.getState().setSidebarMode("explore");
+        if (entry.resultKind === "library") {
+          setPendingExternalUserDatasetId(entry.loadDatasetId);
+          setCatalogSourcedAt({
+            forDatasetId: entry.loadDatasetId,
+            date: entry.createdAt ?? null,
+          });
+        } else {
+          setDatasetId(entry.loadDatasetId);
+          setCatalogSourcedAt({
+            forDatasetId: entry.loadDatasetId,
+            date: entry.createdAt ?? null,
+          });
+        }
+      },
+    });
+  }, [setCatalogSourcedAt, setDatasetId, setPendingExternalUserDatasetId]);
 
   const clearBbox = useCallback(() => {
     setSelectedBbox(null);
@@ -1606,7 +1657,13 @@ export const OverviewMap: React.FC = () => {
         });
         useUiStore.getState().setCoordSearchArea({ lat, lon, radiusKm: res.radiusKm, bbox: res.bbox });
         setSelectedBbox(res.bbox);
-        setBboxResults(res.datasets);
+        setBboxResults(buildOverviewBboxResults(
+          res.bbox,
+          res.datasets,
+          userDatasetsForNames ?? [],
+          mySaves,
+          collectionScopeIds,
+        ));
       } catch (err) {
         const e = err as { details?: string; message?: string };
         setBboxError(e?.details ?? e?.message ?? "Coordinate search failed");
@@ -1614,7 +1671,7 @@ export const OverviewMap: React.FC = () => {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- bboxQuery.mutateAsync and pointRadiusQuery.mutateAsync are stable React Query mutation refs
-  }, [pendingCoordSearch]);
+  }, [pendingCoordSearch, collectionScopeIds, mySaves, userDatasetsForNames]);
 
   // Compute the union bbox of all visible datasets that have a loaded overview
   // grid and animate the minimap transform to frame it.
@@ -1847,13 +1904,6 @@ export const OverviewMap: React.FC = () => {
     { waterType: waterTypeForDatasets },
     { query: { queryKey: getGetDatasetsQueryKey({ waterType: waterTypeForDatasets }) } },
   );
-  const { data: userDatasetsForNames } = useGetUserDatasets({
-    query: {
-      queryKey: getGetUserDatasetsQueryKey(),
-      retry: false,
-      staleTime: 60_000,
-    },
-  });
   // Build a ref so the rAF render loop always has fresh dataset names without
   // re-triggering the expensive draw effect.
   const datasetNameMapRef = useRef<Map<string, string>>(new Map());
@@ -5690,8 +5740,8 @@ export const OverviewMap: React.FC = () => {
             </ViewscreenTooltip>
           )}
 
-          {/* Gap/overlap indicator toggle — visible in puzzle mode */}
-          {puzzleMode && (
+          {/* Gap/overlap indicator toggle — only meaningful for an active collection */}
+          {puzzleMode && collectionScopeId !== null && (
             <ViewscreenTooltip label="Highlight uncovered gaps (red) and overlapping tiles (orange)" side="bottom">
               <button
                 data-testid="overview-puzzle-gap-toggle"
@@ -6846,10 +6896,10 @@ export const OverviewMap: React.FC = () => {
           loading={bboxQuery.isPending}
           error={bboxError}
           onRequest={() => void requestBbox()}
-          onRedraw={() => { setBboxResults(null); setBboxError(null); setSelectedBbox(null); }}
           onClear={clearBbox}
           onClose={() => { clearBbox(); setSelectMode(false); }}
           onSave={(id) => void handleBboxSave(id)}
+          onLoad={handleBboxLoad}
           savedIds={savedCatalogIds}
           savingIds={bboxSavingIds}
         />
@@ -7482,14 +7532,14 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, savedTrailsRef,
 
 interface BboxQueryPanelProps {
   bbox: { north: number; south: number; east: number; west: number };
-  results: DatasetCatalogSearchResult[] | null;
+  results: OverviewBboxResult[] | null;
   loading: boolean;
   error: string | null;
   onRequest: () => void;
-  onRedraw: () => void;
   onClear: () => void;
   onClose: () => void;
   onSave: (id: string) => void;
+  onLoad: (entry: OverviewBboxResult) => void;
   savedIds: Set<string>;
   savingIds: Set<string>;
 }
@@ -7500,10 +7550,10 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
   loading,
   error,
   onRequest,
-  onRedraw,
   onClear,
   onClose,
   onSave,
+  onLoad,
   savedIds,
   savingIds,
 }) => {
@@ -7614,22 +7664,6 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
             {loading ? "REQUESTING…" : "▼ REQUEST BATHYMETRY"}
           </button>
           <button
-            data-testid="overview-bbox-redraw"
-            onClick={onRedraw}
-            style={{
-              background: "transparent",
-              border: "1px solid rgba(0,229,255,0.2)",
-              borderRadius: 3,
-              color: "#7dd3fc",
-              padding: "4px 8px",
-              cursor: "pointer",
-              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-              letterSpacing: "0.1em",
-            }}
-          >
-            REDRAW
-          </button>
-          <button
             data-testid="overview-bbox-clear"
             onClick={onClear}
             style={{
@@ -7691,11 +7725,12 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
           </div>
         )}
         {filteredResults?.map((entry) => {
-          const saved = savedIds.has(entry.id);
-          const saving = savingIds.has(entry.id);
+          const saveApplicable = entry.resultKind === "catalog";
+          const saved = saveApplicable && savedIds.has(entry.id);
+          const saving = saveApplicable && savingIds.has(entry.id);
           return (
             <div
-              key={entry.id}
+              key={`${entry.resultKind}:${entry.loadDatasetId}:${entry.catalogSaveId ?? ""}`}
               data-testid="overview-bbox-result-card"
               style={{
                 padding: "8px 10px",
@@ -7711,22 +7746,41 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
               </div>
               <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                 <button
-                  data-testid="overview-bbox-save"
-                  onClick={() => !saved && !saving && onSave(entry.id)}
-                  disabled={saved || saving}
+                  data-testid="overview-bbox-load"
+                  onClick={() => onLoad(entry)}
                   style={{
                     flex: 1,
-                    background: saved ? "rgba(34,197,94,0.1)" : "rgba(0,229,255,0.05)",
-                    border: `1px solid ${saved ? "rgba(34,197,94,0.4)" : "rgba(0,229,255,0.2)"}`,
+                    background: "rgba(34,211,238,0.12)",
+                    border: "1px solid rgba(34,211,238,0.4)",
                     borderRadius: 3,
-                    color: saved ? "#4ade80" : "#7dd3fc",
+                    color: "#67e8f9",
                     padding: "3px 6px",
-                    cursor: saved || saving ? "default" : "pointer",
+                    cursor: "pointer",
                     fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                     letterSpacing: "0.08em",
                   }}
                 >
-                  {saved ? "✓ SAVED" : saving ? "SAVING…" : "+ SAVE"}
+                  LOAD
+                </button>
+                <button
+                  data-testid="overview-bbox-save"
+                  onClick={() => saveApplicable && !saved && !saving && onSave(entry.id)}
+                  disabled={!saveApplicable || saved || saving}
+                  style={{
+                    flex: 1,
+                    background: saved || !saveApplicable ? "rgba(34,197,94,0.1)" : "rgba(0,229,255,0.05)",
+                    border: `1px solid ${saved || !saveApplicable ? "rgba(34,197,94,0.4)" : "rgba(0,229,255,0.2)"}`,
+                    borderRadius: 3,
+                    color: saved || !saveApplicable ? "#4ade80" : "#7dd3fc",
+                    padding: "3px 6px",
+                    cursor: !saveApplicable || saved || saving ? "default" : "pointer",
+                    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                    letterSpacing: "0.08em",
+                  }}
+                >
+                  {!saveApplicable
+                    ? "✓ SAVED"
+                    : saved ? "✓ SAVED" : saving ? "SAVING…" : "+ SAVE"}
                 </button>
               </div>
             </div>
