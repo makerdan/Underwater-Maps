@@ -73,6 +73,7 @@ const MEMBER_KIND_ICONS: Record<string, string> = {
   catalogSave: "💾",
 };
 
+const COLLECTION_REFRESH_INTERVAL_MS = 2_000;
 interface RecoveryCandidate {
   key: string;
   datasetId: string;
@@ -106,7 +107,11 @@ export const AddToCollectionDialog: React.FC<{
 }> = ({ label, targets, onClose }) => {
   const qc = useQueryClient();
   const { data: collections = [] } = useGetUserCollections({
-    query: { queryKey: getGetUserCollectionsQueryKey() },
+    query: {
+      queryKey: getGetUserCollectionsQueryKey(),
+      refetchInterval: COLLECTION_REFRESH_INTERVAL_MS,
+      refetchIntervalInBackground: true,
+    },
   });
   const createMutation = usePostUserCollections();
   const addMemberMutation = usePostUserCollectionsIdMembers();
@@ -603,7 +608,12 @@ export const CollectionsSection: React.FC = () => {
   const qc = useQueryClient();
 
   const { data: collections = [], isPending } = useGetUserCollections({
-    query: { queryKey: getGetUserCollectionsQueryKey(), enabled: isLoaded && isSignedIn === true },
+    query: {
+      queryKey: getGetUserCollectionsQueryKey(),
+      enabled: isLoaded && isSignedIn === true,
+      refetchInterval: COLLECTION_REFRESH_INTERVAL_MS,
+      refetchIntervalInBackground: true,
+    },
   });
 
   // Saves list (unfiltered) so catalogSave members can be mapped to their

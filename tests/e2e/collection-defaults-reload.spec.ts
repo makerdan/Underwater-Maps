@@ -69,8 +69,8 @@ function terrain(datasetId: string) {
   };
 }
 
-async function installCollectionRoutes(page: Page): Promise<CollectionFixture[]> {
-  const collections: CollectionFixture[] = [
+function createCollectionFixtures(): CollectionFixture[] {
+  return [
     {
       id: STANDARD_COLLECTION_ID,
       name: "Uploaded defaults",
@@ -103,7 +103,12 @@ async function installCollectionRoutes(page: Page): Promise<CollectionFixture[]>
       updatedAt: CREATED_AT,
     },
   ];
+}
 
+async function installCollectionRoutes(
+  page: Page,
+  collections = createCollectionFixtures(),
+): Promise<CollectionFixture[]> {
   await page.route("**/api/user/collections", async (route) => {
     const request = route.request();
     const pathname = new URL(request.url()).pathname;
@@ -311,5 +316,68 @@ test.describe("collection default member reload persistence", () => {
     await expect(page.locator(".overview-map-header")).toBeVisible({ timeout: 10_000 });
     await expectPuzzleMode(page);
     await expectPrimaryDataset(page, CATALOG_DATASET_IDS[0]);
+  });
+
+  test("refreshes another open browser session after removing its selected default", async ({
+    page,
+    browser,
+  }) => {
+    const collections = await installCollectionRoutes(page);
+    const secondContext = await browser.newContext();
+    const secondPage = await secondContext.newPage();
+    await secondPage.addInitScript(() => {
+      try {
+        const raw = localStorage.getItem("bathyscan:settings");
+        const parsed: { state?: Record<string, unknown>; version?: number } =
+          raw ? JSON.parse(raw) : {};
+        parsed.state = { ...(parsed.state ?? {}), hasSeenOnboarding: true };
+        localStorage.setItem("bathyscan:settings", JSON.stringify(parsed));
+      } catch {
+        localStorage.setItem(
+          "bathyscan:settings",
+          JSON.stringify({ state: { hasSeenOnboarding: true }, version: 0 }),
+        );
+      }
+    });
+    await installCollectionRoutes(secondPage, collections);
+
+    try {
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+      await secondPage.goto("/", { waitUntil: "domcontentloaded" });
+      await expect(page.getByTestId("collections-section")).toBeVisible({ timeout: 12_000 });
+      await expect(secondPage.getByTestId("collections-section")).toBeVisible({ timeout: 12_000 });
+
+      await chooseDefault(page, SPECIAL_COLLECTION_ID, "catalog-member-second");
+      await secondPage.getByTestId(`btn-collection-settings-${SPECIAL_COLLECTION_ID}`).click();
+      await expect(
+        secondPage.getByTestId(`select-collection-default-${SPECIAL_COLLECTION_ID}`),
+      ).toHaveValue("catalog-member-second");
+
+      await removeMember(page, SPECIAL_COLLECTION_ID, "catalog-member-second");
+
+      // The row and its already-open settings sheet must update from polling,
+      // not from a reload or a writer-side cache update.
+      await expect(secondPage.getByTestId(`collection-row-${SPECIAL_COLLECTION_ID}`)).toContainText(
+        "(1)",
+      );
+      await expect(
+        secondPage.getByTestId(`select-collection-default-${SPECIAL_COLLECTION_ID}`),
+      ).toHaveValue("");
+      await expect(
+        secondPage.getByTestId(`collection-member-catalog-member-second`),
+      ).toBeHidden();
+
+      await secondPage
+        .getByTestId(`btn-close-collection-settings-${SPECIAL_COLLECTION_ID}`)
+        .click({ force: true });
+      await secondPage
+        .getByTestId(`btn-activate-collection-${SPECIAL_COLLECTION_ID}`)
+        .click();
+      await expect(secondPage.locator(".overview-map-header")).toBeVisible({ timeout: 10_000 });
+      await expectPuzzleMode(secondPage);
+      await expectPrimaryDataset(secondPage, CATALOG_DATASET_IDS[0]);
+    } finally {
+      await secondContext.close();
+    }
   });
 });
