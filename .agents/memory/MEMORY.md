@@ -150,6 +150,7 @@
 - [Validation-lock suite aggregation](validation-lock-suite-aggregation.md) — scripts lock tests can hang in the aggregate unit command while isolated retries remain green.
 - [Managed validation task environment](managed-validation-task-env.md) — managed validation workflows may omit TASK_PLAN_FILE; use the resolved tier directly when lock evidence matters.
 - [Test DB circular foreign keys](testdb-circular-foreign-keys.md) — add one side after table creation and validate post-table constraints alongside inline references.
+- [Exact patch file replacement](apply-patch-eof-newline.md) — whole-file patches may omit the final newline; byte-compare candidate content and add a final blank patch line if needed.
 
 - [Fly-control test camera spawn](fly-controls-test-camera-spawn.md) — snapshot camera displacement after terrain mount so spawn offsets do not look like physics failures.
 - [Deterministic collection E2E fixtures](e2e-collection-fixtures.md) — create ready upload-backed members in the test and clean them up; never skip based on persisted E2E-library contents.
