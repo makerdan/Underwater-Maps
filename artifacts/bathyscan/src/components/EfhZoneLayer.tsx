@@ -31,12 +31,18 @@ import {
   getGetDatasetsQueryKey,
   type EfhSpeciesProperties,
   type EfhFeature,
+  type EfhAvailableSpecies,
   type SavedHabitatFeatureProperties,
 } from "@workspace/api-client-react";
 import { useSettingsStore } from "@/lib/settingsStore";
 import type { ThreeEvent } from "@react-three/fiber";
 
 import { polygonIntersectsBbox, type Bbox } from "@/lib/efhBboxFilter";
+import {
+  availableEfhSpeciesFromFeatures,
+  EMPTY_EFH_SPECIES,
+  filterEfhByActiveSpecies,
+} from "@/lib/efhSpecies";
 /** UUID format: custom (user-uploaded) dataset IDs. */
 const CUSTOM_DATASET_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -173,8 +179,8 @@ export const EfhZoneLayer: React.FC = () => {
   const { terrain } = useAppState();
   const efhOverlayEnabled = useUiStore((s) => s.efhOverlayEnabled);
   const setSelectedEfh = useUiStore((s) => s.setSelectedEfh);
-  const hiddenEfhSpecies = useUiStore((s) => s.hiddenEfhSpecies);
-  const clearHiddenEfhSpecies = useUiStore((s) => s.clearHiddenEfhSpecies);
+  const activeEfhSpecies = useUiStore((s) => s.activeEfhSpecies);
+  const initializeActiveEfhSpecies = useUiStore((s) => s.initializeActiveEfhSpecies);
 
   const datasetId = terrain?.datasetId ?? "";
 
@@ -192,23 +198,71 @@ export const EfhZoneLayer: React.FC = () => {
   );
   const hasEfh = !!allDatasets?.find((d) => d.id === datasetId)?.hasEfh;
 
-  // UUID (user-uploaded) datasets use the path-param route GET /efh/:id which
-  // performs an auth + ownership check server-side.
+  const selectedSpeciesParam = activeEfhSpecies.join(",");
+
+  // Metadata requests never transfer polygon geometries, so the complete
+  // species catalog is available before choosing the two active species.
+  const { data: efhByIdMetadata } = useGetEfhById(
+    datasetId,
+    { metadataOnly: true },
+    {
+      query: {
+        enabled: isUuidDataset && efhOverlayEnabled && !embeddedPolygons,
+        queryKey: getGetEfhByIdQueryKey(datasetId, { metadataOnly: true }),
+      },
+    },
+  );
+
+  const { data: efhMetadata } = useGetEfh(
+    { datasetId, metadataOnly: true },
+    {
+      query: {
+        enabled: hasEfh && efhOverlayEnabled && !embeddedPolygons && !isUuidDataset,
+        queryKey: getGetEfhQueryKey({ datasetId, metadataOnly: true }),
+      },
+    },
+  );
+
   const { data: efhByIdData } = useGetEfhById(
     datasetId,
-    undefined,
-    { query: { enabled: isUuidDataset && efhOverlayEnabled && !embeddedPolygons, queryKey: getGetEfhByIdQueryKey(datasetId) } },
+    { species: selectedSpeciesParam },
+    {
+      query: {
+        enabled: isUuidDataset && efhOverlayEnabled && !embeddedPolygons && activeEfhSpecies.length > 0,
+        queryKey: getGetEfhByIdQueryKey(datasetId, { species: selectedSpeciesParam }),
+      },
+    },
+  );
+  const { data: efhData } = useGetEfh(
+    { datasetId, species: selectedSpeciesParam },
+    {
+      query: {
+        enabled: hasEfh && efhOverlayEnabled && !embeddedPolygons && !isUuidDataset && activeEfhSpecies.length > 0,
+        queryKey: getGetEfhQueryKey({ datasetId, species: selectedSpeciesParam }),
+      },
+    },
   );
 
-  // Only fetch from /efh for preset datasets (hasEfh flag). For user-saved EFH
-  // datasets the polygons arrive via `habitatPolygons` on the terrain object.
-  const { data: efhData } = useGetEfh(
-    { datasetId },
-    { query: { enabled: hasEfh && efhOverlayEnabled && !embeddedPolygons && !isUuidDataset, queryKey: getGetEfhQueryKey({ datasetId }) } },
+  const availableSpecies: EfhAvailableSpecies[] = useMemo(
+    () => (embeddedPolygons?.features?.length
+      ? availableEfhSpeciesFromFeatures(embeddedPolygons.features as EfhFeature[])
+      : (isUuidDataset
+        ? efhByIdMetadata?.availableSpecies ?? availableEfhSpeciesFromFeatures(efhByIdMetadata?.features)
+        : efhMetadata?.availableSpecies ?? availableEfhSpeciesFromFeatures(efhMetadata?.features)) ?? EMPTY_EFH_SPECIES),
+    [embeddedPolygons, isUuidDataset, efhByIdMetadata, efhMetadata],
   );
+  useEffect(() => {
+    initializeActiveEfhSpecies(datasetId, availableSpecies);
+  }, [datasetId, availableSpecies, initializeActiveEfhSpecies]);
 
   // Prefer embedded polygons (user-saved datasets), then UUID-route data, then preset data.
-  const activeFeatures = embeddedPolygons?.features ?? efhByIdData?.features ?? efhData?.features ?? null;
+  const activeFeatures = filterEfhByActiveSpecies(
+    (embeddedPolygons?.features as EfhFeature[] | undefined) ??
+      efhByIdData?.features ??
+      efhData?.features ??
+      [],
+    activeEfhSpecies,
+  );
 
   const zones = useMemo(() => {
     if (!activeFeatures || !terrain) return [];
@@ -223,7 +277,6 @@ export const EfhZoneLayer: React.FC = () => {
       bbox.minLon !== bbox.maxLon && bbox.minLat !== bbox.maxLat;
 
     const visibleFeatures = activeFeatures.filter((f) => {
-      if (hiddenEfhSpecies.has(f.properties.commonName ?? "")) return false;
       if (!hasBbox) return true;
 
       const geom = f.geometry as {
@@ -251,13 +304,7 @@ export const EfhZoneLayer: React.FC = () => {
       terrain.minLon, terrain.maxLon,
       terrain.minLat, terrain.maxLat,
     );
-  }, [activeFeatures, terrain, hiddenEfhSpecies]);
-
-  // When the active dataset changes, reset the hidden-species set so stale
-  // toggle state from the previous dataset doesn't bleed into the new one.
-  useEffect(() => {
-    clearHiddenEfhSpecies();
-  }, [datasetId]); // eslint-disable-line react-hooks/exhaustive-deps -- clearHiddenEfhSpecies is a Zustand setter (stable ref)
+  }, [activeFeatures, terrain]);
 
   // Free GPU buffers when zones change or the component unmounts
   useEffect(() => {

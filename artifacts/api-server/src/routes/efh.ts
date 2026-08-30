@@ -28,6 +28,7 @@ import { logger } from "../lib/logger.js";
 import { ALL_PRESET_DATASETS } from "../lib/terrain.js";
 import {
   SALTWATER_EFH_BY_DATASET,
+  type EfhAvailableSpecies,
   type EfhFeatureCollection,
 } from "../lib/efhData.js";
 import { TX_FRESHWATER_EFH_BY_DATASET } from "../lib/txFreshwaterEfhData.js";
@@ -35,10 +36,28 @@ import { TX_FRESHWATER_EFH_BY_DATASET } from "../lib/txFreshwaterEfhData.js";
 const EfhQuerySchema = z.object({
   datasetId: z.string().optional(),
   species: z.string().optional(),
+  metadataOnly: z.preprocess(
+    (value) => {
+      if (value === undefined || value === true || value === false) return value;
+      if (value === "true") return true;
+      if (value === "false") return false;
+      return value;
+    },
+    z.boolean().optional(),
+  ),
 });
 
 const EfhByIdQuerySchema = z.object({
   species: z.string().optional(),
+  metadataOnly: z.preprocess(
+    (value) => {
+      if (value === undefined || value === true || value === false) return value;
+      if (value === "true") return true;
+      if (value === "false") return false;
+      return value;
+    },
+    z.boolean().optional(),
+  ),
 });
 
 const router = Router();
@@ -58,23 +77,51 @@ export const EFH_DATASET_IDS: ReadonlySet<string> = new Set(
 const CUSTOM_DATASET_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/**
- * Filter an EfhFeatureCollection by a comma-separated species query string.
- * Returns the original features array when no filter is requested.
- */
+const MAX_EFH_SPECIES = 2;
+
+function availableSpecies(
+  features: EfhFeatureCollection["features"],
+): EfhAvailableSpecies[] {
+  const seen = new Set<string>();
+  const result: EfhAvailableSpecies[] = [];
+  for (const feature of features) {
+    const species = feature.properties.species;
+    const key = species.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push({
+      species,
+      commonName: feature.properties.commonName ?? species,
+      color: feature.properties.color ?? "#00e5ff",
+    });
+  }
+  return result;
+}
+
+function parseSpeciesQuery(species: string | undefined): string[] | null {
+  if (!species) return [];
+  const requested = species.split(",").map((s) => s.trim().toLowerCase());
+  if (
+    requested.length > MAX_EFH_SPECIES ||
+    requested.some((value) => value.length === 0)
+  ) {
+    return null;
+  }
+  return requested;
+}
+
+/** Filter an EfhFeatureCollection by at most two comma-separated species. */
 function filterBySpecies(
   features: EfhFeatureCollection["features"],
-  species: string | undefined,
+  requested: string[],
 ): EfhFeatureCollection["features"] {
-  if (!species) return features;
-  const requested = new Set(
-    species.split(",").map((s) => s.trim().toLowerCase()),
-  );
+  if (requested.length === 0) return features.slice(0, MAX_EFH_SPECIES);
+  const requestedSet = new Set(requested);
   return features.filter(
     (f) =>
-      requested.has(f.properties.species.toLowerCase()) ||
-      requested.has(f.properties.commonName.toLowerCase().replace(/ /g, "_")) ||
-      requested.has(f.properties.commonName.toLowerCase()),
+      requestedSet.has(f.properties.species.toLowerCase()) ||
+      requestedSet.has(f.properties.commonName.toLowerCase().replace(/ /g, "_")) ||
+      requestedSet.has(f.properties.commonName.toLowerCase()),
   );
 }
 
@@ -82,6 +129,11 @@ const EfhResponseSchema = z.object({
   type: z.literal("FeatureCollection"),
   features: z.array(z.unknown()),
   metadata: z.record(z.unknown()),
+  availableSpecies: z.array(z.object({
+    species: z.string(),
+    commonName: z.string(),
+    color: z.string(),
+  })),
 });
 
 function warnEfhShape(data: unknown): void {
@@ -99,6 +151,7 @@ function emptyEfhResponse(datasetId: string | undefined) {
       creditUrl:
         "https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles",
     },
+    availableSpecies: [] as EfhAvailableSpecies[],
   };
   warnEfhShape(r);
   return r;
@@ -119,7 +172,15 @@ router.get("/efh", (req, res) => {
     });
     return;
   }
-  const { datasetId, species } = parsed.data;
+  const { datasetId, species, metadataOnly } = parsed.data;
+  const requested = parseSpeciesQuery(species);
+  if (requested === null) {
+    res.status(400).json({
+      error: "invalid_params",
+      details: `At most ${MAX_EFH_SPECIES} species may be requested`,
+    });
+    return;
+  }
 
   const collection = datasetId ? EFH_BY_DATASET[datasetId] : undefined;
 
@@ -131,8 +192,11 @@ router.get("/efh", (req, res) => {
   {
     const _r = {
       type: "FeatureCollection" as const,
-      features: filterBySpecies(collection.features, species),
+      features: metadataOnly
+        ? []
+        : filterBySpecies(collection.features, requested),
       metadata: collection.metadata,
+      availableSpecies: availableSpecies(collection.features),
     };
     warnEfhShape(_r);
     res.json(_r);
@@ -181,6 +245,14 @@ router.get("/efh/:id", asyncHandler(async (req, res) => {
       });
       return;
     }
+    const requested = parseSpeciesQuery(queryParsed.data.species);
+    if (requested === null) {
+      res.status(400).json({
+        error: "invalid_params",
+        details: `At most ${MAX_EFH_SPECIES} species may be requested`,
+      });
+      return;
+    }
 
     const collection = EFH_BY_DATASET[datasetId];
     if (!collection) {
@@ -191,8 +263,11 @@ router.get("/efh/:id", asyncHandler(async (req, res) => {
     {
       const _r = {
         type: "FeatureCollection" as const,
-        features: filterBySpecies(collection.features, queryParsed.data.species),
+        features: queryParsed.data.metadataOnly
+          ? []
+          : filterBySpecies(collection.features, requested),
         metadata: collection.metadata,
+        availableSpecies: availableSpecies(collection.features),
       };
       warnEfhShape(_r);
       res.json(_r);
@@ -215,6 +290,14 @@ router.get("/efh/:id", asyncHandler(async (req, res) => {
     });
     return;
   }
+  const requested = parseSpeciesQuery(queryParsed.data.species);
+  if (requested === null) {
+    res.status(400).json({
+      error: "invalid_params",
+      details: `At most ${MAX_EFH_SPECIES} species may be requested`,
+    });
+    return;
+  }
 
   const collection = EFH_BY_DATASET[datasetId];
   if (!collection) {
@@ -225,8 +308,11 @@ router.get("/efh/:id", asyncHandler(async (req, res) => {
   {
     const _r = {
       type: "FeatureCollection" as const,
-      features: filterBySpecies(collection.features, queryParsed.data.species),
+      features: queryParsed.data.metadataOnly
+        ? []
+        : filterBySpecies(collection.features, requested),
       metadata: collection.metadata,
+      availableSpecies: availableSpecies(collection.features),
     };
     warnEfhShape(_r);
     res.json(_r);

@@ -32,6 +32,7 @@ import {
   useGetEfhById,
   getGetEfhByIdQueryKey,
   type EfhFeature,
+  type EfhAvailableSpecies,
 } from "@workspace/api-client-react";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { AdvancedSection } from "@/components/AdvancedSection";
@@ -49,6 +50,11 @@ import {
   usePaletteStore,
 } from "@/lib/paletteStore";
 import { flushServerSync } from "@/hooks/useServerSettingsSync";
+import {
+  availableEfhSpeciesFromFeatures,
+  EMPTY_EFH_SPECIES,
+  filterEfhByActiveSpecies,
+} from "@/lib/efhSpecies";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(2,8,18,0.94)",
@@ -489,8 +495,9 @@ export const OverlaysToolsPanel: React.FC = () => {
   const setIntertidalScoreMode = useUiStore((s) => s.setIntertidalScoreMode);
   const efhOverlayEnabled = useUiStore((s) => s.efhOverlayEnabled);
   const setEfhOverlayEnabled = useUiStore((s) => s.setEfhOverlayEnabled);
-  const hiddenEfhSpecies = useUiStore((s) => s.hiddenEfhSpecies);
-  const toggleEfhSpecies = useUiStore((s) => s.toggleEfhSpecies);
+  const activeEfhSpecies = useUiStore((s) => s.activeEfhSpecies);
+  const toggleActiveEfhSpecies = useUiStore((s) => s.toggleActiveEfhSpecies);
+  const initializeActiveEfhSpecies = useUiStore((s) => s.initializeActiveEfhSpecies);
   const windOverlayActive = useUiStore((s) => s.windOverlayActive);
   const setWindOverlayActive = useUiStore((s) => s.setWindOverlayActive);
   const tideOverlayActive = useUiStore((s) => s.tideOverlayActive);
@@ -607,11 +614,11 @@ export const OverlaysToolsPanel: React.FC = () => {
     data: efhByIdData,
   } = useGetEfhById(
     datasetId,
-    undefined,
+    { metadataOnly: true },
     {
       query: {
         enabled: isUserDataset && efhOverlayEnabled && !embeddedPolygons && !!datasetId,
-        queryKey: getGetEfhByIdQueryKey(datasetId),
+        queryKey: getGetEfhByIdQueryKey(datasetId, { metadataOnly: true }),
       },
     },
   );
@@ -619,44 +626,71 @@ export const OverlaysToolsPanel: React.FC = () => {
   // EFH loading/error state + feature data — mirrors the enabled condition in EfhZoneLayer.
   // We also capture the feature data here to derive the per-species legend.
   const { isLoading: efhPresetLoading, isError: efhPresetError, data: efhData } = useGetEfh(
-    { datasetId },
+    { datasetId, metadataOnly: true },
     {
       query: {
         enabled: hasEfh && efhOverlayEnabled && !embeddedPolygons && !isUserDataset && !!datasetId,
-        queryKey: getGetEfhQueryKey({ datasetId }),
+        queryKey: getGetEfhQueryKey({ datasetId, metadataOnly: true }),
       },
     },
   );
 
-  const efhLoading = isUserDataset ? efhByIdLoading : efhPresetLoading;
-  const efhError = isUserDataset ? efhByIdError : efhPresetError;
+  const selectedSpeciesParam = activeEfhSpecies.join(",");
+  const { isLoading: efhByIdFeaturesLoading, isError: efhByIdFeaturesError, data: efhByIdFeaturesData } = useGetEfhById(
+    datasetId,
+    { species: selectedSpeciesParam },
+    {
+      query: {
+        enabled: isUserDataset && efhOverlayEnabled && !embeddedPolygons && !!datasetId && activeEfhSpecies.length > 0,
+        queryKey: getGetEfhByIdQueryKey(datasetId, { species: selectedSpeciesParam }),
+      },
+    },
+  );
+  const { isLoading: efhPresetFeaturesLoading, isError: efhPresetFeaturesError, data: efhPresetFeaturesData } = useGetEfh(
+    { datasetId, species: selectedSpeciesParam },
+    {
+      query: {
+        enabled: hasEfh && efhOverlayEnabled && !embeddedPolygons && !isUserDataset && !!datasetId && activeEfhSpecies.length > 0,
+        queryKey: getGetEfhQueryKey({ datasetId, species: selectedSpeciesParam }),
+      },
+    },
+  );
 
-  // Derive unique species entries for the per-species filter legend.
-  // Prefer embedded polygons (user-saved datasets), then UUID-route data, then preset data.
+  const efhLoading = isUserDataset
+    ? efhByIdLoading || efhByIdFeaturesLoading
+    : efhPresetLoading || efhPresetFeaturesLoading;
+  const efhError = isUserDataset
+    ? efhByIdError || efhByIdFeaturesError
+    : efhPresetError || efhPresetFeaturesError;
+
+  // The metadata request carries every species name without polygon geometry.
+  // Embedded saved datasets already carry their catalog in their feature props.
+  const availableSpecies: EfhAvailableSpecies[] = useMemo(
+    () => (embeddedPolygons?.features?.length
+      ? availableEfhSpeciesFromFeatures(embeddedPolygons.features as EfhFeature[])
+      : (isUserDataset
+        ? efhByIdData?.availableSpecies ?? availableEfhSpeciesFromFeatures(efhByIdData?.features)
+        : efhData?.availableSpecies ?? availableEfhSpeciesFromFeatures(efhData?.features)) ?? EMPTY_EFH_SPECIES),
+    [embeddedPolygons, isUserDataset, efhByIdData, efhData],
+  );
+  useEffect(() => {
+    initializeActiveEfhSpecies(datasetId, availableSpecies);
+  }, [datasetId, availableSpecies, initializeActiveEfhSpecies]);
+
+  // Only selected polygons are retained in the client. This is also applied
+  // to embedded saved-dataset polygons, which contain the complete collection.
   const activeEfhFeatures: EfhFeature[] = useMemo(
-    () =>
+    () => filterEfhByActiveSpecies(
       (embeddedPolygons?.features as EfhFeature[] | undefined) ??
-      (efhByIdData?.features as EfhFeature[] | undefined) ??
-      efhData?.features ??
-      [],
-    [embeddedPolygons, efhByIdData, efhData],
+        (isUserDataset ? efhByIdFeaturesData?.features : efhPresetFeaturesData?.features) ??
+        [],
+      activeEfhSpecies,
+    ),
+    [embeddedPolygons, isUserDataset, efhByIdFeaturesData, efhPresetFeaturesData, activeEfhSpecies],
   );
   const efhSpeciesEntries = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const f of activeEfhFeatures) {
-      const { commonName, color } = f.properties;
-      const properties = f.properties as unknown as { species?: string; substrate?: string };
-      if (
-        (properties.species || !properties.substrate) &&
-        commonName &&
-        color &&
-        !seen.has(commonName)
-      ) {
-        seen.set(commonName, color);
-      }
-    }
-    return Array.from(seen.entries());
-  }, [activeEfhFeatures]);
+    return availableSpecies.map(({ commonName, color }) => [commonName, color] as const);
+  }, [availableSpecies]);
 
   // --- Error recovery: revert overlays to inactive on fetch failure ---
   // Use refs to detect false→true transitions only (avoid re-triggering on
@@ -1417,37 +1451,53 @@ export const OverlaysToolsPanel: React.FC = () => {
                         paddingBottom: 2,
                       }}
                     >
-                      Filter by species
+                      Load species ({activeEfhSpecies.length}/2)
                     </span>
                     {efhSpeciesEntries.map(([name, color]) => {
-                      const hidden = hiddenEfhSpecies.has(name);
+                      const active = activeEfhSpecies.includes(name);
+                      const atCapacity = !active && activeEfhSpecies.length >= 2;
                       return (
                         <ViewscreenTooltip
                           key={name}
-                          label={hidden ? `Show ${name}` : `Hide ${name}`}
+                          label={
+                            active
+                              ? `Deselect ${name}`
+                              : atCapacity
+                                ? `Deselect a species before loading ${name}`
+                                : `Load ${name}`
+                          }
                           side="right"
                         >
                           <button
-                            aria-pressed={!hidden}
-                            title={hidden ? `Show ${name}` : `Hide ${name}`}
-                            onClick={() => toggleEfhSpecies(name)}
+                            aria-pressed={active}
+                            aria-disabled={atCapacity}
+                            title={
+                              active
+                                ? `Deselect ${name}`
+                                : atCapacity
+                                  ? `Deselect a species before loading ${name}`
+                                  : `Load ${name}`
+                            }
+                            onClick={() => {
+                              if (!atCapacity) toggleActiveEfhSpecies(name);
+                            }}
                             style={{
                               width: "100%",
                               textAlign: "left",
-                              background: hidden ? "transparent" : "rgba(0,10,20,0.45)",
-                              border: `1px solid ${hidden ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.12)"}`,
+                              background: active ? "rgba(0,10,20,0.45)" : "transparent",
+                              border: `1px solid ${active ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)"}`,
                               borderRadius: 3,
-                              color: hidden ? "#64748b" : "#cbd5e1",
+                              color: active ? "#cbd5e1" : "#64748b",
                               fontFamily: "'JetBrains Mono', monospace",
                               fontSize: "calc(15px * var(--bs-font-scale, 1))",
                               padding: "3px 8px",
-                              cursor: "pointer",
+                              cursor: atCapacity ? "not-allowed" : "pointer",
                               letterSpacing: "0.08em",
                               display: "flex",
                               alignItems: "center",
                               gap: 6,
                               transition: "all 0.12s ease",
-                              opacity: hidden ? 0.5 : 1,
+                              opacity: active ? 1 : 0.5,
                             }}
                           >
                             <span
@@ -1455,7 +1505,7 @@ export const OverlaysToolsPanel: React.FC = () => {
                                 width: 8,
                                 height: 8,
                                 borderRadius: 2,
-                                background: hidden ? "transparent" : color,
+                                background: active ? color : "transparent",
                                 border: `1px solid ${color}`,
                                 flexShrink: 0,
                                 transition: "background 0.12s ease",
@@ -1463,7 +1513,7 @@ export const OverlaysToolsPanel: React.FC = () => {
                             />
                             <span
                               style={{
-                                textDecoration: hidden ? "line-through" : "none",
+                                textDecoration: active ? "none" : "line-through",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
                                 whiteSpace: "nowrap",

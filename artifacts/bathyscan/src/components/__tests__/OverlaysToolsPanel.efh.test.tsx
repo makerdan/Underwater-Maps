@@ -175,6 +175,8 @@ function resetUiStore(overrides: Partial<ReturnType<typeof useUiStore.getState>>
     efhOverlayEnabled: false,
     hiddenEfhSpecies: new Set<string>(),
     selectedEfh: null,
+    activeEfhSpecies: [],
+    activeEfhDatasetId: null,
     ...overrides,
   });
 }
@@ -244,42 +246,32 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
 
   // ── Toggle interaction ─────────────────────────────────────────────────────
 
-  it("clicking a visible species row hides it (adds it to hiddenEfhSpecies)", () => {
+  it("clicking an active species deselects it without changing persisted hidden state", () => {
     resetUiStore({ efhOverlayEnabled: true });
     render(<OverlaysToolsPanel />);
 
     const target = EFH_SPECIES_PALETTE[0]!.commonName;
-    const btn = screen.getByTitle(`Hide ${target}`);
+    const btn = screen.getByTitle(`Deselect ${target}`);
 
     act(() => { fireEvent.click(btn); });
 
-    expect(useUiStore.getState().hiddenEfhSpecies.has(target)).toBe(true);
-  });
-
-  it("clicking a hidden species row makes it visible (removes it from hiddenEfhSpecies)", () => {
-    const target = EFH_SPECIES_PALETTE[1]!.commonName;
-    resetUiStore({
-      efhOverlayEnabled: true,
-      hiddenEfhSpecies: new Set([target]),
-    });
-    render(<OverlaysToolsPanel />);
-
-    const btn = screen.getByTitle(`Show ${target}`);
-    act(() => { fireEvent.click(btn); });
-
+    expect(useUiStore.getState().activeEfhSpecies).not.toContain(target);
     expect(useUiStore.getState().hiddenEfhSpecies.has(target)).toBe(false);
   });
 
-  it("clicking toggles pass the correct commonName to toggleEfhSpecies", () => {
+  it("blocks a third species until an active species is deselected", () => {
     resetUiStore({ efhOverlayEnabled: true });
     render(<OverlaysToolsPanel />);
 
-    // Click every species button and confirm each lands in hiddenEfhSpecies
-    for (const { commonName } of EFH_SPECIES_PALETTE) {
-      const btn = screen.getByTitle(`Hide ${commonName}`);
-      act(() => { fireEvent.click(btn); });
-      expect(useUiStore.getState().hiddenEfhSpecies.has(commonName)).toBe(true);
-    }
+    const first = EFH_SPECIES_PALETTE[0]!.commonName;
+    const second = EFH_SPECIES_PALETTE[1]!.commonName;
+    const third = EFH_SPECIES_PALETTE[2]!.commonName;
+    act(() => { fireEvent.click(screen.getByTitle(`Deselect a species before loading ${third}`)); });
+    expect(useUiStore.getState().activeEfhSpecies).toEqual([first, second]);
+
+    act(() => { fireEvent.click(screen.getByTitle(`Deselect ${first}`)); });
+    act(() => { fireEvent.click(screen.getByTitle(`Load ${third}`)); });
+    expect(useUiStore.getState().activeEfhSpecies).toEqual([second, third]);
   });
 
   // ── Aria and opacity ───────────────────────────────────────────────────────
@@ -288,45 +280,30 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
     resetUiStore({ efhOverlayEnabled: true });
     render(<OverlaysToolsPanel />);
 
-    const target = EFH_SPECIES_PALETTE[2]!.commonName;
-    const btn = screen.getByTitle(`Hide ${target}`);
+    const target = EFH_SPECIES_PALETTE[0]!.commonName;
+    const btn = screen.getByTitle(`Deselect ${target}`);
 
     expect(btn.getAttribute("aria-pressed")).toBe("true");
     expect((btn as HTMLElement).style.opacity).toBe("1");
   });
 
-  it("hidden species button has aria-pressed='false' and reduced opacity (0.38)", () => {
+  it("unselected species button has aria-pressed='false' and reduced opacity", () => {
     const target = EFH_SPECIES_PALETTE[2]!.commonName;
     resetUiStore({
       efhOverlayEnabled: true,
-      hiddenEfhSpecies: new Set([target]),
+      activeEfhSpecies: [EFH_SPECIES_PALETTE[0]!.commonName, EFH_SPECIES_PALETTE[1]!.commonName],
     });
     render(<OverlaysToolsPanel />);
 
-    const btn = screen.getByTitle(`Show ${target}`);
+    const btn = screen.getByTitle(`Deselect a species before loading ${target}`);
 
     expect(btn.getAttribute("aria-pressed")).toBe("false");
     expect((btn as HTMLElement).style.opacity).toBe("0.5");
   });
 
-  it("multiple hidden species all render at reduced opacity with aria-pressed='false'", () => {
-    const hidden = [EFH_SPECIES_PALETTE[0]!.commonName, EFH_SPECIES_PALETTE[3]!.commonName];
-    resetUiStore({
-      efhOverlayEnabled: true,
-      hiddenEfhSpecies: new Set(hidden),
-    });
-    render(<OverlaysToolsPanel />);
+  // ── Dynamic "Load species" section ───────────────────────────────────────
 
-    for (const name of hidden) {
-      const btn = screen.getByTitle(`Show ${name}`);
-      expect(btn.getAttribute("aria-pressed")).toBe("false");
-      expect((btn as HTMLElement).style.opacity).toBe("0.5");
-    }
-  });
-
-  // ── Dynamic "Filter by species" section ───────────────────────────────────
-
-  it("renders a 'Filter by species' section when useGetEfh returns feature data", () => {
+  it("renders a 'Load species' section when useGetEfh returns feature data", () => {
     mockEfhData = {
       features: [
         { properties: { commonName: "Pacific Halibut", color: "#f59e0b" } },
@@ -336,7 +313,7 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
     resetUiStore({ efhOverlayEnabled: true });
     render(<OverlaysToolsPanel />);
 
-    expect(screen.getByText(/filter by species/i)).toBeInTheDocument();
+    expect(screen.getByText(/load species/i)).toBeInTheDocument();
     // The dynamic section shows the raw name (not uppercased)
     expect(screen.getByText("Pacific Halibut")).toBeInTheDocument();
     expect(screen.getByText("Sablefish")).toBeInTheDocument();
@@ -347,10 +324,10 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
     resetUiStore({ efhOverlayEnabled: true });
     render(<OverlaysToolsPanel />);
 
-    expect(screen.queryByText(/filter by species/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/load species/i)).not.toBeInTheDocument();
   });
 
-  it("dynamic species button has aria-pressed='false' when that species is hidden", () => {
+  it("dynamic species button has aria-pressed='false' when it is not selected", () => {
     mockEfhData = {
       features: [
         { properties: { commonName: "Sablefish", color: "#0e7490" } },
@@ -358,7 +335,8 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
     };
     resetUiStore({
       efhOverlayEnabled: true,
-      hiddenEfhSpecies: new Set(["Sablefish"]),
+      activeEfhSpecies: ["Pacific Halibut", "Pacific Cod"],
+      activeEfhDatasetId: "ds-efh",
     });
     render(<OverlaysToolsPanel />);
 

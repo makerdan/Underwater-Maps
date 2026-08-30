@@ -48,7 +48,10 @@
  */
 import { create } from "zustand";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
-import type { EfhSpeciesProperties } from "@workspace/api-client-react";
+import type {
+  EfhAvailableSpecies,
+  EfhSpeciesProperties,
+} from "@workspace/api-client-react";
 import { useSettingsStore, DEFAULT_SETTINGS, type SidebarMode, type SettingsState } from "./settingsStore";
 import { onSidebarModeChange } from "./liveMode";
 
@@ -239,6 +242,16 @@ interface UiStore {
    */
   selectedEfh: EfhSpeciesProperties | null;
   setSelectedEfh: (p: EfhSpeciesProperties | null) => void;
+  /**
+   * Session-only EFH load selection. Values are common names so the same
+   * selection can be sent to both preset and custom routes as an accepted
+   * species alias. The setter/action enforce the two-species hard limit.
+   */
+  activeEfhSpecies: string[];
+  activeEfhDatasetId: string | null;
+  setActiveEfhSpecies: (species: string[]) => void;
+  toggleActiveEfhSpecies: (commonName: string) => void;
+  initializeActiveEfhSpecies: (datasetId: string, available: EfhAvailableSpecies[]) => void;
   /**
    * EFH species common names the user has hidden via the legend toggle.
    * Keys match `feature.properties.commonName` (case-sensitive).
@@ -583,6 +596,45 @@ export const useUiStore = create<UiStore>((set, get) => {
     setSelectedHotspot: (h) => set({ selectedHotspot: h }),
     selectedEfh: null,
     setSelectedEfh: (p) => set({ selectedEfh: p }),
+    activeEfhSpecies: [],
+    activeEfhDatasetId: null,
+    setActiveEfhSpecies: (species) => {
+      const next = [...new Set(species.filter((name) => name.trim()))].slice(0, 2);
+      const selected = get().selectedEfh;
+      set({
+        activeEfhSpecies: next,
+        ...(selected && !next.includes(selected.commonName ?? "")
+          ? { selectedEfh: null }
+          : {}),
+      });
+    },
+    toggleActiveEfhSpecies: (commonName) => {
+      const state = get();
+      if (state.activeEfhSpecies.includes(commonName)) {
+        set({
+          activeEfhSpecies: state.activeEfhSpecies.filter((name) => name !== commonName),
+          ...(state.selectedEfh?.commonName === commonName ? { selectedEfh: null } : {}),
+        });
+      } else if (state.activeEfhSpecies.length < 2) {
+        set({ activeEfhSpecies: [...state.activeEfhSpecies, commonName] });
+      }
+    },
+    initializeActiveEfhSpecies: (datasetId, available) => {
+      const names = [...new Set(available.map((species) => species.commonName).filter(Boolean))];
+      const state = get();
+      const kept = state.activeEfhSpecies.filter((name) => names.includes(name)).slice(0, 2);
+      const datasetChanged = state.activeEfhDatasetId !== datasetId;
+      const shouldInitialize = datasetChanged ||
+        (names.length > 0 && state.activeEfhSpecies.length === 0);
+      const next = shouldInitialize ? names.slice(0, 2) : kept;
+      set({
+        activeEfhDatasetId: datasetId,
+        activeEfhSpecies: next,
+        ...(datasetChanged || (state.selectedEfh && !next.includes(state.selectedEfh.commonName ?? ""))
+          ? { selectedEfh: null }
+          : {}),
+      });
+    },
     findDataPanelOpen: false,
     openFindDataCount: 0,
     setFindDataPanelOpen: (open) =>
@@ -701,7 +753,13 @@ export const useUiStore = create<UiStore>((set, get) => {
     setEfhOverlayEnabled: (enabled) => {
       set(enabled
         ? { efhOverlayEnabled: true }
-        : { efhOverlayEnabled: false, selectedEfh: null, hiddenEfhSpecies: new Set<string>() });
+        : {
+            efhOverlayEnabled: false,
+            selectedEfh: null,
+            activeEfhSpecies: [],
+            activeEfhDatasetId: null,
+            hiddenEfhSpecies: new Set<string>(),
+          });
     },
 
     // hyd93FeaturesEnabled is persisted via settingsStore so the overlay stays on

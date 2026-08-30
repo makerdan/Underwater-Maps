@@ -2764,10 +2764,23 @@ export const EfhFeatureCollectionType = {
 
 export type EfhFeatureCollectionMetadata = { [key: string]: unknown };
 
+/**
+ * Species metadata returned without polygon geometry
+ */
+export interface EfhAvailableSpecies {
+  /** Scientific species name or source identifier */
+  species: string;
+  commonName: string;
+  /** Suggested hex color for rendering */
+  color: string;
+}
+
 export interface EfhFeatureCollection {
   type: EfhFeatureCollectionType;
   features: EfhFeature[];
   metadata?: EfhFeatureCollectionMetadata;
+  /** Lightweight catalog of every species available for this dataset */
+  availableSpecies: EfhAvailableSpecies[];
 }
 
 export type FederatedSearchResultCoverageBbox = {
@@ -4647,16 +4660,24 @@ export type GetEfhParams = {
  */
 datasetId?: string;
 /**
- * Comma-separated species names or common names to filter
+ * Comma-separated species names or common names to filter (at most two)
  */
 species?: string;
+/**
+ * Return the available species catalog without polygon geometries
+ */
+metadataOnly?: boolean;
 };
 
 export type GetEfhByIdParams = {
 /**
- * Comma-separated species names or common names to filter
+ * Comma-separated species names or common names to filter (at most two)
  */
 species?: string;
+/**
+ * Return the available species catalog without polygon geometries
+ */
+metadataOnly?: boolean;
 };
 
 export type GetDatasetZonesParams = {

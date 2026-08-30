@@ -5345,9 +5345,12 @@ https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-s
 
  * @summary Essential Fish Habitat zones
  */
+export const getEfhQueryMetadataOnlyDefault = false;
+
 export const GetEfhQueryParams = zod.object({
   "datasetId": zod.coerce.string().optional().describe('Filter to a known preset dataset\'s AOI (e.g. thorne-bay)'),
-  "species": zod.coerce.string().optional().describe('Comma-separated species names or common names to filter')
+  "species": zod.coerce.string().optional().describe('Comma-separated species names or common names to filter (at most two)'),
+  "metadataOnly": zod.coerce.boolean().default(getEfhQueryMetadataOnlyDefault).describe('Return the available species catalog without polygon geometries')
 })
 
 export const GetEfhResponse = zod.object({
@@ -5372,7 +5375,12 @@ export const GetEfhResponse = zod.object({
 }).describe('Properties for either NOAA EFH species polygons or bundled\nShoreZone\/AOOS intertidal habitat polygons. EFH fields are optional\nhere because saved non-EFH habitat retains its native fields.\n'),
   "geometry": zod.record(zod.string(), zod.unknown())
 })),
-  "metadata": zod.record(zod.string(), zod.unknown()).optional()
+  "metadata": zod.record(zod.string(), zod.unknown()).optional(),
+  "availableSpecies": zod.array(zod.object({
+  "species": zod.string().describe('Scientific species name or source identifier'),
+  "commonName": zod.string(),
+  "color": zod.string().describe('Suggested hex color for rendering')
+}).describe('Species metadata returned without polygon geometry')).describe('Lightweight catalog of every species available for this dataset')
 })
 
 
@@ -5396,8 +5404,11 @@ export const GetEfhByIdParams = zod.object({
   "id": zod.coerce.string().describe('Dataset ID (preset slug or UUID for a user-uploaded dataset)')
 })
 
+export const getEfhByIdQueryMetadataOnlyDefault = false;
+
 export const GetEfhByIdQueryParams = zod.object({
-  "species": zod.coerce.string().optional().describe('Comma-separated species names or common names to filter')
+  "species": zod.coerce.string().optional().describe('Comma-separated species names or common names to filter (at most two)'),
+  "metadataOnly": zod.coerce.boolean().default(getEfhByIdQueryMetadataOnlyDefault).describe('Return the available species catalog without polygon geometries')
 })
 
 export const GetEfhByIdResponse = zod.object({
@@ -5422,7 +5433,12 @@ export const GetEfhByIdResponse = zod.object({
 }).describe('Properties for either NOAA EFH species polygons or bundled\nShoreZone\/AOOS intertidal habitat polygons. EFH fields are optional\nhere because saved non-EFH habitat retains its native fields.\n'),
   "geometry": zod.record(zod.string(), zod.unknown())
 })),
-  "metadata": zod.record(zod.string(), zod.unknown()).optional()
+  "metadata": zod.record(zod.string(), zod.unknown()).optional(),
+  "availableSpecies": zod.array(zod.object({
+  "species": zod.string().describe('Scientific species name or source identifier'),
+  "commonName": zod.string(),
+  "color": zod.string().describe('Suggested hex color for rendering')
+}).describe('Species metadata returned without polygon geometry')).describe('Lightweight catalog of every species available for this dataset')
 })
 
 

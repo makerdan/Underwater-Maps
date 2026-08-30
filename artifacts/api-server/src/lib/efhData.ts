@@ -43,6 +43,14 @@ export interface EfhFeatureCollection {
     creditUrl: string;
     lastUpdated: string;
   };
+  /** Lightweight catalog; polygon geometry is only returned for selected species. */
+  availableSpecies?: EfhAvailableSpecies[];
+}
+
+export interface EfhAvailableSpecies {
+  species: string;
+  commonName: string;
+  color: string;
 }
 
 const NOAA_EFH_URL =

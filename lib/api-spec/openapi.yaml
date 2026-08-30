@@ -3570,7 +3570,13 @@ paths:
           in: query
           schema:
             type: string
-          description: Comma-separated species names or common names to filter
+          description: Comma-separated species names or common names to filter (at most two)
+        - name: metadataOnly
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Return the available species catalog without polygon geometries
       responses:
         "200":
           description: GeoJSON FeatureCollection of Essential Fish Habitat zone polygons
@@ -3609,7 +3615,14 @@ paths:
           required: false
           schema:
             type: string
-          description: Comma-separated species names or common names to filter
+          description: Comma-separated species names or common names to filter (at most two)
+        - in: query
+          name: metadataOnly
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Return the available species catalog without polygon geometries
       responses:
         "200":
           description: GeoJSON FeatureCollection of Essential Fish Habitat zone polygons (may be empty)
@@ -8863,9 +8876,29 @@ components:
         metadata:
           type: object
           additionalProperties: true
+        availableSpecies:
+          type: array
+          description: Lightweight catalog of every species available for this dataset
+          items:
+            $ref: "#/components/schemas/EfhAvailableSpecies"
       required:
         - type
         - features
+        - availableSpecies
+
+    EfhAvailableSpecies:
+      type: object
+      description: Species metadata returned without polygon geometry
+      properties:
+        species:
+          type: string
+          description: Scientific species name or source identifier
+        commonName:
+          type: string
+        color:
+          type: string
+          description: Suggested hex color for rendering
+      required: [species, commonName, color]
 
     SavedHabitatFeatureProperties:
       type: object

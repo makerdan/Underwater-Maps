@@ -160,7 +160,7 @@ export function filterEfhByBbox(features: EfhFeature[], bbox: Bbox): EfhFeature[
 export function getVisibleEfhFeatures(
   features: EfhFeature[],
   bbox: Bbox,
-  hiddenSpecies: ReadonlySet<string>,
+  hiddenSpecies: ReadonlySet<string> = new Set(),
 ): EfhFeature[] {
   return filterEfhByBbox(features, bbox).filter(
     (f) => !hiddenSpecies.has(f.properties.commonName ?? ""),

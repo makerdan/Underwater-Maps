@@ -135,6 +135,18 @@ describe("GET /efh — valid datasetId", () => {
     expect(res.body.type).toBe("FeatureCollection");
     expect(res.body.features).toHaveLength(2);
     expect(res.body.metadata).toBeDefined();
+    expect(res.body.availableSpecies).toEqual([
+      expect.objectContaining({ species: "pcod", commonName: "Pacific Cod" }),
+      expect.objectContaining({ species: "halibut", commonName: "Pacific Halibut" }),
+    ]);
+  });
+
+  it("returns the complete species catalog without polygon geometries", async () => {
+    const res = await request(app).get("/efh?datasetId=glacier-bay&metadataOnly=true");
+    expect(res.status).toBe(200);
+    expect(res.body.features).toHaveLength(0);
+    expect(res.body.availableSpecies).toHaveLength(2);
+    expect(res.body.availableSpecies[0]).not.toHaveProperty("geometry");
   });
 
   it("returns only matching features when species filter is applied", async () => {
@@ -161,6 +173,12 @@ describe("GET /efh — valid datasetId", () => {
     const res = await request(app).get("/efh?datasetId=glacier-bay&species=pcod,halibut");
     expect(res.status).toBe(200);
     expect(res.body.features).toHaveLength(2);
+  });
+
+  it("rejects a request for more than two species", async () => {
+    const res = await request(app).get("/efh?datasetId=glacier-bay&species=pcod,halibut,salmon");
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_params");
   });
 });
 
@@ -194,6 +212,17 @@ describe("GET /efh/:id — preset datasets", () => {
     expect(res.status).toBe(200);
     expect(res.body.features).toHaveLength(1);
     expect(res.body.features[0].properties.species).toBe("pcod");
+  });
+
+  it("enforces the two-species limit and supports metadata-only on the /:id route", async () => {
+    const metadata = await request(app).get("/efh/glacier-bay?metadataOnly=true");
+    expect(metadata.status).toBe(200);
+    expect(metadata.body.features).toHaveLength(0);
+    expect(metadata.body.availableSpecies).toHaveLength(2);
+
+    const capped = await request(app).get("/efh/glacier-bay?species=pcod,halibut,salmon");
+    expect(capped.status).toBe(400);
+    expect(capped.body.error).toBe("invalid_params");
   });
 });
 
@@ -281,6 +310,27 @@ describe("GET /efh/:id — custom dataset (UUID) auth guard", () => {
     expect(res.status).toBe(200);
     expect(res.body.features).toHaveLength(1);
     expect(res.body.features[0].properties.species).toBe("pcod");
+
+    delete (EFH_BY_DATASET as Record<string, unknown>)[customUuidWithData];
+  });
+
+  it("rejects more than two species on the ownership-protected UUID route", async () => {
+    const customUuidWithData = "bbbbbbbb-cccc-dddd-eeee-ffffffffffff";
+    vi.mocked(getAuth).mockReturnValueOnce({ userId: "user-d" } as ReturnType<typeof getAuth>);
+    dbState.ownerRows = [{ userId: "user-d" }];
+
+    const { EFH_BY_DATASET } = await import("../efh.js");
+    (EFH_BY_DATASET as Record<string, unknown>)[customUuidWithData] = {
+      type: "FeatureCollection",
+      features: [],
+      metadata: { datasetId: customUuidWithData, creditUrl: "https://example.com" },
+    };
+
+    const res = await request(app).get(
+      `/efh/${customUuidWithData}?species=one,two,three`,
+    );
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_params");
 
     delete (EFH_BY_DATASET as Record<string, unknown>)[customUuidWithData];
   });

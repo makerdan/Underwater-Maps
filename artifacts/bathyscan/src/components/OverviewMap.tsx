@@ -19,6 +19,8 @@ import {
   usePostDatasetsCatalogIdSave,
   useGetEfh,
   getGetEfhQueryKey,
+  useGetEfhById,
+  getGetEfhByIdQueryKey,
   useGetSubstrate,
   getGetSubstrateQueryKey,
   useGetIntertidalSpots,
@@ -123,6 +125,11 @@ import { useRawsStations, type RawsStationItem } from "@/hooks/useRawsStations";
 import { RawsStationPopover } from "@/components/RawsStationLayer";
 import { useHabitatStore } from "@/lib/habitatStore";
 import { filterEfhByBbox, getVisibleEfhFeatures } from "@/lib/efhBboxFilter";
+import {
+  availableEfhSpeciesFromFeatures,
+  EMPTY_EFH_SPECIES,
+  filterEfhByActiveSpecies,
+} from "@/lib/efhSpecies";
 import { HabitatLegend } from "@/components/HabitatLegend";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useTrailStore } from "@/lib/trailStore";
@@ -211,6 +218,8 @@ function layoutSignatureOf(
 const PUZZLE_LAYOUTS_SYNC_KEY = "bathyscan:puzzleLayouts:event";
 const PUZZLE_TRANSFORMS_DENSITY_KEY = "bathyscan:puzzleTransforms:density";
 
+const CUSTOM_DATASET_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type PuzzleLayoutSyncEvent =
   | { type: "save"; layout: PuzzleLayout }
   | { type: "delete"; id: string };
@@ -323,7 +332,6 @@ export const OverviewMap: React.FC = () => {
   const selectedSubstrateUnitIdRef = useRef<string | null>(null);
   const hiddenSubstrateClassesRef = useRef<ReadonlySet<string>>(new Set());
   const substrateLegendLayoutRef = useRef<ReturnType<typeof renderSubstrateLegend>>(null);
-  const hiddenEfhSpeciesRef = useRef<ReadonlySet<string>>(new Set());
   const efhLegendLayoutRef = useRef<EfhLegendLayout | null>(null);
   const embeddedHabitatFeaturesRef = useRef<SubstrateFeature[]>([]);
 
@@ -1931,7 +1939,11 @@ export const OverviewMap: React.FC = () => {
     datasetNameMapRef.current = m;
     dirtyRef.current = true;
   }, [allDatasets, userDatasetsForNames]);
-  const hasEfh = !!allDatasets?.find((d) => d.id === datasetId)?.hasEfh;
+  const isUuidDataset = CUSTOM_DATASET_UUID_RE.test(datasetId);
+  const hasEfh =
+    !!allDatasets?.find((d) => d.id === datasetId)?.hasEfh ||
+    !!embeddedEfhPolygons ||
+    isUuidDataset;
   // Derived once per render so the Fit button doesn't repeat the filter three
   // times in inline JSX style expressions.
   const datasetsWithGrid = useMemo(
@@ -1947,17 +1959,76 @@ export const OverviewMap: React.FC = () => {
     }
     return false;
   }, [puzzleTransforms, puzzleGroups.size]);
-  // Only hit /efh for preset datasets — user-saved EFH datasets have polygons
-  // already embedded in overviewGrid.habitatPolygons.
-  const { data: efhData } = useGetEfh(
-    { datasetId },
-    { query: { enabled: hasEfh && !embeddedEfhPolygons, staleTime: 60_000, queryKey: getGetEfhQueryKey({ datasetId }) } },
+  const activeEfhSpecies = useUiStore((s) => s.activeEfhSpecies);
+  const initializeActiveEfhSpecies = useUiStore((s) => s.initializeActiveEfhSpecies);
+  const selectedSpeciesParam = activeEfhSpecies.join(",");
+
+  // Metadata is requested separately so all species remain discoverable without
+  // transferring polygon geometry. UUID datasets use the ownership-protected
+  // route; preset datasets use the public query-param route.
+  const { data: efhMetadata } = useGetEfh(
+    { datasetId, metadataOnly: true },
+    {
+      query: {
+        enabled: hasEfh && !embeddedEfhPolygons && !isUuidDataset,
+        staleTime: 60_000,
+        queryKey: getGetEfhQueryKey({ datasetId, metadataOnly: true }),
+      },
+    },
   );
+  const { data: efhByIdMetadata } = useGetEfhById(
+    datasetId,
+    { metadataOnly: true },
+    {
+      query: {
+        enabled: isUuidDataset && !embeddedEfhPolygons,
+        staleTime: 60_000,
+        queryKey: getGetEfhByIdQueryKey(datasetId, { metadataOnly: true }),
+      },
+    },
+  );
+  const { data: efhData } = useGetEfh(
+    { datasetId, species: selectedSpeciesParam },
+    {
+      query: {
+        enabled: hasEfh && !embeddedEfhPolygons && !isUuidDataset && activeEfhSpecies.length > 0,
+        staleTime: 60_000,
+        queryKey: getGetEfhQueryKey({ datasetId, species: selectedSpeciesParam }),
+      },
+    },
+  );
+  const { data: efhByIdData } = useGetEfhById(
+    datasetId,
+    { species: selectedSpeciesParam },
+    {
+      query: {
+        enabled: isUuidDataset && !embeddedEfhPolygons && activeEfhSpecies.length > 0,
+        staleTime: 60_000,
+        queryKey: getGetEfhByIdQueryKey(datasetId, { species: selectedSpeciesParam }),
+      },
+    },
+  );
+  const availableSpecies = useMemo(
+    () => embeddedEfhPolygons?.features?.length
+      ? availableEfhSpeciesFromFeatures(embeddedEfhPolygons.features as EfhFeature[])
+      : (isUuidDataset
+        ? efhByIdMetadata?.availableSpecies ?? availableEfhSpeciesFromFeatures(efhByIdMetadata?.features)
+        : efhMetadata?.availableSpecies ?? availableEfhSpeciesFromFeatures(efhMetadata?.features)) ?? EMPTY_EFH_SPECIES,
+    [embeddedEfhPolygons, isUuidDataset, efhByIdMetadata, efhMetadata],
+  );
+  useEffect(() => {
+    initializeActiveEfhSpecies(datasetId, availableSpecies);
+  }, [datasetId, availableSpecies, initializeActiveEfhSpecies]);
   // Prefer embedded polygons (user-saved datasets) over the fetched preset data.
   // Apply the same bathymetric-bbox clip that EfhZoneLayer uses in 3D so both
   // views show identical polygon sets.
   const activeEfhFeatures = useMemo(() => {
-    const raw = embeddedEfhPolygons?.features ?? efhData?.features ?? [];
+    const raw = filterEfhByActiveSpecies(
+      (embeddedEfhPolygons?.features as EfhFeature[] | undefined) ??
+        (isUuidDataset ? efhByIdData?.features : efhData?.features) ??
+        [],
+      activeEfhSpecies,
+    );
     const efhFeatures = raw.filter((f) =>
       Boolean(f.properties.species && f.properties.commonName && f.properties.fmp),
     );
@@ -1968,7 +2039,7 @@ export const OverviewMap: React.FC = () => {
       minLat: overviewGrid.minLat,
       maxLat: overviewGrid.maxLat,
     });
-  }, [embeddedEfhPolygons, efhData, overviewGrid]);
+  }, [embeddedEfhPolygons, isUuidDataset, efhByIdData, efhData, activeEfhSpecies, overviewGrid]);
   useEffect(() => {
     const raw = embeddedEfhPolygons?.features ?? [];
     embeddedHabitatFeaturesRef.current = raw
@@ -2008,12 +2079,6 @@ export const OverviewMap: React.FC = () => {
     hiddenSubstrateClassesRef.current = hiddenSubstrateClasses;
     dirtyRef.current = true;
   }, [hiddenSubstrateClasses]);
-  const hiddenEfhSpecies = useUiStore((s) => s.hiddenEfhSpecies);
-  useEffect(() => {
-    hiddenEfhSpeciesRef.current = hiddenEfhSpecies;
-    dirtyRef.current = true;
-  }, [hiddenEfhSpecies]);
-
   // Weather stations overlay — query always runs when terrain loaded so FAA button works
   const weatherStationsActive = useUiStore((s) => s.weatherStationsActive);
   const timelineVisible = useTimelineVisible();
@@ -3243,10 +3308,9 @@ export const OverviewMap: React.FC = () => {
         const visibleEfhFeatures = getVisibleEfhFeatures(
           efhFeaturesRef.current,
           { minLon: worldGrid.minLon, maxLon: worldGrid.maxLon, minLat: worldGrid.minLat, maxLat: worldGrid.maxLat },
-          hiddenEfhSpeciesRef.current,
         );
         renderEfhOverlay(ctx, visibleEfhFeatures, worldGrid, t);
-        efhLegendLayoutRef.current = renderEfhLegend(ctx, efhFeaturesRef.current, cW, cH, hiddenEfhSpeciesRef.current);
+        efhLegendLayoutRef.current = renderEfhLegend(ctx, efhFeaturesRef.current, cW, cH);
       } else {
         efhLegendLayoutRef.current = null;
       }
@@ -4140,7 +4204,7 @@ export const OverviewMap: React.FC = () => {
       if (showEfhRef.current && efhLegendLayoutRef.current) {
         const hitKey = hitTestEfhLegend(mx, my, efhLegendLayoutRef.current);
         if (hitKey) {
-          useUiStore.getState().toggleEfhSpecies(hitKey);
+          useUiStore.getState().toggleActiveEfhSpecies(hitKey);
           return;
         }
       }
@@ -4257,7 +4321,6 @@ export const OverviewMap: React.FC = () => {
         const visibleEfh = getVisibleEfhFeatures(
           efhFeaturesRef.current,
           { minLon: coordGrid.minLon, maxLon: coordGrid.maxLon, minLat: coordGrid.minLat, maxLat: coordGrid.maxLat },
-          hiddenEfhSpeciesRef.current,
         );
         const hit = hitTestEfh(lon, lat, visibleEfh);
         if (hit) {
