@@ -1,11 +1,15 @@
 import { describe, it, expect } from "vitest";
 import {
+  PoeCapabilityError,
   PoeCreditsError,
+  PoeModelRegistryError,
+  PoeModelUnavailableError,
   PoeRateLimitError,
   PoeAuthError,
   PoeInvalidRequestError,
   ZoneParseError,
   mapHttpStatusToError,
+  normalizePoeError,
 } from "../errors.js";
 
 describe("PoeCreditsError", () => {
@@ -66,5 +70,33 @@ describe("mapHttpStatusToError", () => {
     const err = mapHttpStatusToError(503, "oops");
     expect(err).toBeInstanceOf(Error);
     expect(err.message).toContain("503");
+  });
+});
+
+describe("normalizePoeError", () => {
+  it("returns stable, client-safe codes for registry failures", () => {
+    expect(normalizePoeError(new PoeModelUnavailableError("retired model id"))).toEqual({
+      status: 503,
+      code: "model_unavailable",
+      message: "The selected AI model is not currently available",
+    });
+    expect(normalizePoeError(new PoeCapabilityError("unsupported field"))).toEqual({
+      status: 400,
+      code: "unsupported_capability",
+      message: "The selected AI model cannot perform this operation",
+    });
+    expect(normalizePoeError(new PoeModelRegistryError("upstream details"))).toEqual({
+      status: 503,
+      code: "model_registry_unavailable",
+      message: "AI model verification is temporarily unavailable",
+    });
+  });
+
+  it("does not expose arbitrary provider error messages", () => {
+    expect(normalizePoeError(new Error("Bearer secret or prompt data"))).toEqual({
+      status: 500,
+      code: "poe_error",
+      message: "AI service error",
+    });
   });
 });

@@ -21,6 +21,9 @@ import {
   PoeCreditsError,
   PoeRateLimitError,
   PoeAuthError,
+  PoeCapabilityError,
+  PoeModelUnavailableError,
+  PoeModelRegistryError,
   ZoneParseError,
   hashCacheKey,
   globalPoeCache,
@@ -432,6 +435,21 @@ function handlePoeError(err: unknown, res: Response): void {
     res.status(429).json({ error: "rate_limit", details: err.message });
   } else if (err instanceof PoeAuthError) {
     res.status(401).json({ error: "auth_error", details: "AI service authentication failed" });
+  } else if (typeof PoeCapabilityError === "function" && err instanceof PoeCapabilityError) {
+    res.status(400).json({
+      error: "unsupported_capability",
+      details: "The selected AI model cannot perform this operation",
+    });
+  } else if (typeof PoeModelUnavailableError === "function" && err instanceof PoeModelUnavailableError) {
+    res.status(503).json({
+      error: "model_unavailable",
+      details: "The selected AI model is not currently available",
+    });
+  } else if (typeof PoeModelRegistryError === "function" && err instanceof PoeModelRegistryError) {
+    res.status(503).json({
+      error: "model_registry_unavailable",
+      details: "AI model verification is temporarily unavailable",
+    });
   } else {
     logger.warn({ err }, "[poe] unclassified error");
     res.status(500).json({ error: "poe_error", details: "AI service error" });
@@ -2856,7 +2874,6 @@ _upscaleHydrationDone = hydrateUpscaleCacheFromDisk().then(
 
 // ---------------------------------------------------------------------------
 
-const TOPAZ_MODEL = "TopazLabs";
 const POE_UPSCALE_TIMEOUT_MS = 90_000;
 
 /**
@@ -2958,7 +2975,7 @@ router.post("/upscale", validateBody(UpscaleBodySchema, "POST /api/poe/upscale")
           () =>
             client.chat.completions.create(
               {
-                model: TOPAZ_MODEL,
+                model: POE_MODELS.UPSCALE,
                 messages: [
                   {
                     role: "user" as const,
@@ -2994,14 +3011,14 @@ router.post("/upscale", validateBody(UpscaleBodySchema, "POST /api/poe/upscale")
         const usage = completion.usage;
         await logUsage(
           userId,
-          TOPAZ_MODEL,
+          POE_MODELS.UPSCALE,
           "upscale",
           usage?.prompt_tokens ?? 0,
           usage?.completion_tokens ?? 0,
         );
 
         if (!resultBase64) {
-          logger.warn({ model: TOPAZ_MODEL }, "[poe/upscale] TopazLabs returned no image in response");
+          logger.warn({ model: POE_MODELS.UPSCALE }, "[poe/upscale] TopazLabs returned no image in response");
           return null;
         }
 
