@@ -122,10 +122,10 @@ logical_id = "bbd6169a-8805-45b0-8c81-4c98fc0128e6"
 
 [[outputs]]
 id = "H-mCSWsJ1d9V5c9ls3pC1"
-uri = "file://harden-bug-fixes-skill.zip"
+uri = "file://regression-guard-skill.zip"
 type = "unspecified"
-title = "Harden Bug Fixes (Regression Guard) SKILL.md"
-description = "Zipped SKILL.md for the Harden Bug Fixes / Regression Guard skill."
+title = "Regression Guard SKILL.md"
+description = "Zipped SKILL.md for the Regression Guard skill."
 logical_id = "a9752ce0-9c02-4d75-8d3c-8b76a6f87b6b"
 
 [[outputs]]

@@ -1,56 +1,108 @@
 ---
-name: Harden Bug Fixes
+name: Regression Guard
 description: >-
-  Mandates a "## Regression Guard" section in every task plan for bug fixes,
-  behavior changes to existing features, and tasks that touch error-handling
-  paths. Apply this skill whenever the Planner writes a plan that fixes a bug,
-  changes what an existing feature does, or modifies how errors are caught,
-  reported, or recovered from — even when the task title doesn't say "bug" or
-  "fix". If a task repairs wrong behavior, alters existing behavior, or edits
-  an error path, this skill applies; do not skip it just because the change
-  looks small. It does NOT apply to purely additive features, pure-hardening
-  tasks, DELETE-prefixed tasks, or cosmetic copy edits. Companion to Failure
-  Gate: Failure Gate owns "## Pre-existing failures to ignore" and
-  "## Validation"; this skill owns "## Regression Guard".
+  Requires a "## Regression Guard" section in every task plan for material bug
+  fixes, behavior changes to existing features, error-handling changes, and
+  material security/privacy, data-integrity, concurrency/lifecycle,
+  performance/reliability, or compatibility/contract changes. Apply this skill
+  whenever the Planner writes a plan that fixes a malfunction, replaces
+  existing behavior, changes an error path, or materially changes a boundary,
+  data flow, concurrent lifecycle, resource/reliability behavior, or existing
+  contract — even when the task title does not use a strong-signal keyword.
+  Classify by substance, not keyword match. It does NOT apply to purely
+  additive features, pure-hardening tasks, DELETE-prefixed tasks,
+  cosmetic/copy-only edits, or genuinely non-material internal changes.
+  Companion to Failure Gate: Failure Gate owns "## Pre-existing failures to
+  ignore" and "## Validation"; this skill owns "## Regression Guard".
 ---
 
-# Harden Bug Fixes
+# Regression Guard
 
-A fix without a test is a fix on loan. The bug that shipped once has already
-proven the codebase lets it through; unless something now fails when the bug
-comes back, a future refactor can silently reintroduce it. This skill closes
-that gap by requiring every qualifying plan to say — before implementation
-starts — exactly what test will catch a recurrence, where it lives, and what
-it asserts.
+A fix without a test is a fix on loan. The failure that shipped once has
+already proven the codebase lets it through; unless something now fails when
+the failure comes back, a future refactor can silently reintroduce it. The same
+risk applies when an existing security/privacy boundary, data invariant,
+concurrent lifecycle, performance/reliability property, or compatibility
+contract is materially changed: without a guard, the old failure can return
+without detection. This skill closes that gap by requiring every qualifying
+plan to say — before implementation starts — exactly what test will catch a
+recurrence, where it lives, and what it asserts.
 
 This is a plan-time obligation on the Planner and an execute-time contract for
-the Build agent: the Planner writes the `## Regression Guard` section; the
-Build agent delivers the named test (or honors the documented N/A).
+the Build agent: the Planner writes the `## Regression Guard` section; the Build
+agent delivers the named test (or honors the documented N/A).
 
 ---
 
 ## Classification
 
 Decide whether a task qualifies before writing its plan. A task is in scope
-when it falls into any of these three categories:
+when it falls into any of these categories:
 
 1. **Bug fix** — the task repairs behavior that was wrong.
 2. **Behavior change** — the task changes what an existing feature does
    (replacing prior behavior, not merely adding alongside it).
 3. **Error-handling path** — the task touches code that catches, classifies,
    reports, retries, or recovers from failures.
+4. **Material security/privacy change** — the task changes an existing
+   authorization, access-control, tenant-isolation, protected-data, secret,
+   redaction, retention, exposure, or privacy boundary in a way that could
+   expose, retain, or disclose data incorrectly.
+5. **Material data-integrity change** — the task changes existing validation,
+   persistence, transformation, synchronization, migration, idempotency, or
+   atomicity behavior in a way that could lose, corrupt, duplicate, stale, or
+   misassociate data.
+6. **Material concurrency/lifecycle change** — the task changes existing
+   scheduling, locking, shared state, cancellation, retry coordination,
+   cleanup, disposal, shutdown, worker, queue, or resource-lifecycle behavior
+   in a way that could race, deadlock, leak, double-run, or strand work.
+7. **Material performance/reliability change** — the task changes existing
+   caching, timeout, backpressure, resource-use, availability, throughput,
+   latency, memory, CPU, or degraded-service behavior in a way that could
+   regress an existing workflow or exhaust resources.
+8. **Material compatibility/contract change** — the task changes an existing
+   API, schema, wire format, serialization, configuration, storage, migration,
+   public type, or supported-client contract in a way that could break existing
+   consumers or persisted data.
+
+The word **material** means that an existing user, workflow, protected-data
+boundary, data invariant, resource/lifecycle property, or supported contract
+could be observably harmed. A new endpoint, option, field, or contract that
+does not replace or alter existing behavior remains purely additive and is
+excluded under § Explicit exclusions.
 
 ### Strong-signal trigger keywords and patterns
 
 Treat these as strong signals that the task qualifies (they are indicators,
 not an exhaustive list — classify by substance, not keyword match):
 
-- "fix", "broken", "wrong", "incorrect", "regression", "crash", "silently",
-  "stale", "doesn't work", "fails to", "should have but didn't"
-- "prevent X from happening again", "make sure X no longer..."
-- Task descriptions that name a user-visible malfunction or a reproduction
+- General malfunction signals: "fix", "broken", "wrong", "incorrect",
+  "regression", "crash", "silently", "stale", "doesn't work", "fails to",
+  "should have but didn't", "prevent X from happening again", "make sure X
+  no longer...", or a task description naming a user-visible malfunction or
+  reproduction.
+- **Security/privacy signals:** "auth", "authorization", "permission",
+  "access control", "tenant isolation", "PII", "personal data", "secret",
+  "redact", "exposure", "disclosure", "retention", "privacy", "encryption",
+  "CORS", or a change to who can read, write, retain, or receive data.
+- **Data-integrity signals:** "data loss", "corruption", "duplicate",
+  "wrong record", "stale overwrite", "integrity", "validation", "migration",
+  "schema", "idempotency", "atomic", "consistency", "reconciliation", or a
+  change to persistence or transformation semantics.
+- **Concurrency/lifecycle signals:** "race", "deadlock", "lock",
+  "concurrent", "cancellation", "abort", "cleanup", "dispose", "close",
+  "shutdown", "worker", "queue", "lifecycle", "double-run", "stranded", or a
+  change to shared state, scheduling, or resource ownership.
+- **Performance/reliability signals:** "timeout", "latency", "slow",
+  "memory", "CPU", "OOM", "leak", "backpressure", "throughput", "availability",
+  "degraded", "flaky", "retry", "cache", "capacity", or a change that can
+  exhaust resources or regress service under load.
+- **Compatibility/contract signals:** "breaking", "backwards compatibility",
+  "API", "wire format", "serialization", "public type", "supported client",
+  "config", "storage format", "migration", "schema", "version", or a change
+  to an existing consumer-facing or persisted contract.
 - Changes to `try`/`catch` blocks, error boundaries, fallback branches,
-  retry/timeout logic, validation rejects, or error-response shapes
+  retry/timeout logic, validation rejects, or error-response shapes.
 
 ### Explicit exclusions
 
@@ -58,21 +110,28 @@ Do NOT require a Regression Guard for:
 
 - **Pure-hardening tasks** — the task's whole purpose is adding a guard,
   test, lint, or check (see § Self-Satisfying Tasks).
-- **Purely additive features** — a new field, option, endpoint, or panel
-  where no prior behavior is replaced (see § Behavior Change Threshold).
+- **Purely additive features** — a new field, option, endpoint, panel, or
+  contract where no prior behavior or existing contract is replaced or altered
+  (see § Behavior Change Threshold).
 - **DELETE-prefixed tasks** — tasks marked for deletion are not being built;
   gating them wastes everyone's time.
 - **Cosmetic/copy changes in error strings** — rewording an error message
   without changing when or whether it fires is not an error-handling change.
+- **Genuinely non-material internal changes** — a misleading comment, a
+  suboptimal log line, dead code, or an internal refactor that cannot affect an
+  existing user, workflow, protected-data boundary, data invariant,
+  resource/lifecycle property, or supported contract.
 
 ### Materiality threshold
 
-The failure being fixed must have been **observable to a user or have caused
-a real malfunction** (wrong data, crash, silent data loss, wrong render,
-broken flow). Internal-only nits — a misleading comment, a suboptimal log
-line, dead code — do not clear the bar. The point of the guard is to prevent
-a *recurrence that matters*; if nothing material ever went wrong, there is no
-recurrence to guard against.
+The failure being fixed, or the changed property at risk, must have been
+**observable to a user, caused a real malfunction, or created a material risk**
+of wrong data, data loss or corruption, unauthorized exposure, broken
+compatibility, a concurrency/lifecycle failure, resource exhaustion, service
+degradation, crash, wrong render, or broken flow. Internal-only nits that
+cannot affect one of those properties do not clear the bar. The point of the
+guard is to prevent a *recurrence that matters*; if no material failure or
+material regression risk exists, there is no recurrence to guard against.
 
 ---
 
@@ -83,9 +142,9 @@ exactly these three fields, all filled with real content:
 
 ~~~markdown
 ## Regression Guard
-**Covers:** <what scenario/input triggers the bug — the concrete conditions under which the old behavior went wrong>
+**Covers:** <the concrete scenario/input, boundary, invariant, lifecycle, reliability property, or contract whose old failure or material regression must not return>
 **Test location:** <file path of the test that will catch a recurrence>
-**What it checks:** <the specific assertion/behavior — what fails if the bug comes back>
+**What it checks:** <the specific assertion/behavior — what fails if the old failure or material regression comes back>
 ~~~
 
 Place the section after `## Pre-existing failures to ignore` and
@@ -109,8 +168,8 @@ exercises the code path without asserting the fixed behavior.
 
 ## N/A Protocol
 
-Some fixes genuinely cannot be guarded by an automated test. In that case,
-say so explicitly — never omit the section. Use this format:
+Some qualifying changes genuinely cannot be guarded by an automated test. In
+that case, say so explicitly — never omit the section. Use this format:
 
 ~~~markdown
 ## Regression Guard
@@ -159,8 +218,8 @@ These do not clear the bar and make the section non-compliant:
 ## Self-Satisfying Tasks
 
 A task whose **primary deliverable is itself a test or guard script**
-satisfies the Regression Guard requirement automatically — the deliverable
-*is* the guard. Requiring a guard for the guard would recurse forever.
+satisfies the Regression Guard requirement automatically — the deliverable *is*
+the guard. Requiring a guard for the guard would recurse forever.
 
 Mark such plans as **Self-satisfying**:
 
@@ -181,19 +240,25 @@ normal template, naming that test.
 
 Hardening is required only when **the old (wrong) behavior needs to be
 proven gone or could silently revert**. That is the test to apply when a
-task changes existing behavior:
+task changes existing behavior or an existing material risk boundary:
 
 - If the change *replaces* prior behavior — a different default, a corrected
-  calculation, a redirected flow — the old behavior could come back in a
-  refactor without anything failing. Guard it.
+  calculation, a redirected flow, a changed access boundary, a new
+  persistence/consistency rule, a changed lifecycle guarantee, a changed
+  resource/reliability property, or a changed existing contract — the old
+  wrong or unsafe behavior could come back in a refactor without anything
+  failing. Guard it.
 - If the change is **purely additive** — a new field, a new option, a new
-  endpoint, a new panel, with no prior behavior replaced — there is no "old
-  wrong behavior" to prove gone. Excluded. (Normal test coverage for new
-  features is still good practice, but it is not this skill's mandate.)
+  endpoint, a new panel, or a new independent contract, with no prior
+  behavior or existing contract replaced or altered — there is no "old wrong
+  behavior" to prove gone. Excluded. (Normal test coverage for new features
+  is still good practice, but it is not this skill's mandate.)
 
-When in doubt, ask: "if someone reverted just this diff, would a user get
-the *old wrong* behavior back, or just lose a new capability?" Old-wrong-back
-means guard; capability-lost means additive and excluded.
+When in doubt, ask: "if someone reverted just this diff, would a user get the
+old wrong or unsafe behavior back, would an existing workflow or contract
+break, or would they just lose a new capability?" Old-wrong-back,
+unsafe-boundary-back, existing-risk-back, or contract-break-back means guard;
+capability-lost means additive and excluded.
 
 ---
 
@@ -229,15 +294,20 @@ Before writing the first heading of any plan, emit this exact line in your
 response:
 
 ```
-[HARDEN-BUG-FIX] Classification: <bug-fix|behavior-change|error-handling|not-applicable>. Guard: <covered — <test file> | N/A — <reason> | self-satisfying>.
+[REGRESSION-GUARD] Classification: <bug-fix|behavior-change|error-handling|security-privacy|data-integrity|concurrency-lifecycle|performance-reliability|compatibility-contract|not-applicable>. Guard: <covered — <test file> | N/A — <reason> | self-satisfying>.
 ```
+
+Use one or more applicable classifications when a task crosses categories,
+separating them with commas.
 
 Examples:
 
 ```
-[HARDEN-BUG-FIX] Classification: bug-fix. Guard: covered — artifacts/bathyscan/src/lib/__tests__/terrainGeometry.test.ts.
-[HARDEN-BUG-FIX] Classification: error-handling. Guard: N/A — race condition requiring real proxy timing.
-[HARDEN-BUG-FIX] Classification: not-applicable. Guard: self-satisfying.
+[REGRESSION-GUARD] Classification: bug-fix. Guard: covered — artifacts/bathyscan/src/lib/__tests__/terrainGeometry.test.ts.
+[REGRESSION-GUARD] Classification: security-privacy. Guard: covered — server/auth.test.ts.
+[REGRESSION-GUARD] Classification: data-integrity, concurrency-lifecycle. Guard: covered — server/sync.test.ts.
+[REGRESSION-GUARD] Classification: error-handling. Guard: N/A — race condition requiring real proxy timing.
+[REGRESSION-GUARD] Classification: not-applicable. Guard: self-satisfying.
 ```
 
 This creates a visible, searchable audit trail in the conversation, the same
