@@ -212,8 +212,8 @@ description = "Direct download of the canonical Install GitHub Actions skill fro
 id = "VcDmPiOcuHP3q1PILJicH"
 uri = "file://exports/failure-gate-skill.zip"
 type = "unspecified"
-title = "Failure Gate Skill (ZIP)"
-description = "Direct download of the canonical Failure Gate skill from .agents/skills."
+title = "Failure Gate skill ZIP"
+description = "Direct download of the canonical Failure Gate skill packaged from .agents/skills/failure-gate/SKILL.md. The archived file was verified byte-for-byte against the canonical source."
 
 [[outputs]]
 id = "fKLQihg4JTReJK-losZBr"
