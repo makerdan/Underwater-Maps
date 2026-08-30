@@ -53,6 +53,12 @@ Choose the mode from the request:
 - **Combined:** perform each explicitly requested mode as a separate workstream,
   sharing discovery and validation but not silently adding another mode.
 
+Treat ordinary documentation, one-off public/marketing analysis, and CI workflow
+configuration as adjacent work, not one of these modes, unless the user also
+requests an in-app Help system, a protected admin analytics surface or its
+instrumentation, or application runtime/port-safety changes. An incidental
+fixed-port mention in a CI request does not select Runtime Safety.
+
 Use the host project's native approach and conventions. Read an installed
 specialist skill only when its subject is in scope: for runtime work read
 `.agents/skills/Port-Authority/SKILL.md` and, only when its stated heavy-project
