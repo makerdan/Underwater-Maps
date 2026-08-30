@@ -67,6 +67,7 @@ import {
   computeInitialTransform,
   computeFitTransform,
   clampTransform,
+  zoomTransformAtPoint,
   canvasToLonLat,
   lonLatToCanvas,
   lonRangeOf,
@@ -106,6 +107,7 @@ import {
   type ContourSegment,
   type EfhLegendLayout,
   type OverviewTransform,
+  type OverviewZoomPivot,
   type CanvasSavedTrail,
   type NodataBoundarySegment,
   type WeatherStationPin,
@@ -481,6 +483,7 @@ export const OverviewMap: React.FC = () => {
     to: OverviewTransform;
     startTime: number;
     duration: number;
+    zoomPivot?: OverviewZoomPivot;
   } | null>(null);
 
   // Drag tracking
@@ -488,7 +491,12 @@ export const OverviewMap: React.FC = () => {
   const hasDraggedRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
   const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
-  const pinchRef = useRef<{ distance: number; scale: number; centerX: number; centerY: number } | null>(null);
+  const pinchRef = useRef<{
+    distance: number;
+    transform: OverviewTransform;
+    centerX: number;
+    centerY: number;
+  } | null>(null);
   const suppressMouseUntilRef = useRef(0);
 
   // Mouse position (canvas-relative, −1 means outside)
@@ -1719,18 +1727,13 @@ export const OverviewMap: React.FC = () => {
     const t = transformRef.current;
     if (!canvas || !t || !overviewGrid) return;
 
-    const newScale = Math.max(0.5, Math.min(20, t.scale * factor));
-    const ratio = newScale / t.scale;
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
-
-    const targetTransform = clampTransform(
-      {
-        ...t,
-        scale: newScale,
-        offsetX: cx + (t.offsetX - cx) * ratio,
-        offsetY: cy + (t.offsetY - cy) * ratio,
-      },
+    const zoomPivot = { x: cx, y: cy };
+    const targetTransform = zoomTransformAtPoint(
+      t,
+      factor,
+      zoomPivot,
       worldGridRef.current ?? overviewGrid,
       canvas.width,
       canvas.height,
@@ -1740,6 +1743,7 @@ export const OverviewMap: React.FC = () => {
       to: targetTransform,
       startTime: performance.now(),
       duration: 300,
+      zoomPivot,
     };
     dirtyRef.current = true;
   }, [overviewGrid]);
@@ -2632,12 +2636,27 @@ export const OverviewMap: React.FC = () => {
             : 1 - Math.pow(-2 * progress + 2, 3) / 2;
         const from = anim.from;
         const to = anim.to;
-        transformRef.current = {
-          pxPerDeg: from.pxPerDeg + (to.pxPerDeg - from.pxPerDeg) * ease,
-          scale: from.scale + (to.scale - from.scale) * ease,
-          offsetX: from.offsetX + (to.offsetX - from.offsetX) * ease,
-          offsetY: from.offsetY + (to.offsetY - from.offsetY) * ease,
-        };
+        if (anim.zoomPivot && to.pxPerDeg === from.pxPerDeg) {
+          // Zoom animation frames use the same focal-point projection as the
+          // final transform. This prevents the bitmap, reference image, and
+          // SVG layer from taking different geographic paths between frames.
+          const interpolatedScale = from.scale + (to.scale - from.scale) * ease;
+          transformRef.current = zoomTransformAtPoint(
+            from,
+            interpolatedScale / from.scale,
+            anim.zoomPivot,
+            worldGridRef.current ?? grid,
+            cW,
+            cH,
+          );
+        } else {
+          transformRef.current = {
+            pxPerDeg: from.pxPerDeg + (to.pxPerDeg - from.pxPerDeg) * ease,
+            scale: from.scale + (to.scale - from.scale) * ease,
+            offsetX: from.offsetX + (to.offsetX - from.offsetX) * ease,
+            offsetY: from.offsetY + (to.offsetY - from.offsetY) * ease,
+          };
+        }
         dirtyRef.current = true;
         if (progress >= 1) {
           transformRef.current = to;
@@ -4041,22 +4060,21 @@ export const OverviewMap: React.FC = () => {
       if (!t || !overviewGrid) return;
 
       const rect = canvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
 
       const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-      const newScale = Math.max(0.5, Math.min(20, t.scale * factor));
-      const ratio = newScale / t.scale;
+      const scaleX = canvas.width / Math.max(1, rect.width);
+      const scaleY = canvas.height / Math.max(1, rect.height);
+      const zoomPivot = {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY,
+      };
 
       // Cancel any in-progress fit animation so manual zoom takes over immediately.
       fitAnimRef.current = null;
-      transformRef.current = clampTransform(
-        {
-          ...t,
-          scale: newScale,
-          offsetX: mx + (t.offsetX - mx) * ratio,
-          offsetY: my + (t.offsetY - my) * ratio,
-        },
+      transformRef.current = zoomTransformAtPoint(
+        t,
+        factor,
+        zoomPivot,
         worldGridRef.current ?? overviewGrid,
         canvas.width,
         canvas.height,
@@ -4627,11 +4645,16 @@ export const OverviewMap: React.FC = () => {
         const points = [...activePointersRef.current.values()];
         const first = points[0]!;
         const second = points[1]!;
-        const centerX = (first.x + second.x) / 2 - canvas.getBoundingClientRect().left;
-        const centerY = (first.y + second.y) / 2 - canvas.getBoundingClientRect().top;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / Math.max(1, rect.width);
+        const scaleY = canvas.height / Math.max(1, rect.height);
+        const centerX = ((first.x + second.x) / 2 - rect.left) * scaleX;
+        const centerY = ((first.y + second.y) / 2 - rect.top) * scaleY;
         pinchRef.current = {
           distance: Math.hypot(second.x - first.x, second.y - first.y),
-          scale: transformRef.current?.scale ?? 1,
+          transform: transformRef.current
+            ? { ...transformRef.current }
+            : { scale: 1, offsetX: 0, offsetY: 0, pxPerDeg: 1 },
           centerX,
           centerY,
         };
@@ -4660,17 +4683,12 @@ export const OverviewMap: React.FC = () => {
         const second = points[1]!;
         const distance = Math.max(1, Math.hypot(second.x - first.x, second.y - first.y));
         const ratio = distance / Math.max(1, pinchRef.current.distance);
-        const nextScale = Math.max(0.5, Math.min(20, pinchRef.current.scale * ratio));
-        const actualRatio = nextScale / transformRef.current.scale;
         const { centerX, centerY } = pinchRef.current;
         fitAnimRef.current = null;
-        transformRef.current = clampTransform(
-          {
-            ...transformRef.current,
-            scale: nextScale,
-            offsetX: centerX + (transformRef.current.offsetX - centerX) * actualRatio,
-            offsetY: centerY + (transformRef.current.offsetY - centerY) * actualRatio,
-          },
+        transformRef.current = zoomTransformAtPoint(
+          pinchRef.current.transform,
+          ratio,
+          { x: centerX, y: centerY },
           worldGridRef.current ?? overviewGrid,
           canvas.width,
           canvas.height,

@@ -9,8 +9,8 @@
  * "@/lib/overviewRenderer" (this file) — the internal module boundaries are
  * an implementation detail and may change.
  */
-export { lonRangeOf, normaliseLon, lonLatToCanvas, canvasToLonLat, computeInitialTransform, computeFitTransform, clampTransform } from "./transforms";
-export type { OverviewTransform } from "./transforms";
+export { lonRangeOf, normaliseLon, lonLatToCanvas, canvasToLonLat, computeInitialTransform, computeFitTransform, clampTransform, zoomTransformAtPoint } from "./transforms";
+export type { OverviewTransform, OverviewZoomPivot } from "./transforms";
 export { buildHillshadeLayer, buildHeatmapBitmap, renderHeatmap, renderHeatmapAtBbox } from "./terrainImagery";
 export { renderGridLines, POLYGON_LOD_MIN_ZOOM, shouldDrawOverlayAtScale, renderHabitatOverlay, renderEfhOverlay, hitTestEfh, renderSubstrateOverlay, hitTestSubstrate, renderScaleBar, drawSelectionRect, buildIntertidalHotspotDescriptors, SYNTHETIC_HATCH_COLORS, renderSyntheticHatch, renderIntertidalBand } from "./overlays";
 export type { WeatherStationPin, RawsStationPin, IntertidalHotspotPin, IntertidalSpotFeature } from "./overlays";

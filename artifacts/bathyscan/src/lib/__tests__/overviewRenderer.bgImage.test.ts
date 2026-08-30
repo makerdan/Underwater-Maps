@@ -17,6 +17,8 @@ import {
   computeBgFallbackRect,
   drawBackgroundImage,
   lonLatToCanvas,
+  canvasToLonLat,
+  zoomTransformAtPoint,
   type BgGeoAnchorPoint,
   type OverviewTransform,
 } from "../overviewRenderer";
@@ -276,5 +278,51 @@ describe("drawBackgroundImage", () => {
     const ctx = makeCtx();
     drawBackgroundImage(ctx, IMAGE, 100, 100, null, [], GRID, T, 0.5);
     expect(ctx.drawImage).not.toHaveBeenCalled();
+  });
+});
+
+describe("zoomTransformAtPoint — geographic registration", () => {
+  it("keeps the toolbar focal point fixed through an animated zoom path and round trip", () => {
+    const pivot = { x: 63, y: 41 };
+    const start: OverviewTransform = {
+      scale: 1.25,
+      offsetX: -18,
+      offsetY: 27,
+      pxPerDeg: 10,
+    };
+    const zoomed = zoomTransformAtPoint(start, 1.35, pivot, GRID, 800, 600);
+    const zoomedBack = zoomTransformAtPoint(zoomed, 1 / 1.35, pivot, GRID, 800, 600);
+    const startGeo = canvasToLonLat(pivot.x, pivot.y, GRID, start);
+    const zoomedGeo = canvasToLonLat(pivot.x, pivot.y, GRID, zoomed);
+    const roundTripGeo = canvasToLonLat(pivot.x, pivot.y, GRID, zoomedBack);
+
+    expect(zoomedGeo.lon).toBeCloseTo(startGeo.lon, 9);
+    expect(zoomedGeo.lat).toBeCloseTo(startGeo.lat, 9);
+    expect(zoomedBack.scale).toBeCloseTo(start.scale, 9);
+    expect(zoomedBack.offsetX).toBeCloseTo(start.offsetX, 9);
+    expect(zoomedBack.offsetY).toBeCloseTo(start.offsetY, 9);
+    expect(roundTripGeo.lon).toBeCloseTo(startGeo.lon, 9);
+    expect(roundTripGeo.lat).toBeCloseTo(startGeo.lat, 9);
+  });
+
+  it("keeps a reference-image anchor and its dataset point on the same geographic frame", () => {
+    const pivot = { x: 63, y: 41 };
+    const start: OverviewTransform = {
+      scale: 1,
+      offsetX: 12,
+      offsetY: -8,
+      pxPerDeg: 10,
+    };
+    const zoomed = zoomTransformAtPoint(start, 1.35, pivot, GRID, 800, 600);
+    const geographicPoint = canvasToLonLat(120, 80, GRID, start);
+    const [startX, startY] = lonLatToCanvas(geographicPoint.lon, geographicPoint.lat, GRID, start);
+    const [zoomedX, zoomedY] = lonLatToCanvas(geographicPoint.lon, geographicPoint.lat, GRID, zoomed);
+
+    // Both renderers consume lonLatToCanvas, so the dataset bitmap and the
+    // anchor-derived reference image must move by the same transform delta.
+    expect(startX).toBeCloseTo(120, 9);
+    expect(startY).toBeCloseTo(80, 9);
+    expect(zoomedX - pivot.x).toBeCloseTo((startX - pivot.x) * 1.35, 9);
+    expect(zoomedY - pivot.y).toBeCloseTo((startY - pivot.y) * 1.35, 9);
   });
 });

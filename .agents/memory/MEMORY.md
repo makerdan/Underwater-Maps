@@ -140,6 +140,7 @@
 - [Nested router prefix guards](nested-router-prefix-guards.md) — prefix-aware checks avoid false duplicate reports when Express nested mounts hide their mount path.
 - [Catalog save service boundary](catalog-save-service-boundary.md) — background save lifecycle belongs in the domain service; provider builders can be lazily resolved to avoid route cycles.
 - [Overview reference overlay e2e](overview-reference-overlay-e2e.md) — after viewport changes, wait for the next live snapshot before asserting anchored or dataset-bounds image placement.
+- [Overview zoom focal transform](overview-zoom-focal-transform.md) — use one canvas-space focal transform for toolbar, wheel, pinch, and animated frames; pinch starts from the gesture transform.
 - [Puzzle layout density metadata](puzzle-layout-density.md) — pair legacy pixel offsets with optional save-time density so restores stay geographically aligned across viewports.
 - [Geographic continuous longitude frame](geographic-continuous-frame.md) — compare wrapped GPS/map longitudes on the eastward interval beginning at the dataset minLon.
 - [Sidebar responsive CSSOM expectation](sidebar-responsive-cssom.md) — wide sidebar min-width assertion is a deterministic jsdom/CSSOM baseline mismatch, unrelated to Plan tools.

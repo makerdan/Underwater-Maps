@@ -29,6 +29,11 @@ export interface OverviewTransform {
   pxPerDeg: number;
 }
 
+export interface OverviewZoomPivot {
+  x: number;
+  y: number;
+}
+
 /**
  * Return the effective longitude span for a bounding box, handling the case
  * where the box crosses the antimeridian (minLon > maxLon).
@@ -160,4 +165,47 @@ export function clampTransform(
     offsetX: Math.max(-terrainW * (1 - minVis), Math.min(canvasW - terrainW * minVis, t.offsetX)),
     offsetY: Math.max(-terrainH * (1 - minVis), Math.min(canvasH - terrainH * minVis, t.offsetY)),
   };
+}
+
+/**
+ * Apply a zoom around a canvas-space focal point.
+ *
+ * The point under `pivot` represents the geographic point that must remain
+ * under that same pixel after the scale changes. Keeping this calculation in
+ * the renderer module makes toolbar, wheel, and pinch input use the exact same
+ * geographic rule instead of maintaining subtly different copies in the
+ * component.
+ */
+export function zoomTransformAtPoint(
+  t: OverviewTransform,
+  factor: number,
+  pivot: OverviewZoomPivot,
+  grid: TerrainData,
+  canvasW: number,
+  canvasH: number,
+): OverviewTransform {
+  if (
+    !Number.isFinite(factor) ||
+    factor <= 0 ||
+    !Number.isFinite(t.scale) ||
+    t.scale <= 0 ||
+    !Number.isFinite(pivot.x) ||
+    !Number.isFinite(pivot.y)
+  ) {
+    return t;
+  }
+
+  const newScale = Math.max(0.5, Math.min(20, t.scale * factor));
+  const ratio = newScale / t.scale;
+  return clampTransform(
+    {
+      ...t,
+      scale: newScale,
+      offsetX: pivot.x + (t.offsetX - pivot.x) * ratio,
+      offsetY: pivot.y + (t.offsetY - pivot.y) * ratio,
+    },
+    grid,
+    canvasW,
+    canvasH,
+  );
 }

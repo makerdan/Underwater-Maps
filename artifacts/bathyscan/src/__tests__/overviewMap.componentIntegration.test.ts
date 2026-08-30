@@ -2237,3 +2237,64 @@ describe("OverviewMap — puzzle geo-transform publication with a single grid", 
     expect(dLonAfter!).toBeLessThan(dLonBefore!);
   });
 });
+
+describe("OverviewMap — toolbar zoom preserves geographic registration", () => {
+  beforeEach(() => {
+    mockConfig.efhData = undefined;
+    setupStores();
+  });
+
+  it("keeps the centered geographic point fixed across repeated zoom-in/out rounds", async () => {
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+    await waitForCameraArrow();
+
+    const canvas = screen.getByTestId("overview-map-canvas") as HTMLCanvasElement;
+    canvas.getBoundingClientRect = () =>
+      ({
+        left: 0, top: 0,
+        right: CANVAS_W, bottom: CANVAS_H,
+        width: CANVAS_W, height: CANVAS_H,
+        x: 0, y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    const initial = usePuzzleStore.getState().overviewTransform;
+    expect(initial).not.toBeNull();
+    const pivot = { x: CANVAS_W / 2, y: CANVAS_H / 2 };
+    const initialGeo = overviewRenderer.canvasToLonLat(
+      pivot.x,
+      pivot.y,
+      makeOverviewGrid(),
+      initial!,
+    );
+
+    for (let round = 0; round < 3; round++) {
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("overview-zoom-in"));
+        await new Promise((resolve) => setTimeout(resolve, 360));
+      });
+      const zoomed = usePuzzleStore.getState().overviewTransform;
+      expect(zoomed).not.toBeNull();
+      const zoomedGeo = overviewRenderer.canvasToLonLat(
+        pivot.x,
+        pivot.y,
+        makeOverviewGrid(),
+        zoomed!,
+      );
+      expect(zoomedGeo.lon).toBeCloseTo(initialGeo.lon, 6);
+      expect(zoomedGeo.lat).toBeCloseTo(initialGeo.lat, 6);
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("overview-zoom-out"));
+        await new Promise((resolve) => setTimeout(resolve, 360));
+      });
+      const restored = usePuzzleStore.getState().overviewTransform;
+      expect(restored).not.toBeNull();
+      expect(restored!.scale).toBeCloseTo(initial!.scale, 6);
+      expect(restored!.offsetX).toBeCloseTo(initial!.offsetX, 6);
+      expect(restored!.offsetY).toBeCloseTo(initial!.offsetY, 6);
+    }
+  });
+});
