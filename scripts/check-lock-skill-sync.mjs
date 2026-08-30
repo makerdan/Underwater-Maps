@@ -45,9 +45,9 @@ const FREE_PORTS_SCRIPT = resolve(root, "scripts/kill-port-holders.mjs");
  * Anchor terms for scripts/validation-lock.mjs.
  * Extracted from Port-Authority skill Phase 4 documentation.
  *
- * Keep this list in sync with the Phase 4 section of:
+ * Keep this list in sync with the canonical Phase 4 section of:
  *   .agents/skills/Port-Authority/SKILL.md
- *   .local/custom_skills/port-authority/SKILL.md
+ * Runtime mirrors under .local/custom_skills are platform-managed derivatives.
  */
 const LOCK_ANCHORS = [
   {
@@ -89,9 +89,9 @@ const LOCK_ANCHORS = [
  *   4. SIGTERM→SIGKILL sequence — graceful then forced termination, port confirm
  *   5. Env-guard — KILL_PORT_HOLDERS_RUNNING prevents recursive/production calls
  *
- * Keep this list in sync with the Phase 2 section of:
+ * Keep this list in sync with the canonical Phase 2 section of:
  *   .agents/skills/Port-Authority/SKILL.md
- *   .local/custom_skills/port-authority/SKILL.md
+ * Runtime mirrors under .local/custom_skills are platform-managed derivatives.
  */
 const FREE_PORTS_ANCHORS = [
   {
@@ -242,7 +242,7 @@ if (freePortsFailures.length > 0) {
 console.error(
   "If a script was intentionally refactored, update LOCK_ANCHORS / FREE_PORTS_ANCHORS in\n" +
   "scripts/check-lock-skill-sync.mjs AND update Port-Authority SKILL.md\n" +
-  "(.agents/skills/Port-Authority/SKILL.md and .local/custom_skills/port-authority/SKILL.md)\n" +
-  "so the documentation stays accurate.",
+  "(.agents/skills/Port-Authority/SKILL.md) so the canonical documentation stays accurate.\n" +
+  "Do not edit .local/custom_skills directly; platform synchronization owns that mirror.",
 );
 process.exit(1);

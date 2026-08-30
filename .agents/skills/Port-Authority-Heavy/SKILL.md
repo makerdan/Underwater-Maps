@@ -50,6 +50,8 @@ full decision table):
   multi-package refactors.
 - **`test-standard`** (typecheck + lint + unit + doc checks) — sufficient
   for most feature and bug-fix work.
+- **`test-standard-plus`** (all static + unit checks without Playwright) —
+  correct for broad non-auth, non-schema, non-e2e changes that span packages.
 - **`test-fast`** (typecheck + lint only) — appropriate for pure UI or
   copy changes with no logic impact.
 

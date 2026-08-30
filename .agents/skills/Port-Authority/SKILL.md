@@ -22,6 +22,95 @@ phase entirely**. Never apply conditional machinery speculatively.
 
 ---
 
+## Installation contract (ALWAYS)
+
+The downloadable bundle contains exactly these resources:
+
+- `SKILL.md` — this guidance.
+- `scripts/free-ports.mjs` — a dependency-free **template** for the target
+  project's port cleanup command.
+- `scripts/validation-lock.mjs` — a dependency-free **template** for the
+  target project's validation serialization command.
+- `Port-Authority-Heavy/SKILL.md` — the optional companion extension.
+
+The two scripts in the bundle are templates, not promises that the target
+project already has those paths. Install them only after the Phase 0 audit:
+
+1. Extract the bundle into a temporary directory and verify the four entries,
+   their frontmatter, and their executable smoke checks. A missing, extra,
+   renamed, or byte-different entry is an installation failure.
+2. Audit the target project's existing workflows, scripts, lock files, and
+   port ownership. If the project already has a cleanup or serialization
+   implementation, compare behavior and adapt that implementation instead of
+   overwriting it. Never replace an existing script blindly.
+3. If a template is needed, copy it into the target project's `scripts/`
+   directory, preserve its executable bit, and change only its documented
+   adaptation points. Defaults resolve relative to the copied script:
+   `.local/` for locks and no ports for cleanup (ports must be supplied).
+4. Run the template's invalid-input and no-op smoke checks in an isolated
+   temporary directory. Do not use a live application port or the workspace's
+   real lock directory. A failed smoke check stops installation.
+5. Install the project's own runtime wiring separately. The templates do not
+   know the target project's package manager, workflow names, e2e port registry,
+   generated files, or database layout. Do not copy BathyScan-specific paths,
+   `--e2e` behavior, or hidden project assumptions into a fresh installation.
+6. Do not edit `.local/custom_skills/`; it is a platform-managed mirror. The
+   tracked `.agents/skills/` source and generated archive are canonical.
+
+### Validation registration acceptance
+
+The target project must have an executable backing command for **each** of
+these four names before registration is reported successful:
+
+| Command | Use when | Minimum acceptance |
+|---|---|---|
+| `test-fast` | copy, style, UI, or new-component-only changes | typecheck and lint targets exist and run |
+| `test-standard` | most bug fixes and features touching existing behavior | fast targets plus unit and relevant documentation/data checks exist |
+| `test-standard-plus` | static/unit coverage across multiple packages, without browser suites | the complete non-Playwright target is executable |
+| `test-heavy` | new routes with e2e coverage, schema, auth/security, or broad refactors | the serialized full target, including browser/schema checks, is executable |
+
+Verify the registration manifest, the platform registration, and the target
+package scripts independently. A name without an executable backing command is
+an installation failure; never register an optimistic placeholder or silently
+substitute another tier. Record the selected tier, its timeout budget, and
+whether its steps use `validation-lock.mjs` before accepting the installation.
+Read the `validation-tiers` skill for the project-specific decision table, but
+retain all four names even when a particular project omits a tier's optional
+checks.
+
+### Installation acceptance
+
+Run these deterministic smoke checks from the target project before touching
+live services:
+
+1. `node scripts/free-ports.mjs` must reject the missing port with exit 2.
+2. Ask Node to bind port `0`, record the assigned ephemeral port, close that
+   probe server, then pass the now-unused port to `free-ports.mjs`; it must exit
+   0 without signaling any process.
+3. Set `VALIDATION_LOCK_FILE` and `VALIDATION_LOCK_WAITERS_DIR` to paths inside
+   a new temporary directory. Wrap `node -e "process.exit(0)"`, then
+   `node -e "process.exit(7)"`; the wrapper must return 0 and 7 respectively
+   and leave no lock behind.
+4. In that same temporary directory, seed a lock with a confirmed-dead PID and
+   run the wrapper again. It must log a stale takeover, succeed, and clean up.
+   Nest a wrapper for the same resource once; it must log reentrant execution
+   and finish without waiting.
+5. List platform registrations and compare the four names and command strings
+   with the target project's canonical manifest. Invoke every backing package
+   command in its documented dry-run/list mode, or once normally if it has no
+   non-executing mode. Missing registrations, targets, or interpreters fail
+   installation.
+
+After wiring only the resources required by the audit, run the selected
+registered tier twice back-to-back. There must be no manual port clearing,
+process killing, or lock deletion between runs. Confirm that the health probe
+reaches the backend, that each forced cleanup/reclaim is loud, and that a
+failed child command releases its lock and propagates its exit status. If any
+acceptance step fails, leave the existing implementation intact, report the
+failure, and do not claim the installation is complete.
+
+---
+
 ## Phase 0 (ALWAYS) — Audit first
 
 Before changing anything, inventory the runtime:
@@ -232,3 +321,8 @@ names).
 
 - `scripts/free-ports.mjs` — canonical port cleanup (Phase 2).
 - `scripts/validation-lock.mjs` — crash-safe serialization lock with named-resource striping and priority queue (Phase 4).
+
+The scripts are intentionally self-contained. A target project may use
+different runtime scripts (for example `kill-port-holders.mjs`) after the
+audit, but those project-specific files are not part of this bundle and must
+not be referenced as if they were installed resources.

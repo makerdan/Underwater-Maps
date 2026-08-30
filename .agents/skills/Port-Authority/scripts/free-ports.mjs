@@ -4,9 +4,10 @@
  *
  * TEMPLATE — adaptation points:
  *   1. PORTS: pass ports as CLI args, or hard-code a default list below.
- *   2. ENV GUARD: set FREE_PORTS_DISABLE=1 to make this script a no-op
- *      (rename the variable to suit your project; keep a guard so the sweep
- *      can never run recursively or in production).
+ *   2. ENV GUARD: set FREE_PORTS_DISABLE=1 to make this script a no-op;
+ *      FREE_PORTS_RUNNING=1 is set internally to prevent recursion. Rename
+ *      both variables to suit your project, but keep both guards so the sweep
+ *      can never run recursively or in production.
  *   3. WRAPPER_COMMS: extend with any extra dev-server wrappers your stack
  *      uses (e.g. "deno", "bun", "turbo").
  *   4. --include-own-tree: only pass this flag BETWEEN serialized steps,
@@ -44,10 +45,21 @@ if (process.env.FREE_PORTS_DISABLE === "1") {
   console.log("free-ports: FREE_PORTS_DISABLE=1 — skipping sweep.");
   process.exit(0);
 }
-if (process.env.NODE_ENV === "production") {
+if (process.env.FREE_PORTS_RUNNING === "1") {
+  console.log("free-ports: already running in an ancestor process — skipping sweep.");
+  process.exit(0);
+}
+const isDevelopmentWorkspace = Boolean(process.env.REPLIT_DEV_DOMAIN);
+if (
+  !isDevelopmentWorkspace &&
+  (process.env.NODE_ENV === "production" ||
+    process.env.REPLIT_DEPLOYMENT === "1" ||
+    process.env.REPLIT_ENVIRONMENT === "production")
+) {
   console.error("free-ports: refusing to run in production.");
   process.exit(2);
 }
+process.env.FREE_PORTS_RUNNING = "1";
 
 const argv = process.argv.slice(2);
 // --include-own-tree: also kill holders that belong to this process's own
@@ -58,14 +70,23 @@ const argv = process.argv.slice(2);
 // with "port already used". Only safe BETWEEN steps, when nothing in our
 // tree should legitimately hold the swept ports.
 const includeOwnTree = argv.includes("--include-own-tree");
-const ports = argv
-  .filter((a) => /^\d+$/.test(a))
-  .map(Number)
-  .filter((p) => p > 0 && p <= 65535);
-if (ports.length === 0) {
+const unknownFlags = argv.filter(
+  (arg) => arg.startsWith("--") && arg !== "--include-own-tree",
+);
+const positional = argv.filter((arg) => !arg.startsWith("--"));
+if (unknownFlags.length > 0) {
+  console.error(`free-ports: unknown option(s): ${unknownFlags.join(", ")}`);
+  process.exit(2);
+}
+if (
+  positional.length === 0 ||
+  positional.some((arg) => !/^\d+$/.test(arg)) ||
+  positional.some((arg) => Number(arg) < 1 || Number(arg) > 65535)
+) {
   console.error("Usage: free-ports.mjs [--include-own-tree] <port> [<port>...]");
   process.exit(2);
 }
+const ports = [...new Set(positional.map(Number))];
 
 // ── /proc helpers ───────────────────────────────────────────────────────────
 
