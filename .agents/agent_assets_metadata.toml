@@ -242,3 +242,10 @@ uri = "file://exports/app-support-ops-skill.zip"
 type = "unspecified"
 title = "App Support Ops skill ZIP"
 description = "Direct download of the canonical App Support Ops skill packaged from .agents/skills/app-support-ops, including SKILL.md and its evaluation file. Every archived file was verified against the canonical source."
+
+[[outputs]]
+id = "OmEcKPhGxWbS3rEh5l4OD"
+uri = "file://exports/replit-toml-editor-support.zip"
+type = "unspecified"
+title = "Replit TOML Editor support package"
+description = "Direct download containing docs/support/replit-toml-editor-response.md and all files in docs/support/replit-toml-editor-evidence/. Every archived file was verified against the current source."
