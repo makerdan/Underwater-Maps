@@ -12,6 +12,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   formatCatalogMockFailures,
+  parseRuntimeImports,
   scanCatalogMockSource,
 } from "../check-catalog-facade-mocks.mjs";
 
@@ -121,6 +122,79 @@ describe("scanCatalogMockSource", () => {
         ],
       },
     ]);
+  });
+
+  it("resolves aliased named imports to their runtime export names", () => {
+    const failures = scan(`
+      import { scoreEntry as score } from "../lib/catalogSeeder.js";
+      vi.mock("../lib/catalogSeeder.js", () => ({
+        getCatalogEntries: vi.fn(),
+        searchCatalog: vi.fn(),
+        invalidateCatalogCache: vi.fn(),
+      }));
+      void score;
+    `, "src/routes/__tests__/catalog-alias.test.ts");
+
+    assert.deepEqual(failures, [
+      {
+        kind: "catalogSeeder",
+        fileName: "src/routes/__tests__/catalog-alias.test.ts",
+        missing: ["scoreEntry"],
+      },
+    ]);
+  });
+
+  it("resolves properties read through a namespace import", () => {
+    const failures = scan(`
+      import * as catalog from "../lib/catalogSeeder.js";
+      vi.mock("../lib/catalogSeeder.js", () => ({
+        getCatalogEntries: vi.fn(),
+        searchCatalog: vi.fn(),
+        invalidateCatalogCache: vi.fn(),
+      }));
+      void catalog.EXTRA_CATALOG_ENTRIES;
+    `, "src/routes/__tests__/catalog-namespace.test.ts");
+
+    assert.deepEqual(failures, [
+      {
+        kind: "catalogSeeder",
+        fileName: "src/routes/__tests__/catalog-namespace.test.ts",
+        missing: ["EXTRA_CATALOG_ENTRIES"],
+      },
+    ]);
+  });
+
+  it("requires the default export for a default catalog import", () => {
+    const failures = scan(`
+      import catalog from "../lib/catalogSeeder.js";
+      vi.mock("../lib/catalogSeeder.js", () => ({
+        getCatalogEntries: vi.fn(),
+        searchCatalog: vi.fn(),
+        invalidateCatalogCache: vi.fn(),
+      }));
+      void catalog;
+    `, "src/routes/__tests__/catalog-default.test.ts");
+
+    assert.deepEqual(failures, [
+      {
+        kind: "catalogSeeder",
+        fileName: "src/routes/__tests__/catalog-default.test.ts",
+        missing: ["default"],
+      },
+    ]);
+  });
+
+  it("supports namespace aliases and string-indexed property reads", () => {
+    assert.deepEqual(
+      parseRuntimeImports(
+        `
+          import * as catalogApi from "../lib/catalogSeeder.js";
+          void catalogApi["invalidateMiniSearchIndex"];
+        `,
+        "catalogSeeder\\.js",
+      ),
+      ["invalidateMiniSearchIndex"],
+    );
   });
 });
 

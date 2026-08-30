@@ -22,21 +22,97 @@ const FETCH_STRATEGY_PATH = join(
   "artifacts/api-server/src/lib/catalogFetchStrategy.ts",
 );
 
-export function parseNamedRuntimeImports(source, moduleName) {
-  const imports = [];
+function findModuleImportClauses(source, moduleName) {
+  const clauses = [];
   const importRe = new RegExp(
-    `import\\s*\\{([^{}]*?)\\}\\s*from\\s*["'][^"']*${moduleName}["']`,
+    `\\bimport\\s+([^;]*?)\\s+from\\s*["'][^"']*${moduleName}["']`,
     "g",
   );
 
   for (const match of source.matchAll(importRe)) {
-    for (const part of match[1].split(",")) {
-      const cleaned = part.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/g, "").trim();
-      if (!cleaned || cleaned.startsWith("type ")) continue;
-      imports.push(cleaned.split(/\s+as\s+/)[0].trim());
+    clauses.push(match[1]);
+  }
+  return clauses;
+}
+
+function stripImportComments(value) {
+  return value
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+}
+
+function parseNamedImportClause(clause) {
+  const namedMatch = clause.match(/\{([\s\S]*?)\}/);
+  if (!namedMatch) return [];
+
+  const imports = [];
+  for (const part of namedMatch[1].split(",")) {
+    const cleaned = stripImportComments(part).trim();
+    if (!cleaned || cleaned.startsWith("type ")) continue;
+    imports.push(cleaned.split(/\s+as\s+/)[0].trim());
+  }
+  return imports;
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Return runtime exports imported from a module, including properties read
+ * through namespace aliases. A namespace import does not name an export until
+ * code reads one of its properties, so only those properties become mock
+ * requirements. Default imports always require the module's `default` key.
+ */
+export function parseRuntimeImports(source, moduleName) {
+  const imports = new Set();
+  const namespaceLocals = [];
+
+  for (const rawClause of findModuleImportClauses(source, moduleName)) {
+    const clause = stripImportComments(rawClause).trim();
+    if (!clause || clause.startsWith("type ")) continue;
+
+    for (const name of parseNamedImportClause(clause)) {
+      imports.add(name);
+    }
+
+    const namespaceMatch = clause.match(/\*\s+as\s+([A-Za-z_$][\w$]*)/);
+    if (namespaceMatch) {
+      namespaceLocals.push(namespaceMatch[1]);
+    }
+
+    const defaultPart = clause.split(",")[0].trim();
+    if (/^[A-Za-z_$][\w$]*$/.test(defaultPart)) {
+      imports.add("default");
     }
   }
-  return [...new Set(imports)];
+
+  for (const local of namespaceLocals) {
+    const escapedLocal = escapeRegExp(local);
+    const memberRe = new RegExp(
+      `\\b${escapedLocal}\\s*(?:\\?\\.)?\\s*\\.\\s*([A-Za-z_$][\\w$]*)`,
+      "g",
+    );
+    for (const match of source.matchAll(memberRe)) {
+      imports.add(match[1]);
+    }
+
+    const indexedMemberRe = new RegExp(
+      `\\b${escapedLocal}\\s*\\[\\s*(['"])([^'"]+)\\1\\s*\\]`,
+      "g",
+    );
+    for (const match of source.matchAll(indexedMemberRe)) {
+      if (/^[A-Za-z_$][\w$]*$/.test(match[2])) {
+        imports.add(match[2]);
+      }
+    }
+  }
+
+  return [...imports];
+}
+
+export function parseNamedRuntimeImports(source, moduleName) {
+  return parseRuntimeImports(source, moduleName).filter((name) => name !== "default");
 }
 
 /**
@@ -223,7 +299,7 @@ export function scanCatalogMockSource(
   for (const { body } of findMockObjects(source, "catalogSeeder.js")) {
     const mockKeys = parseTopLevelMockKeys(body);
     const required = new Set(facadeExports);
-    for (const name of parseNamedRuntimeImports(source, "catalogSeeder\\.js")) {
+    for (const name of parseRuntimeImports(source, "catalogSeeder\\.js")) {
       required.add(name);
     }
     const missing = [...required].filter((name) => !mockKeys.has(name));
