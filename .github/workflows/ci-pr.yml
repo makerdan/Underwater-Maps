@@ -163,6 +163,9 @@ jobs:
       - name: 'check:skill-compression-contract'
         run: pnpm run check:skill-compression-contract
 
+      - name: 'check:validation-baseline'
+        run: pnpm run check:validation-baseline
+
       - name: 'verify: failure-gate + regression-guard'
         run: pnpm run verify
 

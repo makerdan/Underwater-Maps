@@ -1,0 +1,495 @@
+{
+  "catalogVersion": 1,
+  "catalogDate": "2026-08-30",
+  "entries": [
+    {
+      "id": "BASE-E2E-PUZZLE-POLL",
+      "suite": "Playwright palette E2E",
+      "test": "tests/e2e/overview-puzzle-multiselect.spec.ts — expect.poll matcher calls",
+      "failureSignature": "Runtime TypeError because Playwright expect.poll does not provide the Vitest-only toSatisfy matcher.",
+      "classification": "test",
+      "evidence": {
+        "sources": [
+          { "path": "docs/audits/bug-audit-preexisting-2026-08.md", "locator": "Finding 1, lines 36-41" },
+          { "path": "docs/audits/bug-audit-merge-regressions-2026-08-25.md", "locator": "T-1, lines 137-152" }
+        ],
+        "observations": [
+          { "date": "2026-08-17", "outcome": "fail", "command": "solo Playwright run of the documented baseline spec", "result": "3 failed and 3 passed; failures were deterministic across Playwright retry." },
+          { "date": "2026-08-25", "outcome": "fail", "command": "test-standard-plus palette coverage", "result": "The known browser contract baseline remained outside the audited merge range." }
+        ],
+        "authoritative": false,
+        "summary": "The audit evidence identified a test-only matcher mismatch that was subsequently removed from the spec."
+      },
+      "ownership": {
+        "owner": "BathyScan browser test maintenance",
+        "rationale": "The spec must be repaired or its product contract deliberately changed before the palette signal is trusted."
+      },
+      "firstVerifiedDate": "2026-08-17",
+      "lastVerifiedDate": "2026-08-25",
+      "affectedTiers": ["heavy"],
+      "reviewDeadline": "2026-09-30",
+      "status": "resolved",
+      "statusHistory": [
+        { "status": "active", "date": "2026-08-17", "note": "Confirmed in the pre-existing-failure audit." },
+        { "status": "resolved", "date": "2026-08-17", "note": "The five unsupported toSatisfy calls were replaced; later browser-contract failures have different signatures." }
+      ],
+      "repositoryReferences": ["tests/e2e/overview-puzzle-multiselect.spec.ts"],
+      "resolution": {
+        "date": "2026-08-17",
+        "summary": "The unsupported matcher calls were replaced with Playwright-compatible polling assertions.",
+        "evidence": "Tracked commit 23356481 removed all toSatisfy calls; the current spec contains none."
+      }
+    },
+    {
+      "id": "BASE-PLAN-ARCHIVE-LINT",
+      "suite": "Validation tiers",
+      "test": "scripts/check-failure-gate.mjs — archived task-plan scan",
+      "failureSignature": "The gitignored .local/tasks archive contains non-compliant plans, so the plan lint blocks validation before tests run.",
+      "classification": "tooling",
+      "evidence": {
+        "sources": [
+          { "path": "docs/audits/bug-audit-preexisting-2026-08.md", "locator": "Finding 2, lines 43-48" },
+          { "path": "replit.md", "locator": "Validation routing and archive boundary guidance" }
+        ],
+        "observations": [
+          { "date": "2026-08-17", "outcome": "fail", "command": "test-standard-plus", "result": "The tier stopped at check:failure-gate with 909 non-compliant archive files." },
+          { "date": "2026-08-17", "outcome": "fail", "command": "test-standard-plus with skill gate bypassed", "result": "The same archive gate remained the next independent blocker." }
+        ],
+        "authoritative": false,
+        "summary": "The archive-wide blocker was real at audit time but later tracked gate changes scoped enforcement to the current task."
+      },
+      "ownership": {
+        "owner": "Validation infrastructure",
+        "rationale": "The durable fix belongs in tracked gate behavior or tracked plan storage, not in bulk edits to .local/tasks."
+      },
+      "firstVerifiedDate": "2026-08-17",
+      "lastVerifiedDate": "2026-08-28",
+      "affectedTiers": ["fast", "standard", "standard-plus", "heavy"],
+      "reviewDeadline": "2026-09-30",
+      "status": "resolved",
+      "statusHistory": [
+        { "status": "active", "date": "2026-08-17", "note": "Confirmed as a repeatable tier-wide validation blocker." },
+        { "status": "resolved", "date": "2026-08-28", "note": "Tracked validation routing stopped archive-wide enforcement during task and ad-hoc runs." }
+      ],
+      "repositoryReferences": ["scripts/check-failure-gate.mjs", "replit.md"],
+      "resolution": {
+        "date": "2026-08-28",
+        "summary": "Failure Gate validation now operates on task-scoped plan context instead of requiring a clean gitignored archive.",
+        "evidence": "Tracked validation steps pass --skip-if-no-task, and task-driven checks resolve only TASK_PLAN_FILE."
+      }
+    },
+    {
+      "id": "BASE-REGRESSION-GUARD-ARCHIVE",
+      "suite": "Validation tiers",
+      "test": "scripts/check-regression-guard.mjs — archived task-plan scan",
+      "failureSignature": "Two archived plans have incomplete Regression Guard fields and cannot be repaired by the missing-section stub pass.",
+      "classification": "tooling",
+      "evidence": {
+        "sources": [
+          { "path": "docs/audits/bug-audit-preexisting-2026-08.md", "locator": "Finding 3, lines 50-55" },
+          { "path": "replit.md", "locator": "Validation routing and archive boundary guidance" }
+        ],
+        "observations": [
+          { "date": "2026-08-17", "outcome": "fail", "command": "check:regression-guard with failure-gate skipped", "result": "The two named archived plans failed for missing Covers, Test location, and What it checks fields." },
+          { "date": "2026-08-17", "outcome": "fail", "command": "test-standard-plus", "result": "The regression-guard archive gate was an independent blocker after the failure-gate archive issue." }
+        ],
+        "authoritative": false,
+        "summary": "This second archive-state blocker was real at audit time but later tracked routing stopped archive-wide enforcement."
+      },
+      "ownership": {
+        "owner": "Validation infrastructure",
+        "rationale": "The durable archive policy should prevent recurrence; the ignored plan files themselves are not tracked deliverables."
+      },
+      "firstVerifiedDate": "2026-08-17",
+      "lastVerifiedDate": "2026-08-28",
+      "affectedTiers": ["fast", "standard", "standard-plus", "heavy"],
+      "reviewDeadline": "2026-09-30",
+      "status": "resolved",
+      "statusHistory": [
+        { "status": "active", "date": "2026-08-17", "note": "Confirmed as a repeatable archive-state validation blocker." },
+        { "status": "resolved", "date": "2026-08-28", "note": "Tracked validation routing stopped archive-wide enforcement during task and ad-hoc runs." }
+      ],
+      "repositoryReferences": ["scripts/check-regression-guard.mjs", "replit.md"],
+      "resolution": {
+        "date": "2026-08-28",
+        "summary": "Regression Guard validation now uses task-scoped plan context and no longer requires repairing the gitignored archive.",
+        "evidence": "Tracked validation steps use --skip-if-no-task and the strict task run validates only TASK_PLAN_FILE."
+      }
+    },
+    {
+      "id": "BASE-RAW-PNPM-AUDIT",
+      "suite": "Dependency audit",
+      "test": "pnpm audit --audit-level=moderate",
+      "failureSignature": "Raw dependency audit reports six test-only vulnerabilities through jsdom and postcss even though the registered check:audit exception is green.",
+      "classification": "dependency",
+      "evidence": {
+        "sources": [
+          { "path": "docs/audits/bug-audit-preexisting-2026-08.md", "locator": "Finding 5, lines 64-69" },
+          { "path": "security-audit-exceptions.md", "locator": "Documented undici exception and review date" }
+        ],
+        "observations": [
+          { "date": "2026-08-17", "outcome": "fail", "command": "pnpm audit --audit-level=moderate", "result": "Six advisories remained on dev-only dependency paths." },
+          { "date": "2026-08-17", "outcome": "pass", "command": "pnpm run check:audit", "result": "The registered audit gate passed with one dated, documented exception." }
+        ],
+        "authoritative": true,
+        "summary": "The failing command and the registered exception are intentionally distinguished; this entry does not authorize ignoring other audit signatures."
+      },
+      "ownership": {
+        "owner": "Dependency maintenance",
+        "rationale": "Revisit when compatible jsdom and postcss releases are available, then remove the dated exception."
+      },
+      "firstVerifiedDate": "2026-08-17",
+      "lastVerifiedDate": "2026-08-17",
+      "affectedTiers": ["standalone"],
+      "reviewDeadline": "2026-10-17",
+      "status": "active",
+      "statusHistory": [
+        { "status": "active", "date": "2026-08-17", "note": "Raw audit failure was observed while the registered gate remained compliant." }
+      ],
+      "repositoryReferences": ["pnpm-lock.yaml", "scripts/check-audit.mjs"],
+      "resolution": null
+    },
+    {
+      "id": "BASE-OVERVIEW-ZOOM-GEO",
+      "suite": "BathyScan component integration",
+      "test": "OverviewMap geographic transform publication after wheel zoom",
+      "failureSignature": "A fixed-pixel puzzle translation leaves the published dLon unchanged after Overview zoom, so persisted geographic placement is stale.",
+      "classification": "product",
+      "evidence": {
+        "sources": [
+          { "path": "docs/audits/bug-audit-merge-regressions-2026-08-25.md", "locator": "F-1, lines 75-102" },
+          { "path": "docs/audits/bug-audit-preexisting-2026-08.md", "locator": "Audit summary and validation method" }
+        ],
+        "observations": [
+          { "date": "2026-08-25", "outcome": "fail", "command": "overviewMap.componentIntegration.test.ts", "result": "The geographic transform assertion failed 3/3 with dLon unchanged." },
+          { "date": "2026-08-25", "outcome": "fail", "command": "reproduction of Overview wheel zoom scenario", "result": "The rAF republish path did not publish a changed transform for the fixed-pixel translation." }
+        ],
+        "authoritative": true,
+        "summary": "This is the one confirmed product defect in the recent merge-regression audit and must not be treated as a harmless test baseline."
+      },
+      "ownership": {
+        "owner": "BathyScan Overview map",
+        "rationale": "The zoom refresh trigger and geographic persistence contract require a product fix before cross-device placement is trusted."
+      },
+      "firstVerifiedDate": "2026-08-25",
+      "lastVerifiedDate": "2026-08-25",
+      "affectedTiers": ["standard"],
+      "reviewDeadline": "2026-09-15",
+      "status": "active",
+      "statusHistory": [
+        { "status": "active", "date": "2026-08-25", "note": "Confirmed independently in the merge-regression audit." }
+      ],
+      "repositoryReferences": ["artifacts/bathyscan/src/components/OverviewMap.tsx", "artifacts/bathyscan/src/__tests__/overviewMap.componentIntegration.test.ts"],
+      "resolution": null
+    },
+    {
+      "id": "BASE-SIDEBAR-CHEVRON-CONTRACT",
+      "suite": "BathyScan unit tests",
+      "test": "DatasetPanel.myLibraryCollapse.test.tsx",
+      "failureSignature": "The test expects old up/down chevrons while SidebarSection intentionally renders the newer collapsed/expanded chevrons.",
+      "classification": "test",
+      "evidence": {
+        "sources": [
+          { "path": "docs/audits/bug-audit-merge-regressions-2026-08-25.md", "locator": "T-4, lines 154-174" },
+          { "path": "docs/audits/bug-audit-preexisting-2026-08.md", "locator": "Audit summary" }
+        ],
+        "observations": [
+          { "date": "2026-08-25", "outcome": "fail", "command": "BathyScan unit shard", "result": "The stale chevron assertion failed against the current SidebarSection output." },
+          { "date": "2026-08-25", "outcome": "fail", "command": "isolated DatasetPanel.myLibraryCollapse.test.tsx retry", "result": "The same assertion failed on three isolated retries." }
+        ],
+        "authoritative": false,
+        "summary": "The audit identifies contract drift between an intentionally changed UI and its older assertion; current ownership still needs re-verification."
+      },
+      "ownership": {
+        "owner": "BathyScan sidebar test maintenance",
+        "rationale": "Confirm the intended chevron contract, then update the assertion or revert the UI deliberately."
+      },
+      "firstVerifiedDate": "2026-08-25",
+      "lastVerifiedDate": "2026-08-25",
+      "affectedTiers": ["standard", "standard-plus", "heavy"],
+      "reviewDeadline": "2026-09-15",
+      "status": "needs-review",
+      "statusHistory": [
+        { "status": "active", "date": "2026-08-25", "note": "Observed in the merge-regression validation run." },
+        { "status": "needs-review", "date": "2026-08-26", "note": "Requires a fresh verification before it can authorize triage." }
+      ],
+      "repositoryReferences": ["artifacts/bathyscan/src/components/SidebarSection.tsx", "artifacts/bathyscan/src/__tests__/DatasetPanel.myLibraryCollapse.test.tsx"],
+      "resolution": null
+    },
+    {
+      "id": "BASE-SIDEBAR-CSSOM-WIDTH",
+      "suite": "BathyScan unit tests",
+      "test": "sidebarShell.responsiveMinWidth.test.tsx",
+      "failureSignature": "The CSSOM assertion expects the former 2in sidebar width while the current responsive contract intentionally uses 2.25in.",
+      "classification": "test",
+      "evidence": {
+        "sources": [
+          { "path": "docs/audits/bug-audit-merge-regressions-2026-08-25.md", "locator": "T-4, lines 154-174" },
+          { "path": "docs/audits/bug-audit-preexisting-2026-08.md", "locator": "Audit summary" }
+        ],
+        "observations": [
+          { "date": "2026-08-25", "outcome": "fail", "command": "BathyScan unit shard", "result": "The CSSOM expectation reported the current min-width expression as different from the former contract." },
+          { "date": "2026-08-26", "outcome": "fail", "command": "isolated sidebarShell.responsiveMinWidth.test.tsx retry", "result": "The mismatch reproduced across isolated retries." }
+        ],
+        "authoritative": false,
+        "summary": "The audit records stale test expectations, not proof that the responsive sidebar implementation is wrong."
+      },
+      "ownership": {
+        "owner": "BathyScan sidebar test maintenance",
+        "rationale": "Reconcile the intended responsive width with the assertion before classifying future failures."
+      },
+      "firstVerifiedDate": "2026-08-25",
+      "lastVerifiedDate": "2026-08-26",
+      "affectedTiers": ["standard", "standard-plus", "heavy"],
+      "reviewDeadline": "2026-09-15",
+      "status": "needs-review",
+      "statusHistory": [
+        { "status": "active", "date": "2026-08-25", "note": "Observed in the merge-regression validation run." },
+        { "status": "needs-review", "date": "2026-08-26", "note": "Requires a fresh verification before it can authorize triage." }
+      ],
+      "repositoryReferences": ["artifacts/bathyscan/src/components/SidebarSection.tsx", "artifacts/bathyscan/src/__tests__/sidebarShell.responsiveMinWidth.test.tsx"],
+      "resolution": null
+    },
+    {
+      "id": "BASE-SETTINGS-BACKUP-KEY",
+      "suite": "BathyScan unit tests",
+      "test": "settingsBackup.test.ts",
+      "failureSignature": "The settings backup assertion reports dailyRouteTimezone as an unexpected skipped key during import validation.",
+      "classification": "test",
+      "evidence": {
+        "sources": [
+          { "path": "docs/audits/bug-audit-merge-regressions-2026-08-25.md", "locator": "T-5, lines 176-191" },
+          { "path": "docs/audits/bug-audit-preexisting-2026-08.md", "locator": "Resolved/stale baseline reconciliation" }
+        ],
+        "observations": [
+          { "date": "2026-08-25", "outcome": "fail", "command": "BathyScan unit shard", "result": "settingsBackup.test.ts reported the unrelated dailyRouteTimezone skipped-key contract." },
+          { "date": "2026-08-26", "outcome": "fail", "command": "isolated settingsBackup.test.ts retry", "result": "The same skipped-key mismatch reproduced independently." }
+        ],
+        "authoritative": false,
+        "summary": "This entry remains non-authoritative until the settings backup contract is re-verified against the current settings schema."
+      },
+      "ownership": {
+        "owner": "Settings backup maintenance",
+        "rationale": "Reconcile exported settings and validated imports; do not alter unrelated API behavior to silence this test."
+      },
+      "firstVerifiedDate": "2026-08-25",
+      "lastVerifiedDate": "2026-08-26",
+      "affectedTiers": ["standard", "standard-plus", "heavy"],
+      "reviewDeadline": "2026-09-15",
+      "status": "needs-review",
+      "statusHistory": [
+        { "status": "active", "date": "2026-08-25", "note": "Observed in the merge-regression validation run." },
+        { "status": "needs-review", "date": "2026-08-26", "note": "Not authoritative without current settings-contract verification." }
+      ],
+      "repositoryReferences": ["artifacts/bathyscan/src/lib/__tests__/settingsBackup.test.ts", "artifacts/bathyscan/src/lib/settingsBackup.ts"],
+      "resolution": null
+    },
+    {
+      "id": "BASE-OFFLINE-PACK-STATUS",
+      "suite": "BathyScan unit tests",
+      "test": "useOfflinePackStatus.test.ts",
+      "failureSignature": "The offline-pack status assertion expects downloaded while the current result is stale.",
+      "classification": "test",
+      "evidence": {
+        "sources": [
+          { "path": "docs/audits/bug-audit-merge-regressions-2026-08-25.md", "locator": "T-5, lines 176-191" },
+          { "path": "docs/audits/bug-audit-preexisting-2026-08.md", "locator": "Audit summary" }
+        ],
+        "observations": [
+          { "date": "2026-08-25", "outcome": "fail", "command": "BathyScan unit shard", "result": "Two useOfflinePackStatus tests reported stale versus downloaded." },
+          { "date": "2026-08-26", "outcome": "fail", "command": "isolated useOfflinePackStatus.test.ts retry", "result": "The status mismatch reproduced independently." }
+        ],
+        "authoritative": false,
+        "summary": "The audit classifies this as offline status/test contract drift pending fresh ownership evidence."
+      },
+      "ownership": {
+        "owner": "Offline pack maintenance",
+        "rationale": "Reconcile status semantics and test fixture setup before using this record for triage."
+      },
+      "firstVerifiedDate": "2026-08-25",
+      "lastVerifiedDate": "2026-08-26",
+      "affectedTiers": ["standard", "standard-plus", "heavy"],
+      "reviewDeadline": "2026-09-15",
+      "status": "needs-review",
+      "statusHistory": [
+        { "status": "active", "date": "2026-08-25", "note": "Observed in the merge-regression validation run." },
+        { "status": "needs-review", "date": "2026-08-26", "note": "Requires current status-contract verification." }
+      ],
+      "repositoryReferences": ["artifacts/bathyscan/src/hooks/__tests__/useOfflinePackStatus.test.ts", "artifacts/bathyscan/src/hooks/useOfflinePackStatus.ts"],
+      "resolution": null
+    },
+    {
+      "id": "BASE-ACCESSIBILITY-CLERK-PROVIDER",
+      "suite": "BathyScan unit tests",
+      "test": "accessibility.audit.test.tsx — GpsImportDialog render",
+      "failureSignature": "The accessibility test cannot render GpsImportDialog without the Clerk provider required by the current component.",
+      "classification": "environment",
+      "evidence": {
+        "sources": [
+          { "path": "docs/audits/bug-audit-merge-regressions-2026-08-25.md", "locator": "T-5, lines 176-191" },
+          { "path": "docs/audits/bug-audit-preexisting-2026-08.md", "locator": "Audit summary" }
+        ],
+        "observations": [
+          { "date": "2026-08-25", "outcome": "fail", "command": "BathyScan unit shard", "result": "The accessibility test failed while rendering GpsImportDialog without a Clerk provider." },
+          { "date": "2026-08-26", "outcome": "fail", "command": "isolated accessibility.audit.test.tsx retry", "result": "The provider setup failure reproduced independently." }
+        ],
+        "authoritative": false,
+        "summary": "This is test harness/provider setup evidence, not evidence that authenticated GPS import is broken."
+      },
+      "ownership": {
+        "owner": "BathyScan accessibility test harness",
+        "rationale": "Provide the intended auth test context or adjust the test harness before classifying the component."
+      },
+      "firstVerifiedDate": "2026-08-25",
+      "lastVerifiedDate": "2026-08-26",
+      "affectedTiers": ["standard", "standard-plus", "heavy"],
+      "reviewDeadline": "2026-09-15",
+      "status": "needs-review",
+      "statusHistory": [
+        { "status": "active", "date": "2026-08-25", "note": "Observed in the merge-regression validation run." },
+        { "status": "needs-review", "date": "2026-08-26", "note": "Provider setup must be re-verified before use as provenance." }
+      ],
+      "repositoryReferences": ["artifacts/bathyscan/src/__tests__/accessibility.audit.test.tsx", "artifacts/bathyscan/src/components/GpsImportDialog.tsx"],
+      "resolution": null
+    },
+    {
+      "id": "BASE-SETTINGS-SYNC-E2E",
+      "suite": "Playwright palette E2E",
+      "test": "tests/e2e/settings-cross-device-sync.spec.ts",
+      "failureSignature": "The cross-device settings test times out while clicking through the reset flow, without screenshot-backed proof of a product failure.",
+      "classification": "environment",
+      "evidence": {
+        "sources": [
+          { "path": "docs/audits/bug-audit-merge-regressions-2026-08-25.md", "locator": "T-6, lines 193-209" },
+          { "path": "docs/audits/ci-validation-baselines-2026-08.md", "locator": "Runtime browser coverage and clean-sample policy" }
+        ],
+        "observations": [
+          { "date": "2026-08-25", "outcome": "blocked", "command": "palette E2E run", "result": "A locator click timed out after 60 seconds in the initial attempt and retry." },
+          { "date": "2026-08-25", "outcome": "blocked", "command": "authenticated browser evidence review", "result": "No screenshot-backed user-visible failure was established." }
+        ],
+        "authoritative": false,
+        "summary": "The audit assigns this to active settings-sync work and explicitly does not treat the timeout as a product defect."
+      },
+      "ownership": {
+        "owner": "Settings synchronization flow",
+        "rationale": "Reproduce with the authenticated harness and existing trace context before assigning product ownership."
+      },
+      "firstVerifiedDate": "2026-08-25",
+      "lastVerifiedDate": "2026-08-25",
+      "affectedTiers": ["heavy"],
+      "reviewDeadline": "2026-09-15",
+      "status": "needs-review",
+      "statusHistory": [
+        { "status": "active", "date": "2026-08-25", "note": "Observed as a retryable timeout in palette E2E." },
+        { "status": "needs-review", "date": "2026-08-26", "note": "Skipped/blocked browser evidence cannot authorize an ignore." }
+      ],
+      "repositoryReferences": ["tests/e2e/settings-cross-device-sync.spec.ts", "docs/audits/bug-audit-merge-regressions-2026-08-25.md"],
+      "resolution": null
+    },
+    {
+      "id": "BASE-AUTHENTICATED-BROWSER-LIMIT",
+      "suite": "Authenticated browser coverage",
+      "test": "Sidebar, upload, GPS, and puzzle journeys requiring seeded terrain/auth",
+      "failureSignature": "The available environment cannot establish a valid authenticated browser failure state, so skipped coverage is not evidence of a pass.",
+      "classification": "environment",
+      "evidence": {
+        "sources": [
+          { "path": "docs/audits/bug-audit-merge-regressions-2026-08-25.md", "locator": "T-2, lines 211-225" },
+          { "path": "docs/audits/ux-baseline-sweep-2026-08-24.md", "locator": "Authenticated desktop/mobile manual queue" }
+        ],
+        "observations": [
+          { "date": "2026-08-25", "outcome": "blocked", "command": "authenticated browser journey attempt", "result": "The harness skipped before reaching a screenshot-backed failing state." },
+          { "date": "2026-08-25", "outcome": "blocked", "command": "manual authenticated coverage review", "result": "No valid failure state was reached; skipped tests were not counted as passes." }
+        ],
+        "authoritative": false,
+        "summary": "This record describes an evidence limitation and cannot authorize skipping a future reproducible failure."
+      },
+      "ownership": {
+        "owner": "Authenticated browser harness",
+        "rationale": "Restore seeded authenticated desktop and mobile coverage, then classify only reproducible user-visible failures."
+      },
+      "firstVerifiedDate": "2026-08-25",
+      "lastVerifiedDate": "2026-08-25",
+      "affectedTiers": ["heavy"],
+      "reviewDeadline": "2026-09-15",
+      "status": "environment-limited",
+      "statusHistory": [
+        { "status": "environment-limited", "date": "2026-08-25", "note": "Environment limitation documented; no product failure was inferred." }
+      ],
+      "repositoryReferences": ["docs/audits/bug-audit-merge-regressions-2026-08-25.md", "docs/audits/ux-baseline-sweep-2026-08-24.md"],
+      "resolution": null
+    },
+    {
+      "id": "BASE-MIGRATION-SNAPSHOT-MISSING",
+      "suite": "Schema freshness guard",
+      "test": "scripts/check-schema-drift.mjs — migration 0026 snapshot",
+      "failureSignature": "The schema-stale guard reports that migration 0026 lacks its generated Drizzle snapshot metadata.",
+      "classification": "tooling",
+      "evidence": {
+        "sources": [
+          { "path": "docs/audits/bug-audit-merge-regressions-2026-08-25.md", "locator": "T-5 and T-3, lines 176-191 and 227-244" },
+          { "path": "docs/audits/bug-audit-preexisting-2026-08.md", "locator": "Static validation sweep" }
+        ],
+        "observations": [
+          { "date": "2026-08-25", "outcome": "fail", "command": "test-standard-plus", "result": "The schema-stale guard reported missing meta/0026_snapshot.json." },
+          { "date": "2026-08-26", "outcome": "fail", "command": "schema freshness guard retry", "result": "The missing migration snapshot remained unrelated to the audited UI changes." }
+        ],
+        "authoritative": false,
+        "summary": "The schema guard failure is tracked as non-authoritative until the generated snapshot is re-verified."
+      },
+      "ownership": {
+        "owner": "Database migration maintenance",
+        "rationale": "Generate and verify the migration snapshot in the owning schema task; do not suppress schema freshness failures."
+      },
+      "firstVerifiedDate": "2026-08-25",
+      "lastVerifiedDate": "2026-08-26",
+      "affectedTiers": ["standard", "standard-plus", "heavy"],
+      "reviewDeadline": "2026-09-15",
+      "status": "needs-review",
+      "statusHistory": [
+        { "status": "active", "date": "2026-08-25", "note": "Observed in the mandated validation run." },
+        { "status": "needs-review", "date": "2026-08-26", "note": "Requires current schema evidence before it can support triage." }
+      ],
+      "repositoryReferences": ["scripts/check-schema-drift.mjs", "lib/db/drizzle/meta/0026_snapshot.json"],
+      "resolution": null
+    },
+    {
+      "id": "BASE-SKILL-MIRROR-DRIFT",
+      "suite": "Validation environment checks",
+      "test": "scripts/check-skill-mirror-sync.mjs",
+      "failureSignature": "Gitignored custom skill mirrors had stale fingerprints after canonical skill files merged, blocking validation in the local environment.",
+      "classification": "environment",
+      "evidence": {
+        "sources": [
+          { "path": "docs/audits/bug-audit-preexisting-2026-08.md", "locator": "Finding 4, lines 57-62" },
+          { "path": "replit.md", "locator": "Skill mirror synchronization guidance" }
+        ],
+        "observations": [
+          { "date": "2026-08-17", "outcome": "fail", "command": "test-standard-plus", "result": "Nine stale gitignored mirrors failed the synchronization check." },
+          { "date": "2026-08-17", "outcome": "pass", "command": "sanctioned post-merge mirror synchronization", "result": "Canonical skills were re-copied and the local check became clean without tracked changes." }
+        ],
+        "authoritative": false,
+        "summary": "The documented environment incident was repaired; a future stale mirror requires fresh evidence and is not covered by this resolved record."
+      },
+      "ownership": {
+        "owner": "Skill mirror maintenance",
+        "rationale": "Keep canonical tracked skills authoritative and re-verify mirror synchronization after future merges."
+      },
+      "firstVerifiedDate": "2026-08-17",
+      "lastVerifiedDate": "2026-08-17",
+      "affectedTiers": ["fast", "standard", "standard-plus", "heavy"],
+      "reviewDeadline": "2026-09-30",
+      "status": "resolved",
+      "statusHistory": [
+        { "status": "active", "date": "2026-08-17", "note": "Stale mirrors blocked the local validation sweep." },
+        { "status": "resolved", "date": "2026-08-17", "note": "Sanctioned synchronization repaired the gitignored derived copies." }
+      ],
+      "repositoryReferences": ["scripts/check-skill-mirror-sync.mjs", "replit.md"],
+      "resolution": {
+        "date": "2026-08-17",
+        "summary": "The local mirror copies were synchronized from canonical tracked skills.",
+        "evidence": "The audit records the sanctioned sync as zero tracked changes and the check passed afterward."
+      }
+    }
+  ]
+}

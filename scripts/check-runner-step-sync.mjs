@@ -125,6 +125,7 @@ export const GITHUB_CI_COVERAGE = {
   "check:skill-compression-contract": {
     tokens: ["pnpm run check:skill-compression-contract"],
   },
+  "check:validation-baseline": { tokens: ["pnpm run check:validation-baseline"] },
   "fix:failure-gate-stubs": {
     excluded: "Mutates Agent task plans under gitignored .local/tasks/, which GitHub Actions must not create or repair.",
     dependency: "task-plan-context",

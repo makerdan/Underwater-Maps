@@ -103,6 +103,8 @@ export function getValidationSteps(logPrefix) {
     { name: "check:ci-validation-parity-skill", resource: null, cmd: "pnpm run check:ci-validation-parity-skill", tiers: FAST },
     // no resource: semantic contract guard for durable Skill Compression previews, sub-second
     { name: "check:skill-compression-contract", resource: null, cmd: "pnpm run check:skill-compression-contract", tiers: FAST },
+    // no resource: tracked failure-baseline schema and freshness check, sub-second
+    { name: "check:validation-baseline", resource: null, cmd: "pnpm run check:validation-baseline", tiers: FAST },
     // no resource: auto-remediates missing stubs before the strict check runs, sub-second file-write only.
     { name: "fix:failure-gate-stubs", resource: null, cmd: "node scripts/check-failure-gate.mjs --fix-stub --skip-if-no-task", tiers: FAST },
     // no resource: failure-gate full lint (plan files in .local/tasks/), sub-second.
