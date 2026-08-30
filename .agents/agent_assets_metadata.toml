@@ -235,3 +235,10 @@ uri = "file://exports/port-authority-skill.zip"
 type = "unspecified"
 title = "Port Authority skill ZIP"
 description = "Direct download of the canonical Port Authority skill packaged from .agents/skills/Port-Authority, including SKILL.md and its bundled scripts. Every archived file was verified against the canonical source."
+
+[[outputs]]
+id = "wuGScEvD2cLwY5GfX0S14"
+uri = "file://exports/app-support-ops-skill.zip"
+type = "unspecified"
+title = "App Support Ops skill ZIP"
+description = "Direct download of the canonical App Support Ops skill packaged from .agents/skills/app-support-ops, including SKILL.md and its evaluation file. Every archived file was verified against the canonical source."
