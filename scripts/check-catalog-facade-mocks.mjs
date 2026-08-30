@@ -22,7 +22,7 @@ const FETCH_STRATEGY_PATH = join(
   "artifacts/api-server/src/lib/catalogFetchStrategy.ts",
 );
 
-function parseNamedRuntimeImports(source, moduleName) {
+export function parseNamedRuntimeImports(source, moduleName) {
   const imports = [];
   const importRe = new RegExp(
     `import\\s*\\{([^{}]*?)\\}\\s*from\\s*["'][^"']*${moduleName}["']`,
@@ -46,7 +46,7 @@ function parseNamedRuntimeImports(source, moduleName) {
  * makes a future fixture shape change alter the guard's result. This small
  * scanner only needs to understand strings, comments, and balanced braces.
  */
-function findMockObjects(source, moduleSuffix) {
+export function findMockObjects(source, moduleSuffix) {
   const calls = [];
   const callRe = /vi\.mock\(\s*(['"])([^'"]+)\1\s*,/g;
 
@@ -118,7 +118,7 @@ function findMatchingBrace(source, openBrace) {
   return -1;
 }
 
-function parseTopLevelMockKeys(body) {
+export function parseTopLevelMockKeys(body) {
   const keys = new Set();
   let depth = 0;
   let quote = null;
@@ -210,15 +210,19 @@ const fetchStrategyTerrainRequired = parseNamedRuntimeImports(
   readFileSync(FETCH_STRATEGY_PATH, "utf8"),
   "terrain\\.js",
 );
-const failures = [];
-
-for (const filePath of collectTestFiles(API_SRC)) {
-  const source = readFileSync(filePath, "utf8");
-  const displayPath = relative(ROOT, filePath);
-
+export function scanCatalogMockSource(
+  source,
+  {
+    fileName = "<source>",
+    facadeExports = facadeRequired,
+    seederTerrainExports = seederTerrainRequired,
+    fetchStrategyTerrainExports = fetchStrategyTerrainRequired,
+  } = {},
+) {
+  const failures = [];
   for (const { body } of findMockObjects(source, "catalogSeeder.js")) {
     const mockKeys = parseTopLevelMockKeys(body);
-    const required = new Set(facadeRequired);
+    const required = new Set(facadeExports);
     for (const name of parseNamedRuntimeImports(source, "catalogSeeder\\.js")) {
       required.add(name);
     }
@@ -226,7 +230,7 @@ for (const filePath of collectTestFiles(API_SRC)) {
     if (missing.length > 0) {
       failures.push({
         kind: "catalogSeeder",
-        fileName: displayPath,
+        fileName,
         missing,
       });
     }
@@ -234,42 +238,59 @@ for (const filePath of collectTestFiles(API_SRC)) {
 
   const hasCatalogSeederImport = /from\s*["'][^"']*catalogSeeder\.js["']/.test(source);
   const hasFetchStrategyImport = /catalogFetchStrategy(?:\.js)?/.test(source);
-  if (!hasCatalogSeederImport && !hasFetchStrategyImport) continue;
+  if (!hasCatalogSeederImport && !hasFetchStrategyImport) return failures;
 
   for (const { body } of findMockObjects(source, "terrain.js")) {
     const mockKeys = parseTopLevelMockKeys(body);
     const required = hasFetchStrategyImport
-      ? fetchStrategyTerrainRequired
-      : seederTerrainRequired;
+      ? fetchStrategyTerrainExports
+      : seederTerrainExports;
     const missing = required.filter((name) => !mockKeys.has(name));
     if (missing.length > 0) {
       failures.push({
         kind: "terrain",
-        fileName: displayPath,
+        fileName,
         missing,
       });
     }
   }
+  return failures;
 }
 
-if (failures.length > 0) {
-  console.error(
-    [
-      "Catalog-related test mock drift detected.",
-      "Wholesale mocks are missing runtime-required exports:",
-      ...failures.map(
-        ({ kind, fileName, missing }) =>
-          `  - ${fileName} (${kind}): missing ${missing.join(", ")}`,
-      ),
-      "",
-      "Add inert/test-specific implementations for the missing exports, or use",
-      "the shared terrain mock factory for terrain.js wholesale mocks.",
-    ].join("\n"),
+export function formatCatalogMockFailures(failures) {
+  return [
+    "Catalog-related test mock drift detected.",
+    "Wholesale mocks are missing runtime-required exports:",
+    ...failures.map(
+      ({ kind, fileName, missing }) =>
+        `  - ${fileName} (${kind}): missing ${missing.join(", ")}`,
+    ),
+    "",
+    "Add inert/test-specific implementations for the missing exports, or use",
+    "the shared terrain mock factory for terrain.js wholesale mocks.",
+  ].join("\n");
+}
+
+const isMain =
+  process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isMain) {
+  const failures = [];
+  for (const filePath of collectTestFiles(API_SRC)) {
+    failures.push(
+      ...scanCatalogMockSource(readFileSync(filePath, "utf8"), {
+        fileName: relative(ROOT, filePath),
+      }),
+    );
+  }
+
+  if (failures.length > 0) {
+    console.error(formatCatalogMockFailures(failures));
+    process.exit(1);
+  }
+
+  console.log(
+    `Catalog-related test mocks cover ${facadeRequired.length} catalog facade export(s) ` +
+      `and module-init terrain constants.`,
   );
-  process.exit(1);
 }
-
-console.log(
-  `Catalog-related test mocks cover ${facadeRequired.length} catalog facade export(s) ` +
-    `and module-init terrain constants.`,
-);

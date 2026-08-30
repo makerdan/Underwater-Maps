@@ -22,7 +22,7 @@
     "check:docs-stale": "node scripts/generate-api-docs.mjs --check",
     "scaffold:catalog-tests": "node scripts/scaffold-catalog-tests.mjs",
     "check:catalog-coverage": "node scripts/scaffold-catalog-tests.mjs --check",
-    "check:catalog-facade-mocks": "node scripts/check-catalog-facade-mocks.mjs",
+    "check:catalog-facade-mocks": "node --test scripts/__tests__/check-catalog-facade-mocks.test.mjs && node scripts/check-catalog-facade-mocks.mjs",
     "check:routes-documented": "pnpm --filter @workspace/api-server exec vitest run src/__tests__/routes-documented.test.ts",
     "check:lock-skill-sync": "node scripts/check-lock-skill-sync.mjs",
     "check:skill-mirror-sync": "node --test scripts/__tests__/check-skill-mirror-sync.test.mjs && node scripts/check-skill-mirror-sync.mjs",
