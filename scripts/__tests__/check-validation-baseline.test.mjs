@@ -1,9 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  findBaselineMaintenanceFindings,
   runValidationBaselineCheck,
   validateBaselineCatalog,
 } from "../check-validation-baseline.mjs";
@@ -110,4 +113,139 @@ test("catalog defects never become a test suppression mechanism", () => {
   assert.ok(result.errors.some((error) => error.includes("unknown field(s): testResults")));
   assert.equal(result.skippedTests, undefined);
   assert.equal(result.filteredTests, undefined);
+});
+
+test("maintenance report returns no findings when active records are outside both windows", () => {
+  const candidate = cloneCatalog();
+  const result = findBaselineMaintenanceFindings(candidate, {
+    asOf: "2026-08-30",
+    withinDays: 0,
+    staleAfterDays: 100,
+  });
+  assert.deepEqual(result.actionable, []);
+  assert.equal(result.informationalInactive.length, 12);
+});
+
+test("maintenance report includes the inclusive deadline boundary", () => {
+  const candidate = cloneCatalog();
+  const result = findBaselineMaintenanceFindings(candidate, {
+    asOf: "2026-08-30",
+    withinDays: 16,
+    staleAfterDays: 0,
+  });
+  const finding = result.actionable.find((entry) => entry.id === "BASE-OVERVIEW-ZOOM-GEO");
+  assert.ok(finding);
+  assert.ok(finding.reasons.includes("review-deadline"));
+  assert.equal(finding.daysUntilDeadline, 16);
+});
+
+test("maintenance report identifies expired deadlines and stale reviews", () => {
+  const candidate = cloneCatalog();
+  const active = candidate.entries.find((entry) => entry.id === "BASE-OVERVIEW-ZOOM-GEO");
+  assert.ok(active);
+  active.reviewDeadline = "2026-08-29";
+  active.lastVerifiedDate = "2026-07-01";
+  const report = findBaselineMaintenanceFindings(candidate, {
+    asOf: "2026-08-30",
+    withinDays: 0,
+    staleAfterDays: 30,
+  });
+  const finding = report.actionable.find((entry) => entry.id === active.id);
+  assert.ok(finding);
+  assert.deepEqual(finding.reasons, ["review-deadline", "stale-review"]);
+  assert.equal(finding.daysUntilDeadline, -1);
+});
+
+test("maintenance validation can report expired active records while strict validation rejects them", () => {
+  const candidate = cloneCatalog();
+  const active = candidate.entries.find((entry) => entry.status === "active");
+  assert.ok(active);
+  active.reviewDeadline = "2026-08-29";
+
+  const strict = check(candidate, "2026-08-30");
+  assert.ok(strict.errors.some((error) => error.includes("reviewDeadline 2026-08-29 has expired")));
+  const maintenance = validateBaselineCatalog(candidate, {
+    repoRoot: root,
+    asOf: "2026-08-30",
+    allowExpiredActive: true,
+  });
+  assert.deepEqual(maintenance.errors, []);
+});
+
+test("maintenance report treats inactive records as informational", () => {
+  const candidate = cloneCatalog();
+  const result = findBaselineMaintenanceFindings(candidate, {
+    asOf: "2026-08-30",
+    withinDays: 365,
+    staleAfterDays: 0,
+  });
+  assert.equal(result.actionable.length, 2);
+  assert.equal(result.informationalInactive.length, 12);
+  assert.ok(result.informationalInactive.some((entry) => entry.status === "resolved"));
+  assert.ok(result.informationalInactive.some((entry) => entry.status === "needs-review"));
+});
+
+test("maintenance CLI exits cleanly with no findings and nonzero for findings or invalid options", () => {
+  const tempDir = mkdtempSync(resolve(tmpdir(), "baseline-maintenance-"));
+  const tempCatalog = resolve(tempDir, "failure-baseline.json");
+  const script = resolve(root, "scripts/check-validation-baseline.mjs");
+  try {
+    writeFileSync(tempCatalog, JSON.stringify(cloneCatalog()));
+    const clean = spawnSync(
+      process.execPath,
+      [
+        script,
+        "--maintenance",
+        "--catalog",
+        tempCatalog,
+        "--repo-root",
+        root,
+        "--as-of",
+        "2026-08-30",
+        "--within-days",
+        "0",
+        "--stale-after-days",
+        "100",
+      ],
+      { encoding: "utf8" },
+    );
+    assert.equal(clean.status, 0, clean.stderr);
+    assert.match(clean.stdout, /MAINTENANCE OK/);
+    assert.match(clean.stdout, /BASE-E2E-PUZZLE-POLL: status resolved/);
+
+    const actionableCatalog = cloneCatalog();
+    const active = actionableCatalog.entries.find((entry) => entry.status === "active");
+    assert.ok(active);
+    active.reviewDeadline = "2026-08-29";
+    writeFileSync(tempCatalog, JSON.stringify(actionableCatalog));
+    const actionable = spawnSync(
+      process.execPath,
+      [
+        script,
+        "--maintenance",
+        "--catalog",
+        tempCatalog,
+        "--repo-root",
+        root,
+        "--as-of",
+        "2026-08-30",
+        "--within-days",
+        "0",
+        "--stale-after-days",
+        "100",
+      ],
+      { encoding: "utf8" },
+    );
+    assert.equal(actionable.status, 1);
+    assert.match(actionable.stderr, /MAINTENANCE ACTION NEEDED/);
+    assert.match(actionable.stdout, /inactive record\(s\) not counted as actionable/);
+
+    const invalid = spawnSync(process.execPath, [script, "--maintenance", "--within-days", "-1"], {
+      encoding: "utf8",
+    });
+    assert.equal(invalid.status, 1);
+    assert.match(invalid.stderr, /--within-days must be a non-negative integer/);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
 });

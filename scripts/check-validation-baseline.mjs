@@ -164,7 +164,7 @@ function checkEvidence(errors, entry, repoRoot) {
   checkNonEmptyString(errors, evidence.summary, `${entry.id}.evidence.summary`);
 }
 
-function checkLifecycle(errors, entry, asOf) {
+function checkLifecycle(errors, entry, asOf, { allowExpiredActive = false } = {}) {
   if (!KNOWN_STATUSES.includes(entry.status)) {
     errors.push(`${entry.id}.status must be one of: ${KNOWN_STATUSES.join(", ")}`);
   }
@@ -219,7 +219,7 @@ function checkLifecycle(errors, entry, asOf) {
     if (entry.evidence?.authoritative !== true) {
       errors.push(`${entry.id}.active records require authoritative evidence`);
     }
-    if (isValidDate(entry.reviewDeadline) && entry.reviewDeadline < asOf) {
+    if (!allowExpiredActive && isValidDate(entry.reviewDeadline) && entry.reviewDeadline < asOf) {
       errors.push(`${entry.id}.active reviewDeadline ${entry.reviewDeadline} has expired as of ${asOf}`);
     }
   } else if (entry.status === "environment-limited" && entry.classification !== "environment") {
@@ -238,6 +238,7 @@ function checkLifecycle(errors, entry, asOf) {
 export function validateBaselineCatalog(catalog, options = {}) {
   const repoRoot = resolve(options.repoRoot ?? defaultRoot);
   const asOf = options.asOf ?? new Date().toISOString().slice(0, 10);
+  const allowExpiredActive = options.allowExpiredActive === true;
   const errors = [];
   checkDate(errors, asOf, "asOf");
   if (!isPlainObject(catalog)) {
@@ -303,7 +304,7 @@ export function validateBaselineCatalog(catalog, options = {}) {
       }
     }
     checkDate(errors, entry.reviewDeadline, `${entry.id ?? label}.reviewDeadline`);
-    checkLifecycle(errors, entry, asOf);
+    checkLifecycle(errors, entry, asOf, { allowExpiredActive });
     if (!Array.isArray(entry.repositoryReferences) || entry.repositoryReferences.length === 0) {
       errors.push(`${entry.id}.repositoryReferences must contain at least one file`);
     } else {
@@ -321,23 +322,141 @@ export function validateBaselineCatalog(catalog, options = {}) {
   };
 }
 
-function parseArgs(argv) {
-  const args = { catalog: resolve(defaultRoot, CATALOG_RELATIVE_PATH), repoRoot: defaultRoot };
+const DEFAULT_MAINTENANCE_WITHIN_DAYS = 30;
+const DEFAULT_MAINTENANCE_STALE_AFTER_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function parseNonNegativeInteger(value, label) {
+  if (!/^\d+$/.test(String(value))) {
+    throw new Error(`${label} must be a non-negative integer`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) {
+    throw new Error(`${label} is too large`);
+  }
+  return parsed;
+}
+
+function dateAtUtcOffset(asOf, days) {
+  const date = new Date(`${asOf}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function daysBetween(asOf, date) {
+  return Math.round((new Date(`${date}T00:00:00Z`) - new Date(`${asOf}T00:00:00Z`)) / DAY_MS);
+}
+
+/**
+ * Find records that need maintenance without changing which records are
+ * referenceable. Expired active records are intentionally reportable here;
+ * ordinary validation still rejects them.
+ */
+export function findBaselineMaintenanceFindings(
+  catalog,
+  {
+    asOf = new Date().toISOString().slice(0, 10),
+    withinDays = DEFAULT_MAINTENANCE_WITHIN_DAYS,
+    staleAfterDays = DEFAULT_MAINTENANCE_STALE_AFTER_DAYS,
+  } = {},
+) {
+  const expiryCutoff = dateAtUtcOffset(asOf, withinDays);
+  const staleCutoff = dateAtUtcOffset(asOf, -staleAfterDays);
+  const actionable = [];
+  const informationalInactive = [];
+
+  for (const entry of catalog.entries ?? []) {
+    if (entry.status !== "active") {
+      informationalInactive.push({
+        id: entry.id,
+        status: entry.status,
+        reviewDeadline: entry.reviewDeadline,
+        lastVerifiedDate: entry.lastVerifiedDate,
+      });
+      continue;
+    }
+
+    const reasons = [];
+    if (entry.reviewDeadline <= expiryCutoff) reasons.push("review-deadline");
+    if (entry.lastVerifiedDate < staleCutoff) reasons.push("stale-review");
+    if (reasons.length > 0) {
+      actionable.push({
+        id: entry.id,
+        suite: entry.suite,
+        test: entry.test,
+        status: entry.status,
+        reviewDeadline: entry.reviewDeadline,
+        daysUntilDeadline: daysBetween(asOf, entry.reviewDeadline),
+        lastVerifiedDate: entry.lastVerifiedDate,
+        reasons,
+      });
+    }
+  }
+
+  return {
+    asOf,
+    withinDays,
+    staleAfterDays,
+    expiryCutoff,
+    staleCutoff,
+    actionable,
+    informationalInactive,
+  };
+}
+
+function parseMaintenanceArgs(argv) {
+  const args = {
+    catalog: resolve(defaultRoot, CATALOG_RELATIVE_PATH),
+    repoRoot: defaultRoot,
+    maintenance: false,
+    withinDays: DEFAULT_MAINTENANCE_WITHIN_DAYS,
+    staleAfterDays: DEFAULT_MAINTENANCE_STALE_AFTER_DAYS,
+  };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--") continue;
-    if (argument === "--catalog" || argument === "--repo-root" || argument === "--as-of") {
+    if (argument === "--maintenance") {
+      args.maintenance = true;
+    } else if (
+      argument === "--catalog" ||
+      argument === "--repo-root" ||
+      argument === "--as-of" ||
+      argument === "--within-days" ||
+      argument === "--stale-after-days"
+    ) {
       const value = argv[index + 1];
       if (!value) throw new Error(`${argument} requires a value`);
       if (argument === "--catalog") args.catalog = resolve(value);
       if (argument === "--repo-root") args.repoRoot = resolve(value);
       if (argument === "--as-of") args.asOf = value;
+      if (argument === "--within-days") args.withinDays = parseNonNegativeInteger(value, argument);
+      if (argument === "--stale-after-days") args.staleAfterDays = parseNonNegativeInteger(value, argument);
       index += 1;
     } else {
       throw new Error(`unknown argument: ${argument}`);
     }
   }
   return args;
+}
+
+export function runValidationBaselineMaintenanceCheck(options = {}) {
+  let catalog;
+  try {
+    catalog = JSON.parse(readFileSync(options.catalog, "utf8"));
+  } catch (error) {
+    return { errors: [`unable to read or parse ${options.catalog}: ${error.message}`] };
+  }
+
+  const validation = validateBaselineCatalog(catalog, {
+    ...options,
+    allowExpiredActive: true,
+  });
+  if (validation.errors.length > 0) return validation;
+
+  return {
+    ...validation,
+    ...findBaselineMaintenanceFindings(catalog, options),
+  };
 }
 
 export function runValidationBaselineCheck(options = {}) {
@@ -428,13 +547,51 @@ export function resolveActiveBaselineReferences(
   return { entries, errors };
 }
 
+function printInformationalInactive(entries) {
+  if (entries.length === 0) return;
+  console.log(
+    `[check-validation-baseline] informational — ` +
+      `${entries.length} inactive record(s) not counted as actionable`,
+  );
+  for (const entry of entries) {
+    console.log(
+      `  - ${entry.id}: status ${entry.status}; ` +
+        `deadline ${entry.reviewDeadline}; last verified ${entry.lastVerifiedDate}`,
+    );
+  }
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
   try {
-    const options = parseArgs(process.argv.slice(2));
-    const result = runValidationBaselineCheck(options);
+    const options = parseMaintenanceArgs(process.argv.slice(2));
+    const result = options.maintenance
+      ? runValidationBaselineMaintenanceCheck(options)
+      : runValidationBaselineCheck(options);
     if (result.errors.length > 0) {
       for (const error of result.errors) console.error(`[check-validation-baseline] ${error}`);
       process.exitCode = 1;
+    } else if (options.maintenance) {
+      if (result.actionable.length > 0) {
+        console.error(
+          `[check-validation-baseline] MAINTENANCE ACTION NEEDED — ` +
+            `${result.actionable.length} active record(s) need attention as of ${result.asOf}`,
+        );
+        for (const finding of result.actionable) {
+          console.error(
+            `  - ${finding.id}: ${finding.reasons.join(", ")}; ` +
+              `deadline ${finding.reviewDeadline} (${finding.daysUntilDeadline} day(s)); ` +
+              `last verified ${finding.lastVerifiedDate}`,
+          );
+        }
+        printInformationalInactive(result.informationalInactive);
+        process.exitCode = 1;
+      } else {
+        console.log(
+          `[check-validation-baseline] MAINTENANCE OK — no actionable active records as of ${result.asOf}; ` +
+            `${result.informationalInactive.length} inactive record(s) informational`,
+        );
+        printInformationalInactive(result.informationalInactive);
+      }
     } else {
       console.log(
         `[check-validation-baseline] OK — ${result.entryCount} entries; ` +

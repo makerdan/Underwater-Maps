@@ -68,3 +68,36 @@ signature to the referenced record; an ID alone never authorizes an ignore.
 The fast validation tier checks this file's structure and freshness only. It
 does not read the catalog into the test runner and does not provide an
 exception mechanism.
+
+## Maintenance report
+
+Run the opt-in maintenance report periodically, before planning a batch of
+work or before a scheduled validation window:
+
+```sh
+pnpm run maintain:validation-baseline
+```
+
+The report uses `--as-of` to make its reference date explicit when needed. By
+default, it reports an actionable active record when its review deadline is
+expired or falls within the next 30 days, or when its `lastVerifiedDate` is
+more than 30 days old. Override those windows with
+`--within-days N` and `--stale-after-days N`:
+
+```sh
+node scripts/check-validation-baseline.mjs --maintenance \
+  --as-of 2026-08-30 --within-days 14 --stale-after-days 30
+```
+
+Deadline findings include the exact deadline and days remaining (negative
+means expired). Inactive records (`needs-review`, `intermittent`,
+`environment-limited`, and `resolved`) are listed as informational and never
+count as actionable. The command exits `1` when actionable records or input
+errors are present, and exits `0` when the catalog is valid and no action is
+needed. Maintenance mode can report expired active records without weakening
+the normal validator: ordinary validation and plan reference resolution still
+reject expired active records.
+
+This is intentionally not in `scripts/validation-steps.mjs`. Ordinary task
+validation remains scoped to `TASK_PLAN_FILE`; approaching a deadline should
+not fail unrelated tasks automatically.

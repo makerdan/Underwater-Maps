@@ -1,0 +1,41 @@
+slightly narrow its role.
+
+Why it makes sense
+The current Failure Gate already handles expiry reactively:
+
+check-validation-baseline.mjs fails active records whose reviewDeadline has passed.
+resolveActiveBaselineReferences() rejects expired records when creating or checking plans.
+The catalog is checked in the fast validation tier.
+That prevents expired records from being accepted, but maintainers may only discover the problem when a plan or validation run is already blocked. A separate maintenance report would provide useful advance warning.
+
+Recommended boundary
+Keep the report as an explicit maintenance command, not as another ordinary validation-tier failure. The draft is already pointed in the right direction here:
+
+Do not make every task validation fail merely because a deadline is approaching.
+Let maintainers run the report periodically.
+Add a short Failure Gate section explaining the report and linking to the lifecycle documentation.
+Reuse the catalog parser and date rules rather than duplicating lifecycle logic.
+Clarifications I would add before accepting it
+Define “approaching expiry.”
+Use a deterministic default such as 14 or 30 days, with an --as-of option and preferably a configurable --within-days option for testing and scheduled maintenance.
+
+Define “missing a review update.”
+The catalog currently has lastVerifiedDate and reviewDeadline, but no explicit review cadence. Specify whether this means:
+
+an active record within the warning window;
+an active record whose lastVerifiedDate is older than a defined interval; or
+a non-active needs-review record requiring human attention.
+Specify exit-code behavior.
+I recommend:
+
+exit 0 when there are no actionable records;
+exit nonzero when actionable records are found;
+keep inactive, resolved, intermittent, and environment-limited records informational rather than treating them as validation failures.
+Preserve strict validation behavior.
+The maintenance report must not weaken the existing rule that expired active records are invalid. It should be able to report expired records without making them referenceable.
+
+Add deterministic tests.
+Cover no findings, near-expiry active records, expired active records, inactive records, threshold boundaries, and --as-of behavior.
+
+Verdict
+Keep Task #4659 and proceed with it, with the above clarifications. It belongs conceptually with Failure Gate’s baseline lifecycle, but it should remain an opt-in maintenance/reporting feature, not part of the normal task validation path.

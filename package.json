@@ -38,6 +38,7 @@
     "check:ci-validation-parity-skill": "node scripts/check-ci-validation-parity-skill.mjs",
     "check:skill-compression-contract": "node scripts/check-skill-compression-contract.mjs",
     "check:validation-baseline": "node scripts/check-validation-baseline.mjs",
+    "maintain:validation-baseline": "node scripts/check-validation-baseline.mjs --maintenance",
     "check:failure-gate": "node scripts/check-failure-gate.mjs",
     "check:failure-gate-self-test": "node --test scripts/__tests__/check-failure-gate.test.mjs",
     "check:pre-commit-self-test": "node --test scripts/__tests__/pre-commit.test.mjs",

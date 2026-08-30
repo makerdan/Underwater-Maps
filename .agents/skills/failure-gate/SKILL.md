@@ -240,6 +240,19 @@ The pipeline's `--fix-stub` and strict-check ordering is an implementation
 detail, not a substitute for a filled plan. The canonical mechanics are in
 `scripts/check-failure-gate.mjs` and `scripts/validation-steps.mjs`.
 
+## Baseline maintenance report
+
+Run `pnpm run maintain:validation-baseline` periodically to find authoritative
+active records whose review deadline is approaching or whose verification is
+stale. This is an opt-in maintenance report, not an ordinary validation-tier
+step: an approaching deadline must not fail unrelated task validation.
+
+The report may surface expired active records, but it never makes them
+referenceable. Normal catalog validation and plan resolution continue to fail
+closed for expired records. See
+`docs/validation/failure-baseline.md` for lifecycle rules, warning-window
+options, finding categories, and exit codes.
+
 ## Reference
 
 - Session mandate: `replit.md` § Agent rules
