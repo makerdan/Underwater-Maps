@@ -2,6 +2,8 @@ import { test as base, expect, type Page, type Locator, type APIRequestContext, 
 import { E2E_API_URL, E2E_RUN_SUFFIX } from "./ports";
 import { ZONE_DEFAULT_COLORS } from "../../artifacts/bathyscan/src/lib/zoneDefaultColors";
 
+export type { APIRequestContext };
+
 /**
  * Shared Playwright fixtures for the BathyScan e2e suite.
  *

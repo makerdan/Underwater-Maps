@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Route } from "./fixtures";
+import { test, expect, apiUrl, E2E_USER_ID, type APIRequestContext, type Page, type Route } from "./fixtures";
 
 type MemberKind = "dataset" | "catalogSave";
 
@@ -27,6 +27,17 @@ type CollectionFixture = {
   updatedAt: string;
 };
 
+type LiveCollection = {
+  id: string;
+  defaultMemberId: string | null;
+  members: Array<{
+    id: string;
+    kind: "dataset";
+    refId: string;
+    name: string;
+  }>;
+};
+
 const CREATED_AT = "2026-01-01T00:00:00.000Z";
 const STANDARD_COLLECTION_ID = "collection-upload-defaults";
 const SPECIAL_COLLECTION_ID = "collection-catalog-defaults";
@@ -39,6 +50,11 @@ const CATALOG_DATASET_IDS = [
   "22222222-2222-4222-8222-222222222221",
   "22222222-2222-4222-8222-222222222222",
 ] as const;
+
+const AUTH_HEADERS = {
+  "x-e2e-user-id": E2E_USER_ID,
+  "x-e2e-bypass-secret": "e2e-playwright-secret",
+};
 
 function member(
   id: string,
@@ -67,6 +83,36 @@ function terrain(datasetId: string) {
     centerLon: 0,
     centerLat: 0,
   };
+}
+
+function makeLiveCsv(minLon: number, minLat: number): Buffer {
+  const rows = ["lon,lat,depth"];
+  for (let y = 0; y < 64; y++) {
+    for (let x = 0; x < 64; x++) {
+      rows.push(`${minLon + x / 63},${minLat + y / 63},${100 + x + y}`);
+    }
+  }
+  return Buffer.from(`${rows.join("\n")}\n`);
+}
+
+async function getLiveCollection(
+  request: APIRequestContext,
+  collectionId: string,
+): Promise<LiveCollection> {
+  const response = await request.get(apiUrl("/api/user/collections"), {
+    headers: AUTH_HEADERS,
+  });
+  expect(
+    response.ok(),
+    `listing live collections failed with ${response.status()}`,
+  ).toBeTruthy();
+  const collections = (await response.json()) as LiveCollection[];
+  const collection = collections.find((item) => item.id === collectionId);
+  expect(
+    collection,
+    `live collection ${collectionId} was not returned`,
+  ).toBeDefined();
+  return collection!;
 }
 
 function createCollectionFixtures(): CollectionFixture[] {
@@ -250,7 +296,14 @@ async function expectPrimaryDataset(page: Page, datasetId: string): Promise<void
     .poll(
       () =>
         page.evaluate(
-          () => window.__bathyTest?.getTerrainSummary?.()?.datasetId ?? null,
+          () => {
+            const testApi = window.__bathyTest;
+            return (
+              testApi?.getTerrainSummary?.()?.datasetId ??
+              testApi?.getCollectionScope?.().primaryDatasetId ??
+              null
+            );
+          },
         ),
       { timeout: 10_000 },
     )
@@ -316,6 +369,169 @@ test.describe("collection default member reload persistence", () => {
     await expect(page.locator(".overview-map-header")).toBeVisible({ timeout: 10_000 });
     await expectPuzzleMode(page);
     await expectPrimaryDataset(page, CATALOG_DATASET_IDS[0]);
+  });
+
+  test("clears a removed live default in the API and reloads to the first member", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(180_000);
+
+    let collectionId: string | null = null;
+    const uploadedDatasetIds: string[] = [];
+
+    try {
+      const upload = async (
+        name: string,
+        minLon: number,
+        minLat: number,
+      ): Promise<string> => {
+        const response = await request.post(apiUrl("/api/datasets/upload"), {
+          headers: AUTH_HEADERS,
+          multipart: {
+            file: {
+              name,
+              mimeType: "text/csv",
+              buffer: makeLiveCsv(minLon, minLat),
+            },
+            resolution: "64",
+          },
+          timeout: 120_000,
+        });
+        expect(
+          response.ok(),
+          `upload ${name} failed with ${response.status()}`,
+        ).toBeTruthy();
+        const body = (await response.json()) as { savedDatasetId?: string };
+        expect(
+          body.savedDatasetId,
+          `upload ${name} did not return a saved dataset`,
+        ).toBeTruthy();
+        const datasetId = body.savedDatasetId!;
+        uploadedDatasetIds.push(datasetId);
+        return datasetId;
+      };
+
+      const firstDatasetId = await upload(
+        `collection-default-first-${Date.now()}.csv`,
+        0,
+        0,
+      );
+      const secondDatasetId = await upload(
+        `collection-default-second-${Date.now()}.csv`,
+        2,
+        2,
+      );
+
+      const createResponse = await request.post(
+        apiUrl("/api/user/collections"),
+        {
+          headers: { ...AUTH_HEADERS, "content-type": "application/json" },
+          data: { name: `Live default reload ${Date.now()}` },
+        },
+      );
+      expect(
+        createResponse.ok(),
+        `collection creation failed with ${createResponse.status()}`,
+      ).toBeTruthy();
+      const createdCollection = (await createResponse.json()) as {
+        id?: string;
+      };
+      expect(createdCollection.id).toBeTruthy();
+      collectionId = createdCollection.id!;
+
+      const addMember = async (datasetId: string) => {
+        const response = await request.post(
+          apiUrl(`/api/user/collections/${collectionId}/members`),
+          {
+            headers: { ...AUTH_HEADERS, "content-type": "application/json" },
+            data: { datasetId },
+          },
+        );
+        expect(
+          response.ok(),
+          `adding ${datasetId} to collection failed with ${response.status()}`,
+        ).toBeTruthy();
+        const body = (await response.json()) as { id?: string };
+        expect(body.id).toBeTruthy();
+        return body.id!;
+      };
+
+      const firstMemberId = await addMember(firstDatasetId);
+      const secondMemberId = await addMember(secondDatasetId);
+
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+      await expect(page.getByTestId("collections-section")).toBeVisible({
+        timeout: 12_000,
+      });
+      await expect(
+        page.getByTestId(`btn-collection-settings-${collectionId}`),
+      ).toBeVisible({ timeout: 12_000 });
+
+      await chooseDefault(page, collectionId, secondMemberId);
+      const selected = await getLiveCollection(request, collectionId);
+      expect(selected.defaultMemberId).toBe(secondMemberId);
+      expect(selected.members.map((member) => member.id)).toEqual([
+        firstMemberId,
+        secondMemberId,
+      ]);
+
+      await page.getByTestId(`btn-expand-collection-${collectionId}`).click();
+      const deleteResponsePromise = page.waitForResponse(
+        (response) =>
+          response.request().method() === "DELETE" &&
+          response
+            .url()
+            .includes(
+              `/api/user/collections/${collectionId}/members/${secondMemberId}`,
+            ),
+      );
+      await page.getByTestId(`btn-remove-member-${secondMemberId}`).click();
+      const deleteResponse = await deleteResponsePromise;
+      expect(deleteResponse.status()).toBe(204);
+      await expect(
+        page.getByTestId(`collection-member-${secondMemberId}`),
+      ).toBeHidden();
+
+      const removed = await getLiveCollection(request, collectionId);
+      expect(removed.defaultMemberId).toBeNull();
+      expect(removed.members.map((member) => member.id)).toEqual([
+        firstMemberId,
+      ]);
+
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await expect(page.getByTestId("collections-section")).toBeVisible({
+        timeout: 12_000,
+      });
+      await expect(
+        page.getByTestId(`btn-collection-settings-${collectionId}`),
+      ).toBeVisible({ timeout: 12_000 });
+      await expectDefault(page, collectionId, "");
+
+      const finalCollection = await getLiveCollection(request, collectionId);
+      expect(finalCollection.defaultMemberId).toBeNull();
+      expect(finalCollection.members.map((member) => member.refId)).toEqual([
+        firstDatasetId,
+      ]);
+
+      await page.getByTestId(`btn-load-collection-${collectionId}`).click();
+      await expectPrimaryDataset(page, firstDatasetId);
+    } finally {
+      if (collectionId) {
+        await request
+          .delete(apiUrl(`/api/user/collections/${collectionId}`), {
+            headers: AUTH_HEADERS,
+          })
+          .catch(() => {});
+      }
+      for (const datasetId of uploadedDatasetIds) {
+        await request
+          .delete(apiUrl(`/api/user/datasets/${datasetId}`), {
+            headers: AUTH_HEADERS,
+          })
+          .catch(() => {});
+      }
+    }
   });
 
   test("refreshes another open browser session after removing its selected default", async ({
