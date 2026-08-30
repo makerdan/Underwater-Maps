@@ -1,0 +1,107 @@
+{
+  "skill_name": "app-support-ops",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "We maintain a browser-based customer portal with an existing content database, keyboard-accessible modal system, role middleware, and a configured support form. Add a first-run help experience that explains the three core workflows, can be revisited later, works on touch devices, and offers grounded Q&A if our existing server-side AI adapter supports it. Audit the UX and tell us what is unavailable rather than adding a new provider.",
+      "expected_output": "A repository-first Help-mode plan or implementation using structured content, first-run/revisit state, accessible responsive behavior, configured feedback, and conditional grounded AI through the existing adapter.",
+      "files": [],
+      "expectations": [
+        "Selects Help mode only and does not add admin analytics or runtime controls.",
+        "Discovers and reuses the existing content, UI, feedback, and AI boundaries.",
+        "Requires first-run guidance, revisit behavior, touch/keyboard/screen-reader support, and grounded app-only Q&A when available.",
+        "Reports missing AI or other prerequisites instead of inventing a provider or contact."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Our server-rendered application has an authenticated admin area and a metrics store, but no charting library and no public browser dashboard. Review a request for weekly usage analytics visible only to approved operators. Include API denial behavior, privacy-safe event collection, retention, and a useful output without assuming a chart package.",
+      "expected_output": "An Admin Analytics-only design with service-authoritative authorization, safe API denial, privacy-minimized non-blocking telemetry, retention/aggregation, and a table/report alternative to charts.",
+      "files": [],
+      "expectations": [
+        "Does not bundle Help or Runtime Safety.",
+        "Keeps authorization server/service authoritative and does not expose admin identifiers or secrets.",
+        "Uses privacy-safe pseudonymous identifiers only when needed, with keyed derivation and bounded retention.",
+        "Makes telemetry non-blocking and chooses a native table/report because charting is absent."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Audit a single-service Rust command-line data processor that binds a local control socket and has tests that sometimes collide on a fixed port. We need environment-provided ports, a repository-wide hardcoded-port guard with a failing fixture, canonical test allocation, and safe cleanup. There is no browser and no development restart UI.",
+      "expected_output": "A Runtime Safety-only audit and implementation plan for a single service, with environment-driven ports, synthetic scan tests, canonical allocation, exact process cleanup, and an explicit not-applicable decision for the UI outage surface.",
+      "files": [],
+      "expectations": [
+        "Selects Runtime Safety only and does not require browser Help or Admin Analytics.",
+        "Handles a non-browser, single-service context without inventing web workflows.",
+        "Requires the hardcoded-port scan plus a synthetic failing fixture, canonical test-port allocation, and safe process-tree cleanup.",
+        "Explicitly says the development outage/restart surface is not applicable because there is no interactive client or restart UI."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "In our local development web app, add a button for developers to simulate an API outage and restart the dev backend so the client reconnect flow can be tested. The app has a controllable dev process, but production builds use a different server entry point. Also inspect port handling and test cleanup.",
+      "expected_output": "A gated Runtime Safety plan that audits ports and cleanup, implements the outage/restart control only in development, and proves exclusion at both build and server boundaries.",
+      "files": [],
+      "expectations": [
+        "Does not automatically add Help or Admin Analytics.",
+        "Treats the outage/restart feature as conditional on the discovered interactive client and controllable development process.",
+        "Requires build-time and server-boundary production exclusion, trustworthy environment checks, authorization/CSRF considerations, rate limits, readiness, and recovery tests.",
+        "Includes environment-owned ports, hardcoded-port detection, canonical test allocation, and safe cleanup rather than generic process killing."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "For our multi-tenant web SaaS, implement a combined support operations package: contextual Help with onboarding and app-grounded AI answers, an operator-only analytics page with page views, and a development-only API outage/restart tool. The repository has an existing auth service, telemetry pipeline, UI component system, two backend services, and a process lock utility. Discover the exact adapters before changing anything.",
+      "expected_output": "An explicitly Combined workflow with three separately gated workstreams, native adapter reuse, server-authoritative admin access, privacy-safe non-blocking telemetry, accessible Help, and runtime/process safety with verifiable production exclusion.",
+      "files": [],
+      "expectations": [
+        "Recognizes the explicit Combined request but keeps Help, Admin Analytics, and Runtime Safety independently scoped and tested.",
+        "Starts with repository/capability discovery and reuses auth, telemetry, UI, and process-lock adapters.",
+        "Includes grounded AI and accessibility requirements for Help, privacy/authorization requirements for Analytics, and port/cleanup/build-server gates for Runtime Safety.",
+        "Does not leak admin identifiers, secrets, raw IPs, or AI credentials and does not make telemetry or restart controls production-critical."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "We have an API-only Go service used by mobile and batch clients. Add a Help mode to the API that returns structured feature and workflow guidance, and consider Q&A only if an approved server-side model already exists. Do not design a browser tour or floating modal.",
+      "expected_output": "A Help-mode API design using structured, maintainable content and an API-appropriate non-browser experience, with conditional grounded Q&A and no pointer-only requirements.",
+      "files": [],
+      "expectations": [
+        "Selects Help only and adapts to an API-only context.",
+        "Does not impose browser modal, dragging, hover, or screen layout requirements as universal prerequisites.",
+        "Keeps content structured, versionable, app-grounded, validated, and safe; uses an existing AI boundary only if discovered.",
+        "States which browser-specific requirements are not applicable."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Please write a generic user manual for my application with screenshots and a friendly tone. It does not need onboarding, support operations, admin protection, analytics instrumentation, or development runtime controls.",
+      "expected_output": "Do not invoke this specialized support-operations workflow; ordinary documentation writing is outside its scope.",
+      "files": [],
+      "expectations": [
+        "Does not bundle or propose Help, Admin Analytics, or Runtime Safety merely because the word application appears.",
+        "Identifies ordinary documentation as a near miss outside the specialized operational scope."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Analyze our public product funnel and recommend which marketing channels deserve more budget. Use the existing warehouse data and make charts for the leadership meeting; there is no request for an admin-only application surface or telemetry implementation.",
+      "expected_output": "Do not invoke App Support Ops; this is ordinary product/marketing analytics analysis, not implementation of protected admin analytics operations.",
+      "files": [],
+      "expectations": [
+        "Does not confuse analysis and chart creation with the Admin Analytics mode.",
+        "Does not add authorization, pseudonymous identifiers, page-view instrumentation, or runtime work."
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Our GitHub Actions workflow is missing a lint job and we want a matrix for Node versions. Please review the CI YAML and suggest a fix. The workflow runs tests on a fixed ephemeral port.",
+      "expected_output": "Do not invoke App Support Ops for a CI workflow request unless the user separately asks for runtime port-safety work; the fixed port mention alone is not the requested task.",
+      "files": [],
+      "expectations": [
+        "Treats unrelated CI configuration as a near miss and does not bundle Runtime Safety.",
+        "Does not inspect or change application Help, Admin Analytics, or outage controls."
+      ]
+    }
+  ]
+}
