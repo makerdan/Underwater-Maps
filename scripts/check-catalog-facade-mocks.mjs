@@ -255,7 +255,10 @@ export function parseTopLevelMockKeys(body) {
     i += 1;
     while (i < body.length && /[\w$]/.test(body[i])) i += 1;
     while (i < body.length && /\s/.test(body[i])) i += 1;
-    if (body[i] === ":") keys.add(body.slice(keyStart, i).trim());
+    const key = body.slice(keyStart, i).trim();
+    if (body[i] === ":" || body[i] === "," || i === body.length) {
+      keys.add(key);
+    }
     i -= 1;
   }
   return keys;

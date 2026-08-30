@@ -58,6 +58,46 @@ describe("scanCatalogMockSource", () => {
     assert.deepEqual(failures, []);
   });
 
+  it("accepts complete catalog seeder and terrain mocks with shorthand exports", () => {
+    const failures = scan(`
+      import { searchCatalog } from "../lib/catalogSeeder.js";
+      const getCatalogEntries = vi.fn();
+      const invalidateCatalogCache = vi.fn();
+      const ALL_PRESET_DATASETS = [];
+      const NCEI_DATASET_COVERAGES = [];
+      vi.mock("../lib/catalogSeeder.js", () => ({
+        getCatalogEntries,
+        searchCatalog,
+        invalidateCatalogCache,
+      }));
+      vi.mock("../lib/terrain.js", () => ({
+        ALL_PRESET_DATASETS,
+        NCEI_DATASET_COVERAGES,
+      }));
+    `);
+
+    assert.deepEqual(failures, []);
+  });
+
+  it("reports missing shorthand exports with the affected mock kind", () => {
+    const failures = scan(`
+      import { searchCatalog } from "../lib/catalogSeeder.js";
+      const getCatalogEntries = vi.fn();
+      vi.mock("../lib/catalogSeeder.js", () => ({
+        getCatalogEntries,
+        searchCatalog,
+      }));
+    `, "src/routes/__tests__/catalog-shorthand.test.ts");
+
+    assert.deepEqual(failures, [
+      {
+        kind: "catalogSeeder",
+        fileName: "src/routes/__tests__/catalog-shorthand.test.ts",
+        missing: ["invalidateCatalogCache"],
+      },
+    ]);
+  });
+
   it("reports missing catalog seeder exports from a wholesale mock", () => {
     const failures = scan(`
       import { searchCatalog } from "../lib/catalogSeeder.js";
