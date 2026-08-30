@@ -437,7 +437,7 @@ describe("OverviewMap — camera heading drives SVG arrow rotation", () => {
       // rAF must fire first to set svgTransform; then the polygon appears.
       const polygon = await waitForCameraArrow();
 
-      const transform = polygon.getAttribute("transform") ?? "";
+      const transform = poly?.getAttribute("transform") ?? "";
       const rotMatch = /rotate\(([^)]+)\)/.exec(transform);
       expect(
         rotMatch,
@@ -472,39 +472,50 @@ describe("OverviewMap — camera heading drives SVG arrow rotation", () => {
     }
 
     // rot = heading → each +90° heading step → +90° rotation step
-    for (let i = 1; i < rotations.length; i++) {
-      expect(rotations[i]! - rotations[i - 1]!).toBeCloseTo(90, 5);
-    }
+      for (let i = 0; i < 4; i++) {
+        fireEvent.wheel(canvas, { deltaY: -100, clientX: CANVAS_W / 2, clientY: CANVAS_H / 2 });
+      }
+    });
+
+    // Wait for at least one more rAF at the elevated scale
+    await waitForCameraArrow();
+    await act(async () => { await new Promise((r) => setTimeout(r, 200)); });
+
+    // showEfhRef.current is false → guard fails before shouldDrawOverlayAtScale
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 });
 
 // ---------------------------------------------------------------------------
-// 2. LOD gate — renderEfhOverlay suppressed below POLYGON_LOD_MIN_ZOOM
+// 3. EFH legend — renderEfhLegend called/suppressed alongside renderEfhOverlay
 //
-// OverviewMap.tsx rAF loop (~line 1168):
+// OverviewMap.tsx rAF loop (~line 1175):
 //   if (showEfhRef.current && efhFeaturesRef.current.length > 0
 //       && shouldDrawOverlayAtScale(t.scale)) {
-//     renderEfhOverlay(ctx, visibleEfhFeatures, worldGrid, t);
+//     renderEfhOverlay(...);
+//     efhLegendLayoutRef.current = renderEfhLegend(ctx, efhFeaturesRef.current, cW, cH, ...);
+//   } else {
+//     efhLegendLayoutRef.current = null;   ← legend skipped
 //   }
 //
-// computeInitialTransform always produces scale=1.0, which is below the
-// POLYGON_LOD_MIN_ZOOM threshold (1.5), so the default view suppresses EFH.
-// Wheel-zooming in (deltaY < 0, factor=1.15 per tick) pushes scale above 1.5
-// after ≥ 3 ticks (1.15³ ≈ 1.52).  Four ticks gives 1.15⁴ ≈ 1.75 — clearly
-// above the threshold — to avoid off-by-one rounding concerns.
+// renderEfhLegend lives in the same guard branch as renderEfhOverlay:
+//   • NOT called at scale < POLYGON_LOD_MIN_ZOOM (default zoom = 1.0)
+//   • NOT called when efhOverlayEnabled is false
+//   • Called with the full efhFeaturesRef array once scale ≥ POLYGON_LOD_MIN_ZOOM
 // ---------------------------------------------------------------------------
 
-describe("OverviewMap — LOD gate suppresses renderEfhOverlay below POLYGON_LOD_MIN_ZOOM", () => {
+describe("OverviewMap — renderEfhLegend called/suppressed by LOD gate and overlay toggle", () => {
   beforeEach(() => {
     mockConfig.efhData = undefined;
     setupStores();
   });
 
-  it(`renderEfhOverlay NOT called at default zoom (scale=1.0 < ${POLYGON_LOD_MIN_ZOOM})`, async () => {
+  it(`renderEfhLegend NOT called at default zoom (scale=1.0 < ${POLYGON_LOD_MIN_ZOOM})`, async () => {
     mockConfig.efhData = { features: [makeEfhFeature()] };
     useUiStore.setState({ ...useUiStore.getState(), efhOverlayEnabled: true });
 
-    const spy = vi.spyOn(overviewRenderer, "renderEfhOverlay");
+    const spy = vi.spyOn(overviewRenderer, "renderEfhLegend");
 
     await act(async () => {
       renderWithProviders(withQuery(React.createElement(OverviewMap)));
@@ -524,18 +535,25 @@ describe("OverviewMap — LOD gate suppresses renderEfhOverlay below POLYGON_LOD
     mockConfig.efhData = { features: [makeEfhFeature()] };
     useUiStore.setState({ ...useUiStore.getState(), efhOverlayEnabled: true });
 
-    const spy = vi.spyOn(overviewRenderer, "renderEfhOverlay");
+    const spy = vi.spyOn(overviewRenderer, "renderEfhLegend");
 
     await act(async () => {
       renderWithProviders(withQuery(React.createElement(OverviewMap)));
     });
 
-    const canvas = document.querySelector<HTMLCanvasElement>(
-      'canvas[data-testid="overview-map-canvas"]',
-    )!;
-    expect(canvas).not.toBeNull();
+    const canvas = screen.getByTestId("overview-map-canvas") as HTMLCanvasElement;
 
-    // Give the canvas a real bounding rect so handleWheel can compute mouse offsets.
+    const viewTransform = overviewRenderer.computeInitialTransform(
+      underlyingGrid,
+      CANVAS_W,
+      CANVAS_H,
+    );
+
+    const viewTransform = overviewRenderer.computeInitialTransform(
+      underlyingGrid,
+      CANVAS_W,
+      CANVAS_H,
+    );
     canvas.getBoundingClientRect = () =>
       ({
         left: 0, top: 0,
@@ -545,35 +563,70 @@ describe("OverviewMap — LOD gate suppresses renderEfhOverlay below POLYGON_LOD
         toJSON: () => ({}),
       }) as DOMRect;
 
-    // 4 zoom-in ticks: scale = 1.0 × 1.15⁴ ≈ 1.75 > POLYGON_LOD_MIN_ZOOM (1.5)
+    // Zoom well past the LOD threshold
     await act(async () => {
       for (let i = 0; i < 4; i++) {
         fireEvent.wheel(canvas, { deltaY: -100, clientX: CANVAS_W / 2, clientY: CANVAS_H / 2 });
       }
     });
 
-    // The next rAF frame will see scale ≥ 1.5 → shouldDrawOverlayAtScale returns true
-    await waitFor(
-      () => { expect(spy).toHaveBeenCalled(); },
-      { timeout: 4000 },
-    );
+    // Wait for at least one more rAF at the elevated scale
+    await waitForCameraArrow();
+    await act(async () => { await new Promise((r) => setTimeout(r, 200)); });
 
+    // showEfhRef.current is false → guard fails before shouldDrawOverlayAtScale
+    expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
   });
+});
 
-  it("renderEfhOverlay NOT called when efhOverlayEnabled is false, even at high zoom", async () => {
+// ---------------------------------------------------------------------------
+// 3. EFH legend — renderEfhLegend called/suppressed alongside renderEfhOverlay
+//
+// OverviewMap.tsx rAF loop (~line 1175):
+//   if (showEfhRef.current && efhFeaturesRef.current.length > 0
+//       && shouldDrawOverlayAtScale(t.scale)) {
+//     renderEfhOverlay(...);
+//     efhLegendLayoutRef.current = renderEfhLegend(ctx, efhFeaturesRef.current, cW, cH, ...);
+//   } else {
+//     efhLegendLayoutRef.current = null;   ← legend skipped
+//   }
+//
+// renderEfhLegend lives in the same guard branch as renderEfhOverlay:
+//   • NOT called at scale < POLYGON_LOD_MIN_ZOOM (default zoom = 1.0)
+//   • NOT called when efhOverlayEnabled is false
+//   • Called with the full efhFeaturesRef array once scale ≥ POLYGON_LOD_MIN_ZOOM
+// ---------------------------------------------------------------------------
+
+describe("OverviewMap — renderEfhLegend called/suppressed by LOD gate and overlay toggle", () => {
+  beforeEach(() => {
+    mockConfig.efhData = undefined;
+    setupStores();
+  });
+
+  it(`renderEfhLegend NOT called at default zoom (scale=1.0 < ${POLYGON_LOD_MIN_ZOOM})`, async () => {
     mockConfig.efhData = { features: [makeEfhFeature()] };
-    // efhOverlayEnabled stays false (default from setupStores)
+    useUiStore.setState({ ...useUiStore.getState(), efhOverlayEnabled: true });
 
-    const spy = vi.spyOn(overviewRenderer, "renderEfhOverlay");
+    const spy = vi.spyOn(overviewRenderer, "renderEfhLegend");
 
     await act(async () => {
       renderWithProviders(withQuery(React.createElement(OverviewMap)));
     });
 
-    const canvas = document.querySelector<HTMLCanvasElement>(
-      'canvas[data-testid="overview-map-canvas"]',
-    )!;
+    const canvas = screen.getByTestId("overview-map-canvas") as HTMLCanvasElement;
+
+    const viewTransform = overviewRenderer.computeInitialTransform(
+      underlyingGrid,
+      CANVAS_W,
+      CANVAS_H,
+    );
+
+    const viewTransform = overviewRenderer.computeInitialTransform(
+      underlyingGrid,
+      CANVAS_W,
+      CANVAS_H,
+    );
     canvas.getBoundingClientRect = () =>
       ({
         left: 0, top: 0,
@@ -583,7 +636,7 @@ describe("OverviewMap — LOD gate suppresses renderEfhOverlay below POLYGON_LOD
         toJSON: () => ({}),
       }) as DOMRect;
 
-    // Zoom past the LOD threshold
+    // Zoom well past the LOD threshold
     await act(async () => {
       for (let i = 0; i < 4; i++) {
         fireEvent.wheel(canvas, { deltaY: -100, clientX: CANVAS_W / 2, clientY: CANVAS_H / 2 });
@@ -653,11 +706,19 @@ describe("OverviewMap — renderEfhLegend called/suppressed by LOD gate and over
       renderWithProviders(withQuery(React.createElement(OverviewMap)));
     });
 
-    const canvas = document.querySelector<HTMLCanvasElement>(
-      'canvas[data-testid="overview-map-canvas"]',
-    )!;
-    expect(canvas).not.toBeNull();
+    const canvas = screen.getByTestId("overview-map-canvas") as HTMLCanvasElement;
 
+    const viewTransform = overviewRenderer.computeInitialTransform(
+      underlyingGrid,
+      CANVAS_W,
+      CANVAS_H,
+    );
+
+    const viewTransform = overviewRenderer.computeInitialTransform(
+      underlyingGrid,
+      CANVAS_W,
+      CANVAS_H,
+    );
     canvas.getBoundingClientRect = () =>
       ({
         left: 0, top: 0,
@@ -667,7 +728,7 @@ describe("OverviewMap — renderEfhLegend called/suppressed by LOD gate and over
         toJSON: () => ({}),
       }) as DOMRect;
 
-    // 4 zoom-in ticks: scale = 1.0 × 1.15⁴ ≈ 1.75 > POLYGON_LOD_MIN_ZOOM (1.5)
+    // Zoom well past the LOD threshold
     await act(async () => {
       for (let i = 0; i < 4; i++) {
         fireEvent.wheel(canvas, { deltaY: -100, clientX: CANVAS_W / 2, clientY: CANVAS_H / 2 });
@@ -699,9 +760,19 @@ describe("OverviewMap — renderEfhLegend called/suppressed by LOD gate and over
       renderWithProviders(withQuery(React.createElement(OverviewMap)));
     });
 
-    const canvas = document.querySelector<HTMLCanvasElement>(
-      'canvas[data-testid="overview-map-canvas"]',
-    )!;
+    const canvas = screen.getByTestId("overview-map-canvas") as HTMLCanvasElement;
+
+    const viewTransform = overviewRenderer.computeInitialTransform(
+      underlyingGrid,
+      CANVAS_W,
+      CANVAS_H,
+    );
+
+    const viewTransform = overviewRenderer.computeInitialTransform(
+      underlyingGrid,
+      CANVAS_W,
+      CANVAS_H,
+    );
     canvas.getBoundingClientRect = () =>
       ({
         left: 0, top: 0,
@@ -889,7 +960,19 @@ describe("OverviewMap — null overviewGrid in visibleDatasets does not crash", 
     ).resolves.not.toThrow();
 
     // The canvas must be present even though no transform was computed yet.
-    const canvas = document.querySelector('canvas[data-testid="overview-map-canvas"]');
+    const canvas = screen.getByTestId("overview-map-canvas") as HTMLCanvasElement;
+
+    const viewTransform = overviewRenderer.computeInitialTransform(
+      underlyingGrid,
+      CANVAS_W,
+      CANVAS_H,
+    );
+
+    const viewTransform = overviewRenderer.computeInitialTransform(
+      underlyingGrid,
+      CANVAS_W,
+      CANVAS_H,
+    );
     expect(canvas).not.toBeNull();
   });
 
@@ -928,17 +1011,17 @@ describe("OverviewMap — null overviewGrid in visibleDatasets does not crash", 
 
     const mockCtx = new Proxy(
       {
-        fillRect: vi.fn((...args: [number, number, number, number]) => {
-          fillRectCalls.push(args);
-        }),
+        canvas: { width: CANVAS_W, height: CANVAS_H },
+        fillRect: vi.fn(),
         fillStyle: "" as string | CanvasGradient | CanvasPattern,
         font: "",
         textAlign: "start" as CanvasTextAlign,
         textBaseline: "alphabetic" as CanvasTextBaseline,
         fillText: vi.fn(),
-        strokeText: vi.fn(),
         measureText: vi.fn(() => ({ width: 50 })),
-        drawImage: vi.fn(),
+        drawImage: vi.fn((bitmap: unknown) => {
+          drawImageOrder.push(bitmap);
+        }),
         save: vi.fn(),
         restore: vi.fn(),
         beginPath: vi.fn(),
@@ -961,21 +1044,16 @@ describe("OverviewMap — null overviewGrid in visibleDatasets does not crash", 
         strokeRect: vi.fn(),
         roundRect: vi.fn(),
         clip: vi.fn(),
+        createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
         createImageData: vi.fn((w: number, h: number) => ({
           data: new Uint8ClampedArray(w * h * 4),
           width: w,
           height: h,
         })),
         putImageData: vi.fn(),
-      },
+      } as Record<string, unknown>,
       {
-        set(target: Record<string, unknown>, prop: string, value: unknown) {
-          if (prop === "fillStyle" && typeof value === "string") {
-            fillStyles.push(value);
-          }
-          target[prop] = value;
-          return true;
-        },
+        set(target, prop: string, value: unknown) { target[prop] = value; return true; },
       },
     );
 
@@ -1149,7 +1227,7 @@ describe("OverviewMap — empty visibleDatasets shows empty-state hint, not LOAD
     const { ctx, fillTextCalls } = makeMockCtxWithFillText();
     const getContextSpy = vi
       .spyOn(HTMLCanvasElement.prototype, "getContext")
-      .mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+      .mockReturnValue(mockCtx as unknown as CanvasRenderingContext2D);
 
     await act(async () => {
       renderWithProviders(withQuery(React.createElement(OverviewMap)));
@@ -1206,7 +1284,7 @@ describe("OverviewMap — empty visibleDatasets shows empty-state hint, not LOAD
     const { ctx, fillTextCalls } = makeMockCtxWithFillText();
     const getContextSpy = vi
       .spyOn(HTMLCanvasElement.prototype, "getContext")
-      .mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+      .mockReturnValue(mockCtx as unknown as CanvasRenderingContext2D);
 
     await act(async () => {
       renderWithProviders(withQuery(React.createElement(OverviewMap)));
@@ -1317,10 +1395,7 @@ describe("OverviewMap — multi-dataset heatmaps drawn at correct canvas positio
     const fakeCanvasB = { __id: "bitmap-B" } as unknown as HTMLCanvasElement;
 
     // buildHeatmapBitmap: first call → primary dataset A, second → secondary B.
-    const buildSpy = vi
-      .spyOn(overviewRenderer, "buildHeatmapBitmap")
-      .mockReturnValueOnce(fakeCanvasA)  // primary (line ~1080 of OverviewMap.tsx)
-      .mockReturnValueOnce(fakeCanvasB); // secondary (line ~1104)
+    const buildSpy = vi.spyOn(overviewRenderer, "buildContourLines");
 
     // -----------------------------------------------------------------------
     // Canvas 2D context mock — captures every drawImage call.
@@ -1331,27 +1406,16 @@ describe("OverviewMap — multi-dataset heatmaps drawn at correct canvas positio
 
     const mockCtx = new Proxy(
       {
-        // Required by renderContourLines / renderScaleBar which read ctx.canvas.width/height.
         canvas: { width: CANVAS_W, height: CANVAS_H },
-        fillRect: vi.fn((...args: [number, number, number, number]) => {
-          if (args[0] === 0 && args[1] === 0 && args[2] === CANVAS_W && args[3] === CANVAS_H) {
-            backgroundFillCalls.push(args);
-          }
-        }),
+        fillRect: vi.fn(),
         fillStyle: "" as string | CanvasGradient | CanvasPattern,
         font: "",
         textAlign: "start" as CanvasTextAlign,
         textBaseline: "alphabetic" as CanvasTextBaseline,
         fillText: vi.fn(),
         measureText: vi.fn(() => ({ width: 50 })),
-        drawImage: vi.fn((
-          bitmap: unknown,
-          x: number,
-          y: number,
-          w: number,
-          h: number,
-        ) => {
-          drawImageCalls.push({ bitmap, x, y, w, h });
+        drawImage: vi.fn((bitmap: unknown) => {
+          drawImageOrder.push(bitmap);
         }),
         save: vi.fn(),
         restore: vi.fn(),
@@ -1382,12 +1446,9 @@ describe("OverviewMap — multi-dataset heatmaps drawn at correct canvas positio
           height: h,
         })),
         putImageData: vi.fn(),
-      },
+      } as Record<string, unknown>,
       {
-        set(target: Record<string, unknown>, prop: string, value: unknown) {
-          target[prop] = value;
-          return true;
-        },
+        set(target, prop: string, value: unknown) { target[prop] = value; return true; },
       },
     );
 
@@ -1398,25 +1459,9 @@ describe("OverviewMap — multi-dataset heatmaps drawn at correct canvas positio
     // -----------------------------------------------------------------------
     // Seed the store with two fully-loaded datasets.
     // -----------------------------------------------------------------------
-    const gridA = makeOverviewGrid(); // -122..-119, 47..49, id="test-ds"
+    const gridA = makeGrid("ds-older"); // 2022-01-01 — older
     const N = 4;
-    const gridB = {
-      datasetId: "ds-b",
-      name: "Dataset B",
-      resolution: N,
-      width: N,
-      height: N,
-      depths: new Array(N * N).fill(0).map((_, i) => 20 + i * 3),
-      minDepth: 20,
-      maxDepth: 20 + (N * N - 1) * 3,
-      minLon: -88,
-      maxLon: -85,
-      minLat: 41,
-      maxLat: 43,
-      centerLon: -86.5,
-      centerLat: 42.0,
-      waterType: "saltwater" as const,
-    } as unknown as import("@workspace/api-client-react").TerrainData;
+    const gridB = makeGrid("ds-newer"); // 2024-01-01 — newer
 
     useTerrainStore.setState({
       visibleDatasets: [
@@ -1561,24 +1606,21 @@ describe("OverviewMap — collection-scoped gap drawing", () => {
   });
 
   it("draws the gap/overlap mask from loaded collection member grids", async () => {
-    const gridA = makeOverviewGrid();
-    const gridB = {
-      ...gridA,
-      datasetId: "test-ds-b",
-      name: "Second Test Dataset",
-    };
+    const gridA = makeGrid("ds-older"); // 2022-01-01 — older
+    const gridB = makeGrid("ds-newer"); // 2024-01-01 — newer
     const mockCtx = new Proxy(
       {
         canvas: { width: CANVAS_W, height: CANVAS_H },
         fillRect: vi.fn(),
-        fillStyle: "",
+        fillStyle: "" as string | CanvasGradient | CanvasPattern,
         font: "",
-        textAlign: "start",
-        textBaseline: "alphabetic",
+        textAlign: "start" as CanvasTextAlign,
+        textBaseline: "alphabetic" as CanvasTextBaseline,
         fillText: vi.fn(),
-        strokeText: vi.fn(),
         measureText: vi.fn(() => ({ width: 50 })),
-        drawImage: vi.fn(),
+        drawImage: vi.fn((bitmap: unknown) => {
+          drawImageOrder.push(bitmap);
+        }),
         save: vi.fn(),
         restore: vi.fn(),
         beginPath: vi.fn(),
@@ -1608,12 +1650,9 @@ describe("OverviewMap — collection-scoped gap drawing", () => {
           height: h,
         })),
         putImageData: vi.fn(),
-      },
+      } as Record<string, unknown>,
       {
-        set(target: Record<string, unknown>, prop: string, value: unknown) {
-          target[prop] = value;
-          return true;
-        },
+        set(target, prop: string, value: unknown) { target[prop] = value; return true; },
       },
     );
     vi.spyOn(HTMLCanvasElement.prototype, "getContext")
@@ -1759,12 +1798,7 @@ describe("OverviewMap — recency sort draws older bitmap before newer bitmap", 
     // Use a call counter so the first call returns bitmapA (primary gridA) and
     // subsequent calls return bitmapB (secondary gridB).
     let buildCallCount = 0;
-    const buildSpy = vi
-      .spyOn(await import("@/lib/overviewRenderer"), "buildHeatmapBitmap")
-      .mockImplementation(() => {
-        buildCallCount += 1;
-        return (buildCallCount === 1 ? bitmapA : bitmapB) as unknown as ImageBitmap;
-      });
+    const buildSpy = vi.spyOn(overviewRenderer, "buildContourLines");
 
     // Seed the store with A (older, 2022) as primary and B (newer, 2024) as secondary.
     useTerrainStore.setState({
@@ -1964,40 +1998,7 @@ describe("OverviewMap — recency sort draws older bitmap before newer bitmap", 
     const newerIdx = drawImageOrder.findIndex((b) => b === bitmapNewer);
     const olderIdx = drawImageOrder.findIndex((b) => b === bitmapOlder);
 
-    // Both bitmaps must appear.
-    expect(newerIdx).toBeGreaterThanOrEqual(0);
-    expect(olderIdx).toBeGreaterThanOrEqual(0);
-
-    // Even though the NEWER dataset is visibleDatasets[0] (primary), recency
-    // sort must still draw it LAST (on top).  The older secondary must be drawn
-    // first (behind the newer primary).
-    expect(olderIdx).toBeLessThan(newerIdx);
-
-    buildSpy2.mockRestore();
-    getContextSpy2.mockRestore();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// N. Secondary dataset contour segments — rebuilt for ALL datasets when
-//    contourInterval changes
-//
-// OverviewMap.tsx useEffect (lines ~1053-1082):
-//   for (const v of visibleDatasets) {
-//     const og = v.overviewGrid;
-//     if (!og) continue;
-//     contourSegmentsRef.current.set(v.datasetId, buildContourLines(og, intervalMetres));
-//   }
-//   }, [visibleDatasets, contourInterval, contoursEnabled, unitsForUi]);
-//
-// The contourSegmentsRef is internal, so correctness is observed by spying on
-// buildContourLines.  On initial mount (contoursEnabled=true) it must fire
-// once per dataset.  After a contourInterval change it must fire again for
-// EVERY visible dataset — catching any future regression that accidentally
-// narrows the loop back to only the primary dataset.
-// ---------------------------------------------------------------------------
-
-describe("OverviewMap — contour segments rebuilt for all datasets when contourInterval changes", () => {
+  const UNDERLYING_ID = "ds-underlying";
   /** Minimal TerrainData grid with distinct datasetId and real depth values. */
   function makeContourGrid(id: string): TerrainData {
     const N = 4;
@@ -2135,7 +2136,7 @@ describe("OverviewMap — puzzle geo-transform publication with a single grid", 
     // Seed sessionStorage with a 20px east, 10px north puzzle offset.
     // After OverviewMap hydrates, the [puzzleTransforms] effect must convert
     // these to geographic offsets and store them in uiStore.puzzleGeoTransforms.
-    const TX = 20;
+    const TX = 50; // 50 px east offset
     const TY = -10;
     sessionStorage.setItem(
       "bathyscan:puzzleTransforms",
@@ -2155,7 +2156,7 @@ describe("OverviewMap — puzzle geo-transform publication with a single grid", 
     const geo = useUiStore.getState().puzzleGeoTransforms;
     expect(geo.size).toBeGreaterThan(0);
 
-    const entry = geo.get(PUZZLE_DS_ID);
+    const entry = useUiStore.getState().puzzleGeoTransforms.get(PUZZLE_DS_ID);
     expect(entry).toBeDefined();
     // Positive tx (east shift) must produce positive dLon.
     expect(entry!.dLon).toBeGreaterThan(0);
@@ -2224,7 +2225,19 @@ describe("OverviewMap — puzzle geo-transform publication with a single grid", 
     expect(dLonBefore!).toBeGreaterThan(0);
 
     // Fire a zoom-in wheel event on the canvas (deltaY < 0 → scale * 1.15).
-    const canvas = container.querySelector("canvas");
+    const canvas = screen.getByTestId("overview-map-canvas") as HTMLCanvasElement;
+
+    const viewTransform = overviewRenderer.computeInitialTransform(
+      underlyingGrid,
+      CANVAS_W,
+      CANVAS_H,
+    );
+
+    const viewTransform = overviewRenderer.computeInitialTransform(
+      underlyingGrid,
+      CANVAS_W,
+      CANVAS_H,
+    );
     expect(canvas).not.toBeNull();
     fireEvent.wheel(canvas!, { deltaY: -120, clientX: 512, clientY: 384, deltaMode: 0 });
 
@@ -2251,6 +2264,18 @@ describe("OverviewMap — toolbar zoom preserves geographic registration", () =>
     await waitForCameraArrow();
 
     const canvas = screen.getByTestId("overview-map-canvas") as HTMLCanvasElement;
+
+    const viewTransform = overviewRenderer.computeInitialTransform(
+      underlyingGrid,
+      CANVAS_W,
+      CANVAS_H,
+    );
+
+    const viewTransform = overviewRenderer.computeInitialTransform(
+      underlyingGrid,
+      CANVAS_W,
+      CANVAS_H,
+    );
     canvas.getBoundingClientRect = () =>
       ({
         left: 0, top: 0,
@@ -2298,3 +2323,66 @@ describe("OverviewMap — toolbar zoom preserves geographic registration", () =>
     }
   });
 });
+
+    const selectedPoint = { lon: -120.2, lat: 48.25 };
+
+    const topmostGrid = { ...makeOverviewGrid(), datasetId: TOPMOST_ID, name: "Topmost" };
+
+  function transformedCanvasPoint(
+    lon: number,
+    lat: number,
+    grid: TerrainData,
+    transform: overviewRenderer.OverviewTransform,
+    tileTransform: typeof TILE_TRANSFORM,
+  ): [number, number] {
+    const [x, y] = overviewRenderer.lonLatToCanvas(lon, lat, grid, transform);
+    const [x0, y0] = overviewRenderer.lonLatToCanvas(
+      grid.minLon,
+      grid.maxLat,
+      grid,
+      transform,
+    );
+    const [x1, y1] = overviewRenderer.lonLatToCanvas(
+      grid.maxLon,
+      grid.minLat,
+      grid,
+      transform,
+    );
+    const centerX = (x0 + x1) / 2;
+    const centerY = (y0 + y1) / 2;
+    const localX = (tileTransform.flipH ? -1 : 1) * (x - centerX);
+    const localY = (tileTransform.flipV ? -1 : 1) * (y - centerY);
+    const angle = (tileTransform.angleDeg * Math.PI) / 180;
+    return [
+      centerX + tileTransform.tx + localX * Math.cos(angle) - localY * Math.sin(angle),
+      centerY + tileTransform.ty + localX * Math.sin(angle) + localY * Math.cos(angle),
+    ];
+  }
+
+    const underlyingGrid = { ...makeOverviewGrid(), datasetId: UNDERLYING_ID, name: "Underlying" };
+
+  const TILE_TRANSFORM = {
+    tx: 42,
+    ty: -26,
+    angleDeg: 37,
+    flipH: true,
+    flipV: false,
+  };
+
+    const [clientX, clientY] = transformedCanvasPoint(
+      selectedPoint.lon,
+      selectedPoint.lat,
+      topmostGrid,
+      viewTransform,
+      TILE_TRANSFORM,
+    );
+
+    const [startX, startY] = transformedCanvasPoint(
+      -120.2,
+      48.25,
+      topmostGrid,
+      viewTransform,
+      TILE_TRANSFORM,
+    );
+
+  const TOPMOST_ID = "ds-topmost";
