@@ -11,7 +11,9 @@
  * contains the raw placeholder text appended by --fix-stub instead of a real
  * command and justification.
  *
- * Run:  node scripts/check-failure-gate.mjs
+ * Run:
+ *   TASK_PLAN_FILE=.local/tasks/<task>.md node scripts/check-failure-gate.mjs
+ *   node scripts/check-failure-gate.mjs --archive
  *
  * Flags:
  *   --fix-stub    Append stubs for whichever required sections are missing in
@@ -25,6 +27,8 @@
  *                 Used by the CI fast-tier step so that old pre-mandate plan
  *                 files (which lack the required sections) do not permanently
  *                 break the fast tier.
+ *   --archive     Explicit maintenance mode: inspect every .md file under
+ *                 .local/tasks/. Never used by ordinary managed task tiers.
  *
  * Exit codes:
  *   0 — all files compliant (or no files found)
@@ -39,6 +43,10 @@ import { chmodSync, existsSync, renameSync, statSync, unlinkSync, writeFileSync 
 import { join, resolve } from "path";
 import { pathToFileURL } from "url";
 import { VALIDATION_COMMANDS } from "./register-validation-commands.mjs";
+import {
+  readBaselineCatalog,
+  resolveActiveBaselineReferences,
+} from "./check-validation-baseline.mjs";
 
 const TASKS_DIR = ".local/tasks";
 
@@ -142,6 +150,7 @@ const skipIfNoTask = process.argv.includes("--skip-if-no-task");
 // **Command:** tier names. A plan with `**Command:** \`not-a-real-tier\``
 // will be caught and exit 1 even in --stubs-only mode.
 const stubsOnly = process.argv.includes("--stubs-only");
+const archiveMode = process.argv.includes("--archive");
 const isMain =
   process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
 
@@ -186,8 +195,8 @@ const STUB_PLACEHOLDERS = [
 // .local/tasks/ archive. This prevents 909 gitignored pre-existing plan files
 // from blocking the fast tier in every fresh environment.
 //
-// When TASK_PLAN_FILE is not set (developer / manual run), the full archive
-// scan proceeds as before.
+// When TASK_PLAN_FILE is not set, archive scanning is available only through
+// the explicit --archive maintenance flag.
 
 const TASK_PLAN_FILE = isMain ? process.env.TASK_PLAN_FILE : undefined;
 
@@ -236,6 +245,14 @@ if (!isMain) {
     process.exit(0);
   }
 
+  if (!archiveMode) {
+    console.error(
+      "check-failure-gate — no TASK_PLAN_FILE set. Refusing an implicit archive scan.\n" +
+        "Set TASK_PLAN_FILE for task validation, or pass --archive for explicit maintenance mode.",
+    );
+    process.exit(1);
+  }
+
   // Archive mode — scan the full .local/tasks/ directory ——————————————————
   if (!existsSync(TASKS_DIR)) {
     console.log(`check-failure-gate — tasks directory "${TASKS_DIR}" does not exist. Nothing to check. ✓`);
@@ -257,6 +274,90 @@ if (!isMain) {
 
   resolveFilePath = (f) => join(TASKS_DIR, f);
   scanDescription = `"${TASKS_DIR}"`;
+}
+
+const BASELINE_ID_PATTERN = /\bBASE-[A-Z0-9-]+\b/g;
+const BASELINE_SECTION_HEADING = "## Pre-existing failures to ignore";
+const BASELINE_OWNERSHIP_MARKERS = {
+  ignored: "**Ignored baseline:**",
+  owned: "**Owned baseline repair:**",
+};
+
+/**
+ * Validate the structured baseline references in a plan. References are
+ * intentionally required in the pre-existing-failures section and must carry
+ * exactly one ownership declaration. Catalog membership does not validate the
+ * runtime failure signature; the Failure Gate evidence rules still do that.
+ */
+export function validatePlanBaselineReferences(
+  content,
+  {
+    catalog,
+    repoRoot,
+    asOf = process.env.FAILURE_BASELINE_AS_OF,
+  } = {},
+) {
+  const lines = content.split("\n");
+  const baselineHeadingIdx = lines.findIndex(
+    (line) => line.trimEnd() === BASELINE_SECTION_HEADING,
+  );
+  const sectionLines = [];
+  if (baselineHeadingIdx !== -1) {
+    for (let i = baselineHeadingIdx + 1; i < lines.length; i += 1) {
+      if (lines[i].startsWith("## ")) break;
+      sectionLines.push(lines[i]);
+    }
+  }
+
+  const idsInDocument = [...new Set(content.match(BASELINE_ID_PATTERN) ?? [])];
+  if (idsInDocument.length === 0) return [];
+
+  const errors = [];
+  const declarations = new Map();
+  for (const line of sectionLines) {
+    const ids = line.match(BASELINE_ID_PATTERN) ?? [];
+    for (const id of ids) {
+      const ownership = [];
+      if (line.includes(BASELINE_OWNERSHIP_MARKERS.ignored)) ownership.push("ignored");
+      if (line.includes(BASELINE_OWNERSHIP_MARKERS.owned)) ownership.push("owned");
+      const previous = declarations.get(id) ?? [];
+      declarations.set(id, [...previous, ...ownership]);
+    }
+  }
+
+  for (const id of idsInDocument) {
+    const ownership = declarations.get(id) ?? [];
+    if (baselineHeadingIdx === -1 || ownership.length === 0) {
+      errors.push(
+        `${id} must appear in "## Pre-existing failures to ignore" with exactly one ` +
+          `**Ignored baseline:** or **Owned baseline repair:** declaration`,
+      );
+      continue;
+    }
+    if (ownership.length !== 1) {
+      errors.push(`${id} has ambiguous ownership; declare it exactly once as ignored or owned`);
+    }
+  }
+
+  if (errors.length > 0) return errors;
+
+  let resolvedCatalog;
+  try {
+    resolvedCatalog =
+      catalog ??
+      readBaselineCatalog({
+        repoRoot,
+        asOf,
+      });
+  } catch (error) {
+    return [`could not validate baseline references: ${error.message}`];
+  }
+  const resolved = resolveActiveBaselineReferences(idsInDocument, {
+    catalog: resolvedCatalog,
+    repoRoot,
+    asOf,
+  });
+  return [...errors, ...resolved.errors];
 }
 
 // ---------------------------------------------------------------------------
@@ -343,7 +444,7 @@ export function writeFileAtomically(
 // ---------------------------------------------------------------------------
 if (isMain) {
 const compliant = [];
-const nonCompliant = []; // { file, readFailed?, missingSections[], unfilledPlaceholders[], missingValidationLines[] }
+const nonCompliant = []; // { file, readFailed?, missingSections[], unfilledPlaceholders[], missingValidationLines[], baselineIssues[] }
 
 for (const file of files) {
   const filePath = resolveFilePath(file);
@@ -358,6 +459,7 @@ for (const file of files) {
       missingSections: REQUIRED_SECTIONS.map((s) => s.heading),
       unfilledPlaceholders: [],
       missingValidationLines: [],
+      baselineIssues: [],
     });
     continue;
   }
@@ -417,11 +519,13 @@ for (const file of files) {
         return [];
       })
     : [];
+  const baselineIssues = validatePlanBaselineReferences(content);
 
   if (
     missingSections.length === 0 &&
     unfilledPlaceholders.length === 0 &&
-    validationLineIssues.length === 0
+    validationLineIssues.length === 0 &&
+    baselineIssues.length === 0
   ) {
     compliant.push(file);
   } else {
@@ -431,6 +535,7 @@ for (const file of files) {
       unfilledPlaceholders,
       // Store descriptive reason strings for display
       missingValidationLines: validationLineIssues.map((i) => i.reason),
+      baselineIssues,
       // Store raw issue objects for fix-stub (need rvl + absent flag)
       _validationLineIssues: validationLineIssues,
       _patchFailures: [],
@@ -535,6 +640,7 @@ for (const {
   missingSections,
   unfilledPlaceholders,
   missingValidationLines,
+  baselineIssues = [],
   _patchFailures = [],
   writeFailed,
   _validationLineIssues = [],
@@ -548,12 +654,14 @@ for (const {
     ),
     ...unfilledPlaceholders.map((p) => `unfilled stub placeholder "${p}"`),
     ..._validationLineIssues.filter((i) => !i.absent).map((i) => i.reason),
+    ...baselineIssues,
   ];
   if (
     !writeFailed &&
     !hasMissing &&
     !hasMissingLines &&
     unfilledPlaceholders.length === 0 &&
+    baselineIssues.length === 0 &&
     _patchFailures.length === 0
   ) {
     // This is a successful repair, not an unchanged compliant file.
@@ -597,12 +705,23 @@ for (const {
     if (unfilledPlaceholders.length > 0) {
       reasons.push(`unfilled stub placeholder(s): ${unfilledPlaceholders.map((p) => `"${p}"`).join(", ")}`);
     }
+    if (baselineIssues.length > 0) {
+      reasons.push(`baseline reference issue(s): ${baselineIssues.join("; ")}`);
+    }
     console.log(`  ✗ ${file} — ${reasons.join("; ")}`);
   }
 }
 
 const trueNonCompliant = nonCompliant.filter(
-  ({ readFailed, missingSections, unfilledPlaceholders, _validationLineIssues, _patchFailures = [], writeFailed }) => {
+  ({
+    readFailed,
+    missingSections,
+    unfilledPlaceholders,
+    baselineIssues = [],
+    _validationLineIssues,
+    _patchFailures = [],
+    writeFailed,
+  }) => {
     const issues = _validationLineIssues || [];
     const unfixableIssues = issues.filter((i) => !i.absent);
     // A file that could not be inspected is never safe to treat as compliant.
@@ -622,6 +741,7 @@ const trueNonCompliant = nonCompliant.filter(
       (!fixStub && unfilledPlaceholders.length > 0) ||
       (!fixStub && issues.some((i) => i.absent)) ||
       (!fixStub && unfixableIssues.length > 0) ||
+      baselineIssues.length > 0 ||
       _patchFailures.length > 0
     );
   },
@@ -629,7 +749,12 @@ const trueNonCompliant = nonCompliant.filter(
 
 if (trueNonCompliant.length > 0) {
   const sectionNames = [...new Set(trueNonCompliant.flatMap((e) => e.missingSections))].join(", ");
-  const hasValidationLineIssues = trueNonCompliant.some((e) => e.missingValidationLines.length > 0);
+  const hasValidationLineIssues = trueNonCompliant.some(
+    (e) => e.missingValidationLines.length > 0,
+  );
+  const hasBaselineIssues = trueNonCompliant.some(
+    (e) => (e.baselineIssues ?? []).length > 0,
+  );
   console.error(
     `\ncheck-failure-gate — ${trueNonCompliant.length} non-compliant plan file(s) found.\n` +
       `Each plan must:\n` +
@@ -644,6 +769,9 @@ if (trueNonCompliant.length > 0) {
       `  4. Include a "**Why:**" line in the ## Validation section.\n` +
       `  5. Include a "**Do not escalate:**" line in the ## Validation section.\n` +
       (hasValidationLineIssues ? `     See per-file listing above for details.\n` : "") +
+      (hasBaselineIssues
+        ? `  6. Reference only active, authoritative, unexpired baseline IDs in the pre-existing-failures section, with exactly one explicit ownership declaration.\n`
+        : "") +
       `Run with --fix-stub to insert missing lines automatically (invalid values must be corrected manually).`,
   );
   process.exit(1);

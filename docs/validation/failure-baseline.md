@@ -34,6 +34,23 @@ repository.
 registered validation tiers. Use `standalone` only when the recorded command is
 explicitly outside those tiers, such as raw `pnpm audit`.
 
+## Referencing a record from a task plan
+
+Use `scripts/new-plan.mjs --baseline-id BASE-...` for an unrelated failure the
+task may ignore, or `--owned-baseline-id BASE-...` when the task explicitly
+owns the repair. Both options are repeatable. The scaffold and Failure Gate
+checker accept only authoritative, unexpired `active` records and emit one of:
+
+```markdown
+- **Ignored baseline:** `BASE-...` — suite › test; match only this signature: ...
+- **Owned baseline repair:** `BASE-...` — suite › test; this task explicitly owns repair of this signature: ...
+```
+
+Keep temporary harness or service limitations separate with
+`--environment-observation`. They are task-local observations, not catalog
+provenance. The executor must still match the observed suite, test, and failure
+signature to the referenced record; an ID alone never authorizes an ignore.
+
 ## Adding or re-verifying a record
 
 1. Use a stable `BASE-...` ID; do not reuse an ID for a different signature.

@@ -23,9 +23,15 @@ and are handled by the project's typecheck/audit process.
 - Every plan has `## Pre-existing failures to ignore` and `## Validation`.
 - `## Validation` has a real registered tier in `**Command:**`, a filled
   `**Why:**`, and `**Do not escalate:**`.
-- A documented baseline failure may be ignored by an **unrelated feature task**.
-  A task whose purpose is validation repair may explicitly own and fix that
-  same failure; its plan must say so.
+- `docs/validation/failure-baseline.json` is the durable baseline source.
+  A plan may reference only an authoritative, unexpired `active` record.
+  Unknown, `needs-review`, `intermittent`, `environment-limited`, and `resolved`
+  IDs cannot authorize an ignore.
+- A referenced baseline must declare exactly one plan ownership:
+  `**Ignored baseline:**` for unrelated work or `**Owned baseline repair:**`
+  when this task must fix it.
+- Catalog membership never proves that a different suite, test, or failure
+  signature is pre-existing. The observed failure must match the record.
 - A retry that passes proves **intermittency only**. It does not prove that the
   failure pre-dates the task.
 - A task-driven tier-lock problem fails closed. Only an explicit
@@ -50,18 +56,21 @@ announcement in the next section before that heading.
    It requires a real `--why` and supplies the required section stubs.
 2. **Scan memory.** Read `.agents/memory/MEMORY.md` and inspect linked entries
    about suites, files, or failure patterns touched by the task.
-3. **Scan recent tasks.** Search recent task descriptions for `pre-existing`,
+3. **Scan the catalog.** Read `docs/validation/failure-baseline.json` for exact
+   suite/test/signature matches. Treat non-active records as context only.
+4. **Scan recent tasks.** Search recent task descriptions for `pre-existing`,
    `known failure`, `flaky`, and the relevant suite names.
-4. **Spot-run when applicable.** If the task changes backend/API-server code,
+5. **Spot-run when applicable.** If the task changes backend/API-server code,
    run the project's primary backend suite once before editing and record its
    failures. Otherwise skip this expensive check.
-5. **Record the baseline.** Put known failures after `Steps` and before
-   `Relevant files`. For a validation-repair task, distinguish failures the
-   task explicitly owns from failures it may ignore.
-6. **Choose the ceiling.** Select the lightest registered validation tier that
+6. **Record the baseline.** Use repeatable `--baseline-id` or
+   `--owned-baseline-id` options with `scripts/new-plan.mjs`. Keep temporary
+   environment observations under `## Task-local environment observations`;
+   they are not durable provenance.
+7. **Choose the ceiling.** Select the lightest registered validation tier that
    covers the task; use the middle tier when uncertain. Add `## Validation`
    immediately after the baseline section.
-7. **Verify the plan.** In single-file mode, run both guards and require exit 0:
+8. **Verify the plan.** In single-file mode, run both guards and require exit 0:
 
    ```sh
    TASK_PLAN_FILE=.local/tasks/<name>.md node scripts/check-failure-gate.mjs
@@ -91,15 +100,16 @@ pre-existing provenance. Use the execution evidence rules before assigning
 ownership.
 ```
 
-When failures are known, list the suite/test and the evidence that it existed
-before this task. State any validation-repair ownership explicitly, for example:
+When an active catalog record matches, reference its ID and declare ownership:
 
 ```markdown
-- **suite › test** — baseline failure confirmed before this task; unrelated
-  feature tasks may ignore it.
-- **suite › test** — this validation-repair task explicitly owns the baseline
-  failure and must fix it.
+- **Ignored baseline:** `BASE-EXAMPLE` — suite › test; match only this signature: exact failure signature.
+- **Owned baseline repair:** `BASE-EXAMPLE-REPAIR` — suite › test; this task explicitly owns repair of this signature: exact failure signature.
 ```
+
+Free-text `--pre-existing` remains task-local evidence, not a durable catalog
+claim. Use `--environment-observation` for temporary harness, service, or
+resource limitations. Neither form weakens the execute-time evidence gate.
 
 Every plan must also contain:
 
@@ -169,10 +179,10 @@ The mechanical details live in:
 
 Apply these rules in order:
 
-1. **Explicit baseline, unrelated task:** skip the listed failure; do not
-   investigate or fix it.
-2. **Explicit baseline, validation-repair task:** fix it when the plan says
-   this task owns it. A baseline label never prevents explicit repair ownership.
+1. **Explicit baseline, unrelated task:** first match the observed suite, test,
+   and signature to the active record. If all match, skip the listed failure;
+   do not investigate or fix it.
+2. **Explicit baseline, validation-repair task:** match the record, then fix it when the plan says this task owns it. A baseline label never prevents explicit repair ownership.
 3. **Not listed:** retry the failing test three times in isolation.
    - Any passing retry means **intermittent**, not pre-existing. Record the
      result, then continue gathering provenance; do not self-classify from the
@@ -187,6 +197,9 @@ Apply these rules in order:
 5. **Insufficient evidence:** treat the failure as a regression, fix it, or
    obtain the missing evidence. Do not silently waive it.
 
+Unknown, stale, resolved, intermittent, environment-limited, or mismatched
+records follow steps 3–5; they are never auto-ignored.
+
 For every self-classified failure, emit:
 
 ```text
@@ -196,6 +209,14 @@ For every self-classified failure, emit:
 Record intermittent outcomes separately from pre-existing provenance. A
 passing retry may be reported as intermittent only; it cannot satisfy the
 two-factor evidence gate.
+
+### Durable promotion boundary
+
+Do not edit the catalog merely because the current task self-classified a
+failure. A newly observed failure remains task-local until it has the required
+retry result, two-factor provenance, exact suite/test/signature, dated evidence,
+an owner, and a review deadline. Promotion is a separate tracked maintenance
+change; use `needs-review` unless fresh evidence is authoritative.
 
 ### 3. Complete without escalation
 
@@ -211,10 +232,9 @@ of a baseline failure, an intermittent retry, or a self-classification.
 ## Archive and remediation boundaries
 
 The validation pipeline may run a scoped `--fix-stub` pass for the current
-`TASK_PLAN_FILE`. An archive-wide fix may be useful in the current environment,
-but `.local/tasks/` is not tracked output. Do not instruct an agent to bulk-edit
-that archive as part of a commit. If durable behavior must change, edit the
-tracked lint/runner/tests/session mandate and regenerate the published asset.
+`TASK_PLAN_FILE`. Archive inspection requires the explicit maintenance command
+`node scripts/check-failure-gate.mjs --archive`; it is never an ordinary managed
+tier dependency. `.local/tasks/` is not tracked output. Do not instruct an agent to bulk-edit that archive as part of a commit. If durable behavior must change, edit the tracked lint, runner, tests, session mandate, and regenerate the published asset.
 
 The pipeline's `--fix-stub` and strict-check ordering is an implementation
 detail, not a substitute for a filled plan. The canonical mechanics are in
@@ -227,5 +247,7 @@ detail, not a substitute for a filled plan. The canonical mechanics are in
 - Failure Gate lint guard: `scripts/check-failure-gate.mjs`
 - Regression Guard lint guard: `scripts/check-regression-guard.mjs`
 - Validation tiers: `.agents/skills/validation-tiers/SKILL.md`
+- Baseline catalog: `docs/validation/failure-baseline.json`
+- Catalog lifecycle guidance: `docs/validation/failure-baseline.md`
 - Known project patterns: `.agents/memory/MEMORY.md`
 - Published snapshot: `artifacts/bathyscan/public/failure-gate-skill.zip`

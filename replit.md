@@ -603,8 +603,9 @@ validation with `nohup`, `setsid`, background shells, or one-off port clones.
 
 ### Failure Gate checklist
 
-Before writing a plan, read the Failure Gate skill, scan relevant memory and recent
-task descriptions, and run the api-server spot-check only when the task changes
+Before writing a plan, read the Failure Gate skill, scan relevant memory, the
+tracked `docs/validation/failure-baseline.json` catalog, and recent task
+descriptions, then run the api-server spot-check only when the task changes
 `artifacts/api-server`. Use `scripts/new-plan.mjs`, document the baseline, choose
 the lightest sufficient validation tier, and emit:
 
@@ -619,9 +620,13 @@ TASK_PLAN_FILE=.local/tasks/<name>.md node scripts/check-failure-gate.mjs
 TASK_PLAN_FILE=.local/tasks/<name>.md node scripts/check-regression-guard.mjs
 ```
 
-Document explicit ownership when a validation-repair task is fixing a listed
-baseline failure. A passing retry means intermittency only, never pre-existing
-provenance. Unrelated feature tasks may ignore documented baseline failures.
+Reference catalog entries with repeatable `--baseline-id` or
+`--owned-baseline-id` options. Only authoritative, unexpired `active` IDs are
+valid, and every reference must say whether the task ignores or owns it.
+Unknown, stale, resolved, intermittent, environment-limited, or mismatched
+records never authorize an ignore. Put temporary limitations under
+`## Task-local environment observations`; they are not durable provenance.
+A passing retry means intermittency only, never pre-existing provenance.
 
 > **BUILD AGENT:** Set `TASK_PLAN_FILE` for every task-driven validation run.
 > The plan's validation command is the ceiling; never escalate. Missing,
@@ -632,7 +637,9 @@ provenance. Unrelated feature tasks may ignore documented baseline failures.
 `scripts/new-plan.mjs`, `scripts/check-failure-gate.mjs`, and the Failure Gate
 skill contain the detailed lint and remediation rules. `.local/tasks/` is a
 gitignored, environment-local archive, not tracked output; do not include bulk
-archive repairs in a commit.
+archive repairs in a commit. Ordinary validation checks only `TASK_PLAN_FILE`;
+use `node scripts/check-failure-gate.mjs --archive` solely for explicit
+maintenance.
 
 
 ## User preferences

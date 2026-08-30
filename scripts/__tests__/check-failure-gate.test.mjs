@@ -24,7 +24,11 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
-import { insertValidationLine, writeFileAtomically } from "../check-failure-gate.mjs";
+import {
+  insertValidationLine,
+  validatePlanBaselineReferences,
+  writeFileAtomically,
+} from "../check-failure-gate.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const scriptPath = resolve(__dirname, "..", "check-failure-gate.mjs");
@@ -95,6 +99,142 @@ describe("new-plan baseline ownership", () => {
     assert.doesNotMatch(result.stdout, /Do not investigate or fix them/);
     assert.doesNotMatch(result.stdout, /Do not attempt further validation fixes/);
   });
+
+  it("resolves an active catalog ID and keeps environment observations task-local", () => {
+    const result = spawnSync(
+      process.execPath,
+      [
+        newPlanPath,
+        "999998",
+        "--title",
+        "Catalog fixture",
+        "--why",
+        "covers catalog-aware plan generation",
+        "--dry-run",
+        "--baseline-id",
+        "BASE-RAW-PNPM-AUDIT",
+        "--environment-observation",
+        "The external audit registry was temporarily unavailable.",
+      ],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /\*\*Ignored baseline:\*\* `BASE-RAW-PNPM-AUDIT`/);
+    assert.match(result.stdout, /## Task-local environment observations/);
+    assert.match(result.stdout, /not durable catalog/);
+  });
+
+  it("rejects unknown, needs-review, and resolved catalog IDs", () => {
+    for (const id of [
+      "BASE-DOES-NOT-EXIST",
+      "BASE-SIDEBAR-CSSOM-WIDTH",
+      "BASE-E2E-PUZZLE-POLL",
+    ]) {
+      const result = spawnSync(
+        process.execPath,
+        [
+          newPlanPath,
+          "999997",
+          "--title",
+          "Invalid catalog fixture",
+          "--why",
+          "covers rejected catalog references",
+          "--dry-run",
+          "--baseline-id",
+          id,
+        ],
+        { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+      );
+      assert.equal(result.status, 1, `expected ${id} to be rejected`);
+      assert.match(result.stderr, new RegExp(id));
+    }
+  });
+
+  it("rejects ambiguous ignored and owned declarations for the same ID", () => {
+    const result = spawnSync(
+      process.execPath,
+      [
+        newPlanPath,
+        "999996",
+        "--title",
+        "Ambiguous ownership fixture",
+        "--why",
+        "covers catalog ownership declarations",
+        "--dry-run",
+        "--baseline-id",
+        "BASE-RAW-PNPM-AUDIT",
+        "--owned-baseline-id",
+        "BASE-RAW-PNPM-AUDIT",
+      ],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    );
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /cannot be both ignored and task-owned/);
+  });
+});
+
+describe("catalog-aware plan reference validation", () => {
+  function planWithBaseline(line) {
+    return [
+      "# Catalog-aware task",
+      "",
+      "## Pre-existing failures to ignore",
+      line,
+      "",
+      "## Validation",
+      "**Command:** `test-fast`",
+      "**Why:** Covers the plan checker contract.",
+      "**Do not escalate:** Run exactly this command.",
+    ].join("\n");
+  }
+
+  it("accepts an active ID with one explicit ignored ownership declaration", () => {
+    assert.deepEqual(
+      validatePlanBaselineReferences(
+        planWithBaseline("- **Ignored baseline:** `BASE-RAW-PNPM-AUDIT` — exact catalog signature."),
+        { asOf: "2026-08-30" },
+      ),
+      [],
+    );
+  });
+
+  it("accepts an active ID with one explicit owned-repair declaration", () => {
+    assert.deepEqual(
+      validatePlanBaselineReferences(
+        planWithBaseline("- **Owned baseline repair:** `BASE-OVERVIEW-ZOOM-GEO` — this task must fix it."),
+        { asOf: "2026-08-30" },
+      ),
+      [],
+    );
+  });
+
+  it("rejects unknown, inactive, and ownership-free references", () => {
+    const cases = [
+      ["- **Ignored baseline:** `BASE-DOES-NOT-EXIST` — unknown.", /not present/],
+      ["- **Ignored baseline:** `BASE-SIDEBAR-CSSOM-WIDTH` — stale.", /needs-review/],
+      ["- **Ignored baseline:** `BASE-E2E-PUZZLE-POLL` — fixed.", /resolved/],
+      ["- `BASE-RAW-PNPM-AUDIT` — no ownership.", /exactly one/],
+    ];
+    for (const [line, expected] of cases) {
+      assert.match(
+        validatePlanBaselineReferences(planWithBaseline(line), {
+          asOf: "2026-08-30",
+        }).join("\n"),
+        expected,
+      );
+    }
+  });
+
+  it("does not treat a catalog ID outside the baseline section as an ignore", () => {
+    const content = planWithBaseline("None known.").replace(
+      "# Catalog-aware task",
+      "# Catalog-aware task\n\nObserved BASE-RAW-PNPM-AUDIT while exploring.",
+    );
+    assert.match(
+      validatePlanBaselineReferences(content, { asOf: "2026-08-30" }).join("\n"),
+      /must appear in "## Pre-existing failures to ignore"/,
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -129,6 +269,24 @@ function writePlan(tasksDir, name, content) {
   writeFileSync(filePath, content, "utf8");
   return filePath;
 }
+
+describe("archive mode is explicit maintenance", () => {
+  it("refuses an implicit archive scan and accepts the explicit --archive mode", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cfgt-explicit-archive-"));
+    try {
+      mkdirSync(join(dir, ".local", "tasks"), { recursive: true });
+      const implicit = runScript([], dir);
+      assert.equal(implicit.status, 1);
+      assert.match(implicit.stderr, /Refusing an implicit archive scan/);
+
+      const explicit = runScript(["--archive"], dir);
+      assert.equal(explicit.status, 0, explicit.stderr);
+      assert.match(explicit.stdout, /Nothing to check/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Shared sandbox for all test groups
@@ -272,7 +430,7 @@ describe("placeholder detection — fix-stub wording in **Why:**", () => {
   });
 
   it("flags the 'Placeholder — review before running this task' Why wording as unfilled (exit 1)", () => {
-    const result = runScript([], sandbox);
+    const result = runScript(["--archive"], sandbox);
     assert.equal(
       result.status,
       1,
@@ -285,7 +443,7 @@ describe("placeholder detection — fix-stub wording in **Why:**", () => {
   });
 
   it("--stubs-only also flags the placeholder Why (exit 1)", () => {
-    const result = runScript(["--stubs-only"], sandbox);
+    const result = runScript(["--archive", "--stubs-only"], sandbox);
     assert.equal(
       result.status,
       1,
@@ -320,7 +478,7 @@ describe("placeholder detection — skill-template angle-bracket Why (long form)
   });
 
   it("flags the '<one-line justification — …>' skill-template Why as unfilled (exit 1)", () => {
-    const result = runScript([], sandbox);
+    const result = runScript(["--archive"], sandbox);
     assert.equal(
       result.status,
       1,
@@ -359,7 +517,7 @@ describe("placeholder detection — fix-stub <replace with one-line justificatio
   });
 
   it("flags the '<replace with one-line justification>' Why as unfilled (exit 1)", () => {
-    const result = runScript([], sandbox);
+    const result = runScript(["--archive"], sandbox);
     assert.equal(
       result.status,
       1,
@@ -398,7 +556,7 @@ describe("--stubs-only: invalid **Command:** tier is still reported (exit 1)", (
   });
 
   it("reports invalid tier in --stubs-only mode and exits 1", () => {
-    const result = runScript(["--stubs-only"], sandbox);
+    const result = runScript(["--archive", "--stubs-only"], sandbox);
     assert.equal(
       result.status,
       1,
@@ -427,7 +585,7 @@ describe("--stubs-only: invalid **Command:** tier is still reported (exit 1)", (
     );
     // Run --stubs-only; only b-bad-tier-stubs-only.md should be in violations,
     // b-no-validation-stubs-only.md should be skipped (missing section is ignored)
-    const result = runScript(["--stubs-only"], sandbox);
+    const result = runScript(["--archive", "--stubs-only"], sandbox);
     // b-no-validation-stubs-only.md must not appear in violations
     assert.ok(
       !result.stdout.includes("b-no-validation-stubs-only.md") ||
@@ -533,7 +691,7 @@ describe("end-to-end pipeline: --fix-stub then strict", () => {
   });
 
   it("--fix-stub exits 0", () => {
-    const result = runScript(["--fix-stub"], e2eDir);
+    const result = runScript(["--archive", "--fix-stub"], e2eDir);
     assert.equal(
       result.status,
       0,
@@ -556,7 +714,7 @@ describe("end-to-end pipeline: --fix-stub then strict", () => {
         "**Do not escalate:** Run exactly this command.",
       ].join("\n"),
     );
-    const result = runScript(["--fix-stub"], e2eDir);
+    const result = runScript(["--archive", "--fix-stub"], e2eDir);
     assert.match(
       result.stdout,
       /e2e-changed\.md — changed \(patched by --fix-stub:/,
@@ -582,7 +740,7 @@ describe("end-to-end pipeline: --fix-stub then strict", () => {
 
   it("after --fix-stub all files have a ## Validation section", () => {
     // Run fix-stub (idempotent if already run)
-    runScript(["--fix-stub"], e2eDir);
+    runScript(["--archive", "--fix-stub"], e2eDir);
 
     const missingSectionContent = readFileSync(join(e2eTasksDir, MISSING_SECTION), "utf8");
     assert.ok(
@@ -607,8 +765,8 @@ describe("end-to-end pipeline: --fix-stub then strict", () => {
   });
 
   it("strict check exits 1 (at least one violation remains after --fix-stub)", () => {
-    runScript(["--fix-stub"], e2eDir);
-    const result = runScript([], e2eDir);
+    runScript(["--archive", "--fix-stub"], e2eDir);
+    const result = runScript(["--archive"], e2eDir);
     assert.equal(
       result.status,
       1,
@@ -626,7 +784,7 @@ describe("end-to-end pipeline: --fix-stub then strict", () => {
     ].join("\n");
     writeFileSync(noValidation, original, "utf8");
 
-    const result = runScript([], e2eDir);
+    const result = runScript(["--archive"], e2eDir);
     assert.equal(result.status, 1, "missing ## Validation must remain non-compliant");
     assert.ok(
       result.stdout.includes("e2e-no-validation-regression.md"),
@@ -701,7 +859,7 @@ describe("end-to-end pipeline: --fix-stub then strict", () => {
     ].join("\n");
     writeFileSync(missingLines, original, "utf8");
 
-    const result = runScript(["--fix-stub"], e2eDir);
+    const result = runScript(["--archive", "--fix-stub"], e2eDir);
     assert.equal(
       result.status,
       0,
@@ -723,8 +881,8 @@ describe("end-to-end pipeline: --fix-stub then strict", () => {
   });
 
   it("strict check reports the angle-bracket-why file as a violation", () => {
-    runScript(["--fix-stub"], e2eDir);
-    const result = runScript([], e2eDir);
+    runScript(["--archive", "--fix-stub"], e2eDir);
+    const result = runScript(["--archive"], e2eDir);
     assert.ok(
       result.stdout.includes(ANGLE_BRACKET_WHY),
       `expected ${ANGLE_BRACKET_WHY} to appear in violations output\nstdout: ${result.stdout}`,
@@ -736,8 +894,8 @@ describe("end-to-end pipeline: --fix-stub then strict", () => {
   });
 
   it("strict check reports the bad-tier file as a violation", () => {
-    runScript(["--fix-stub"], e2eDir);
-    const result = runScript([], e2eDir);
+    runScript(["--archive", "--fix-stub"], e2eDir);
+    const result = runScript(["--archive"], e2eDir);
     assert.ok(
       result.stdout.includes(BAD_TIER),
       `expected ${BAD_TIER} to appear in violations output\nstdout: ${result.stdout}`,
@@ -753,8 +911,8 @@ describe("end-to-end pipeline: --fix-stub then strict", () => {
   });
 
   it("strict check does NOT report the fully compliant file as a violation", () => {
-    runScript(["--fix-stub"], e2eDir);
-    const result = runScript([], e2eDir);
+    runScript(["--archive", "--fix-stub"], e2eDir);
+    const result = runScript(["--archive"], e2eDir);
     // The compliant file should appear with ✓, not ✗
     const lines = result.stdout.split("\n");
     const compliantLine = lines.find((l) => l.includes(COMPLIANT));
@@ -1011,7 +1169,7 @@ describe("--fix-stub: unreadable plan files are hard failures", () => {
   });
 
   it("archive scanning also exits 1 and reports the underlying read error", () => {
-    const result = runScript(["--fix-stub"], unreadableDir);
+    const result = runScript(["--archive", "--fix-stub"], unreadableDir);
     const archivePlanPath = ".local/tasks/unreadable-plan.md";
     assert.equal(
       result.status,

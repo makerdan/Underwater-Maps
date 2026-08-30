@@ -6,8 +6,9 @@
  *
  * Reads the **Command:** tier name from the ## Validation section of a plan
  * file, resolves it against VALIDATION_COMMANDS (the single source of truth),
- * and runs the registered command. The agent passes a plan file path — not a
- * tier name — so there is no substitution surface.
+ * and runs the registered command with TASK_PLAN_FILE scoped to that same
+ * plan. The agent passes a plan file path — not a tier name — so there is no
+ * substitution surface and no archive-wide Failure Gate dependency.
  *
  * Usage:
  *   node scripts/run-locked-tier.mjs <plan-file>
@@ -144,5 +145,9 @@ if (dryRun) {
 // Run the command
 // ---------------------------------------------------------------------------
 console.log(`run-locked-tier: running tier "${tierName}"\n  ${entry.command}`);
-const result = spawnSync(entry.command, { shell: true, stdio: "inherit" });
+const result = spawnSync(entry.command, {
+  shell: true,
+  stdio: "inherit",
+  env: { ...process.env, TASK_PLAN_FILE: planFile },
+});
 process.exit(result.status ?? 1);

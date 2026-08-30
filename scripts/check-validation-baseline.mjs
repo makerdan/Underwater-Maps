@@ -26,6 +26,10 @@ export const KNOWN_CLASSIFICATIONS = [
   "dependency",
   "environment",
 ];
+export const DEFAULT_CATALOG_PATH = resolve(
+  resolve(fileURLToPath(import.meta.url), "..", ".."),
+  CATALOG_RELATIVE_PATH,
+);
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const CATALOG_KEYS = ["catalogVersion", "catalogDate", "entries"];
 const ENTRY_KEYS = [
@@ -344,6 +348,84 @@ export function runValidationBaselineCheck(options = {}) {
     return { errors: [`unable to read or parse ${options.catalog}: ${error.message}`] };
   }
   return validateBaselineCatalog(catalog, options);
+}
+
+/**
+ * Read and validate the tracked catalog for consumers that need to resolve a
+ * plan reference. The standalone checker remains the authoritative validation
+ * command; consumers fail closed if the catalog cannot be read or is invalid.
+ *
+ * FAILURE_BASELINE_CATALOG is intentionally supported for deterministic
+ * checker fixtures and maintenance tooling. Normal task runs use the tracked
+ * default path.
+ */
+export function readBaselineCatalog({
+  catalog = process.env.FAILURE_BASELINE_CATALOG ?? DEFAULT_CATALOG_PATH,
+  repoRoot = defaultRoot,
+  asOf = process.env.FAILURE_BASELINE_AS_OF ?? new Date().toISOString().slice(0, 10),
+} = {}) {
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(catalog, "utf8"));
+  } catch (error) {
+    throw new Error(`unable to read or parse baseline catalog "${catalog}": ${error.message}`);
+  }
+  const result = validateBaselineCatalog(parsed, { repoRoot, asOf });
+  if (result.errors.length > 0) {
+    throw new Error(
+      `baseline catalog "${catalog}" is invalid:\n${result.errors.map((error) => `  - ${error}`).join("\n")}`,
+    );
+  }
+  return parsed;
+}
+
+/**
+ * Resolve IDs that a plan wants to use as provenance. Only authoritative,
+ * unexpired active records are referenceable. A status such as needs-review,
+ * intermittent, environment-limited, or resolved is context, never an ignore
+ * permission.
+ */
+export function resolveActiveBaselineReferences(
+  ids,
+  {
+    catalog,
+    repoRoot = defaultRoot,
+    asOf = process.env.FAILURE_BASELINE_AS_OF ?? new Date().toISOString().slice(0, 10),
+  } = {},
+) {
+  const requestedIds = [...new Set(ids ?? [])];
+  const resolvedCatalog =
+    catalog ??
+    readBaselineCatalog({
+      repoRoot,
+      asOf,
+    });
+  const byId = new Map((resolvedCatalog.entries ?? []).map((entry) => [entry.id, entry]));
+  const entries = [];
+  const errors = [];
+
+  for (const id of requestedIds) {
+    const entry = byId.get(id);
+    if (!entry) {
+      errors.push(`${id} is not present in the baseline catalog`);
+      continue;
+    }
+    if (entry.status !== "active") {
+      errors.push(`${id} is not referenceable because its status is "${entry.status}"`);
+      continue;
+    }
+    if (entry.evidence?.authoritative !== true) {
+      errors.push(`${id} is not referenceable because its evidence is not authoritative`);
+      continue;
+    }
+    if (entry.reviewDeadline < asOf) {
+      errors.push(`${id} is not referenceable because its review deadline ${entry.reviewDeadline} has expired as of ${asOf}`);
+      continue;
+    }
+    entries.push(entry);
+  }
+
+  return { entries, errors };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {

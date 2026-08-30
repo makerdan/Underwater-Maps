@@ -27,6 +27,14 @@
  *                       One-line description of a known baseline failure this
  *                       validation-repair task explicitly owns and must fix.
  *                       May be repeated. Omit when no failures are known.
+ *   --baseline-id <id>  Stable active baseline catalog ID to reference as an
+ *                       ignored failure. May be repeated.
+ *   --owned-baseline-id <id>
+ *                       Stable active baseline catalog ID this validation-repair
+ *                       task explicitly owns. May be repeated.
+ *   --environment-observation <text>
+ *                       Task-local environment limitation or observation. May
+ *                       be repeated; never creates durable catalog provenance.
  *   --out <path>        Override the output path (default: .local/tasks/task-<ref>.md).
  *   --dry-run           Print the generated content without writing to disk.
  *
@@ -37,8 +45,10 @@
 
 import { writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
-import { join } from "path";
+import { dirname, join, resolve } from "path";
+import { fileURLToPath } from "url";
 import { VALIDATION_COMMANDS } from "./register-validation-commands.mjs";
+import { readBaselineCatalog, resolveActiveBaselineReferences } from "./check-validation-baseline.mjs";
 
 // ---------------------------------------------------------------------------
 // Parse CLI arguments
@@ -69,6 +79,9 @@ const tier = getFlag("--tier") ?? "test-standard";
 const outOverride = getFlag("--out");
 const preExistingEntries = getRepeatedFlag("--pre-existing");
 const ownedBaselineEntries = getRepeatedFlag("--owned-baseline");
+const baselineIds = getRepeatedFlag("--baseline-id");
+const ownedBaselineIds = getRepeatedFlag("--owned-baseline-id");
+const environmentObservations = getRepeatedFlag("--environment-observation");
 const dryRun = args.includes("--dry-run");
 
 // ---------------------------------------------------------------------------
@@ -124,6 +137,38 @@ if (!VALID_TIERS.includes(tier)) {
   hasErrors = true;
 }
 
+const duplicateBaselineIds = baselineIds.filter((id) => ownedBaselineIds.includes(id));
+if (duplicateBaselineIds.length > 0) {
+  console.error(
+    `new-plan: ERROR — baseline ID(s) cannot be both ignored and task-owned: ${duplicateBaselineIds.join(", ")}`,
+  );
+  hasErrors = true;
+}
+
+let resolvedBaselineEntries = [];
+if (baselineIds.length > 0 || ownedBaselineIds.length > 0) {
+  try {
+    const catalog = readBaselineCatalog({
+      catalog: process.env.FAILURE_BASELINE_CATALOG,
+      repoRoot: resolve(dirname(fileURLToPath(import.meta.url)), ".."),
+    });
+    const resolved = resolveActiveBaselineReferences(
+      [...baselineIds, ...ownedBaselineIds],
+      { catalog, asOf: process.env.FAILURE_BASELINE_AS_OF },
+    );
+    if (resolved.errors.length > 0) {
+      for (const error of resolved.errors) {
+        console.error(`new-plan: ERROR — ${error}`);
+      }
+      hasErrors = true;
+    }
+    resolvedBaselineEntries = resolved.entries;
+  } catch (error) {
+    console.error(`new-plan: ERROR — ${error.message}`);
+    hasErrors = true;
+  }
+}
+
 if (hasErrors) {
   process.exit(1);
 }
@@ -146,12 +191,35 @@ if (!dryRun && existsSync(outPath)) {
 // Build the pre-existing failures section
 // ---------------------------------------------------------------------------
 let preExistingSection;
-if (preExistingEntries.length > 0 || ownedBaselineEntries.length > 0) {
+const catalogIgnoredBullets = resolvedBaselineEntries
+  .filter((entry) => baselineIds.includes(entry.id))
+  .map(
+    (entry) =>
+      `- **Ignored baseline:** \`${entry.id}\` — ${entry.suite} › ${entry.test}; match only this signature: ${entry.failureSignature}`,
+  );
+const catalogOwnedBullets = resolvedBaselineEntries
+  .filter((entry) => ownedBaselineIds.includes(entry.id))
+  .map(
+    (entry) =>
+      `- **Owned baseline repair:** \`${entry.id}\` — ${entry.suite} › ${entry.test}; this task explicitly owns repair of this signature: ${entry.failureSignature}`,
+  );
+
+if (
+  preExistingEntries.length > 0 ||
+  ownedBaselineEntries.length > 0 ||
+  catalogIgnoredBullets.length > 0 ||
+  catalogOwnedBullets.length > 0
+) {
   const ignoredBullets = preExistingEntries.map((e) => `- **Ignored baseline:** ${e}`);
   const ownedBullets = ownedBaselineEntries.map(
     (e) => `- **Owned baseline repair:** ${e} — this task must fix it.`,
   );
-  const bullets = [...ignoredBullets, ...ownedBullets].join("\n");
+  const bullets = [
+    ...ignoredBullets,
+    ...ownedBullets,
+    ...catalogIgnoredBullets,
+    ...catalogOwnedBullets,
+  ].join("\n");
   preExistingSection =
     `## Pre-existing failures to ignore\n` +
     `These failures exist on \`main\` before this task starts. Each bullet explicitly\n` +
@@ -173,6 +241,14 @@ if (preExistingEntries.length > 0 || ownedBaselineEntries.length > 0) {
     `pre-existing provenance. Use the Failure Gate evidence rules before assigning\n` +
     `ownership.`;
 }
+
+const environmentSection =
+  environmentObservations.length > 0
+    ? `\n\n## Task-local environment observations\n` +
+      `These observations belong only to this task. They are not durable catalog\n` +
+      `records and cannot authorize ignoring a future failure.\n\n` +
+      environmentObservations.map((observation) => `- ${observation}`).join("\n")
+    : "";
 
 // ---------------------------------------------------------------------------
 // Build the validation section
@@ -210,7 +286,7 @@ const content =
   `# Task #${taskRef}: ${title}\n\n` +
   `## Steps\n` +
   `<!-- Fill in implementation steps before starting work -->\n\n` +
-  `${preExistingSection}\n\n` +
+  `${preExistingSection}${environmentSection}\n\n` +
   `${regressionGuardSection}\n\n` +
   `${validationSection}\n`;
 

@@ -32,8 +32,9 @@ Invoke this skill when:
    to know what (if anything) must be updated so the mirror is tracked and
    validated automatically.
 2. A **validation check reports that a skill mirror is stale** — a stored
-   `.fingerprint` does not match the md5 of the canonical `SKILL.md` — and you
-   need to understand the canonical-vs-local contract and how to fix it.
+   `.fingerprint` does not match the md5 of the canonical `SKILL.md` — including
+   after a contract/catalog integration change — and you need to understand the
+   canonical-vs-local contract and how to fix it.
 3. You are **auditing skill health** and want to verify that every skill with a
    counterpart in `.local/custom_skills/` has an up-to-date copy and a current
    fingerprint.
@@ -151,3 +152,5 @@ post-merge sync step — it creates or overwrites `.fingerprint` unconditionally
   overwritten by every sync run.
 - Do **not** manually write a `.fingerprint` value by hand unless you have
   verified it matches the md5 of the current canonical file.
+- Do **not** place a tracked deliverable under `.local/`; runtime mirrors remain
+  generated state even when a task changes the canonical skill contract.
