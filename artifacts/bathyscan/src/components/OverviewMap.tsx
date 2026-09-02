@@ -260,6 +260,7 @@ export const OverviewMap: React.FC = () => {
   }, [primaryDatasetId]);
   const unitsForUi = useSettingsStore((s) => s.units);
   const colormapTheme = useSettingsStore((s) => s.colormapTheme);
+  const nodataColor = useSettingsStore((s) => s.nodataColor);
   const contoursEnabled = useSettingsStore((s) => s.contoursEnabled);
   const contourInterval = useSettingsStore((s) => s.contourInterval);
   const puzzleLayouts = useSettingsStore((s) => s.puzzleLayouts);
@@ -2401,10 +2402,16 @@ export const OverviewMap: React.FC = () => {
       dirtyRef.current = true;
       return;
     }
-    bitmapRef.current = buildHeatmapBitmap(primaryGrid, colormapTheme, primaryGrid.topography);
+    bitmapRef.current = buildHeatmapBitmap(
+      primaryGrid,
+      colormapTheme,
+      primaryGrid.topography,
+      true,
+      nodataColor,
+    );
     invalidateUpscaleRef.current();
     dirtyRef.current = true;
-  }, [appTerrain, overviewGrid, colormapTheme, paletteShallow, paletteDeep, paletteBandColors, paletteCustomStops, paletteBandBoundaries]);
+  }, [appTerrain, overviewGrid, colormapTheme, nodataColor, paletteShallow, paletteDeep, paletteBandColors, paletteCustomStops, paletteBandBoundaries]);
 
   // Maintain secondary dataset bitmaps and the combined world-space bbox grid.
   // Runs whenever visibleDatasets changes OR palette/colormap changes so all
@@ -2428,7 +2435,10 @@ export const OverviewMap: React.FC = () => {
       if (v.datasetId === primaryId) continue; // primary handled by the effect above
       const og = v.overviewGrid;
       if (!og) continue;
-      secondaryBitmapsRef.current.set(v.datasetId, buildHeatmapBitmap(og, colormapTheme, og.topography));
+      secondaryBitmapsRef.current.set(
+        v.datasetId,
+        buildHeatmapBitmap(og, colormapTheme, og.topography, true, nodataColor),
+      );
       nodataBoundarySegmentsRef.current.set(v.datasetId, buildNodataBoundarySegments(og));
     }
 
@@ -2472,7 +2482,7 @@ export const OverviewMap: React.FC = () => {
     }
 
     dirtyRef.current = true;
-  }, [appTerrain, overviewGrid, visibleDatasets, colormapTheme, paletteShallow, paletteDeep, paletteBandColors, paletteCustomStops, paletteBandBoundaries]);
+  }, [appTerrain, overviewGrid, visibleDatasets, colormapTheme, nodataColor, paletteShallow, paletteDeep, paletteBandColors, paletteCustomStops, paletteBandBoundaries]);
 
   // Compute initial transform whenever the grid (or combined world grid) or canvas is ready
   const initTransform = useCallback(() => {
@@ -2520,9 +2530,9 @@ export const OverviewMap: React.FC = () => {
 
     const rebuildBitmaps = () => {
       const og = useTerrainStore.getState().overviewGrid;
-      const theme = useSettingsStore.getState().colormapTheme;
+      const { colormapTheme: theme, nodataColor: currentNodataColor } = useSettingsStore.getState();
       if (og) {
-        bitmapRef.current = buildHeatmapBitmap(og, theme, og.topography);
+        bitmapRef.current = buildHeatmapBitmap(og, theme, og.topography, true, currentNodataColor);
       }
       const visibleNow = visibleDatasetsRef.current;
       const primaryId = visibleNow[0]?.datasetId ?? null;
@@ -2531,7 +2541,13 @@ export const OverviewMap: React.FC = () => {
         if (v.datasetId === primaryId || !v.overviewGrid) continue;
         secondaryBitmapsRef.current.set(
           v.datasetId,
-          buildHeatmapBitmap(v.overviewGrid, theme, v.overviewGrid.topography),
+          buildHeatmapBitmap(
+            v.overviewGrid,
+            theme,
+            v.overviewGrid.topography,
+            true,
+            currentNodataColor,
+          ),
         );
       }
       invalidateUpscaleRef.current();

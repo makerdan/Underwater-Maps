@@ -6,8 +6,8 @@ import { useUiStore } from "@/lib/uiStore";
 import { getGetMarkersQueryKey, getMarkers, type Marker, type TerrainData, type DepthsArray } from "@workspace/api-client-react";
 import { getColormap, getColormapDepthDomain, colormapCssGradient, getColormapTRange, getColormapStops } from "@/lib/colormap";
 import { usePaletteStore } from "@/lib/paletteStore";
-import { useSettingsStore, type ColormapTheme } from "@/lib/settingsStore";
-import { WORLD_SIZE, NO_DATA_COLOR } from "@/lib/terrain";
+import { DEFAULT_SETTINGS, useSettingsStore, type ColormapTheme } from "@/lib/settingsStore";
+import { WORLD_SIZE } from "@/lib/terrain";
 import { buildHillshadeLayer, buildHeatmapBitmap } from "@/lib/overviewRenderer";
 import { useTerrainStore, type VisibleDataset } from "@/lib/terrainStore";
 import { MARKER_COLOR } from "@/lib/markerConstants";
@@ -26,16 +26,15 @@ import {
 const W = 180;
 const H = 180;
 
-// sRGB-gamma byte for a linear-light channel value — keeps NO_DATA_COLOR on
-// the same perceptual path as the colormapped tiles.
-function linToSRGBByte(c: number): number {
-  const s = c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1.0 / 2.4) - 0.055;
-  return Math.max(0, Math.min(255, Math.round(s * 255)));
+function hexToCanvasRgb(hex: string): { r: number; g: number; b: number } {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex);
+  const safeHex = match ? match[1]! : DEFAULT_SETTINGS.nodataColor.slice(1);
+  return {
+    r: parseInt(safeHex.slice(0, 2), 16),
+    g: parseInt(safeHex.slice(2, 4), 16),
+    b: parseInt(safeHex.slice(4, 6), 16),
+  };
 }
-
-const ND_R = linToSRGBByte(NO_DATA_COLOR.r);
-const ND_G = linToSRGBByte(NO_DATA_COLOR.g);
-const ND_B = linToSRGBByte(NO_DATA_COLOR.b);
 
 const MINIMAP_FT_TO_M = 0.3048;
 
@@ -222,10 +221,12 @@ export function drawHeatmap(
   colormapTheme: ColormapTheme = "ocean",
   topography?: number[] | null,
   grid?: TerrainData,
+  nodataColor = DEFAULT_SETTINGS.nodataColor,
 ) {
   const domain = getColormapDepthDomain(colormapTheme, minDepth, maxDepth);
   const domainRange = domain.max - domain.min || 1;
   const toColor = getColormap(colormapTheme);
+  const nodataRgb = hexToCanvasRgb(nodataColor);
   const imageData = ctx.createImageData(W, H);
 
   // Pre-compute per-cell hillshade multipliers when a grid is supplied.
@@ -246,12 +247,12 @@ export function drawHeatmap(
       const rawDepth = depths[idx];
       const i = (py * W + px) * 4;
 
-      // Null/undefined depth → survey gap: render as NO_DATA_COLOR light-gray,
-      // matching overviewRenderer.ts and the 3D terrain mesh behaviour.
-      if (rawDepth === null || rawDepth === undefined) {
-        imageData.data[i]     = ND_R;
-        imageData.data[i + 1] = ND_G;
-        imageData.data[i + 2] = ND_B;
+      // Null/undefined/NaN depth → survey gap: use the configured settings
+      // colour so the minimap matches the Overview and 3D terrain.
+      if (rawDepth === null || rawDepth === undefined || Number.isNaN(rawDepth as number)) {
+        imageData.data[i]     = nodataRgb.r;
+        imageData.data[i + 1] = nodataRgb.g;
+        imageData.data[i + 2] = nodataRgb.b;
         imageData.data[i + 3] = 255;
         continue;
       }
@@ -259,16 +260,12 @@ export function drawHeatmap(
       // Hillshade multiplier for this grid cell (defaults to 1.0 if no grid).
       const hs = hillshade ? (hillshade[hillshadeRow * width + gx] ?? 1.0) : 1.0;
 
-      // Land cell (above-water elevation > 0 in topography): render as
-      // hillshaded gray matching overviewRenderer.ts and the 3D shader land colour.
+      // Land cell (above-water elevation > 0 in topography): use the same
+      // configured nodata colour as survey gaps.
       if (topography && (topography[idx] ?? 0) > 0) {
-        // Base land gray is (120,120,120) in display-sRGB. Apply hillshade in
-        // sRGB space (acceptable for neutral gray where gamma error is minimal),
-        // mirroring the same approach in buildHeatmapBitmap.
-        const v = Math.max(0, Math.min(255, Math.round(120 * hs)));
-        imageData.data[i]     = v;
-        imageData.data[i + 1] = v;
-        imageData.data[i + 2] = v;
+        imageData.data[i]     = nodataRgb.r;
+        imageData.data[i + 1] = nodataRgb.g;
+        imageData.data[i + 2] = nodataRgb.b;
         imageData.data[i + 3] = 255;
         continue;
       }
@@ -422,6 +419,7 @@ export const Minimap: React.FC = () => {
   const setShowNodataBoundary = useUiStore((s) => s.setShowNodataBoundary);
   const puzzleGeoTransforms = useUiStore((s) => s.puzzleGeoTransforms);
   const colormapTheme = useSettingsStore((s) => s.colormapTheme);
+  const nodataColor = useSettingsStore((s) => s.nodataColor);
   const overviewHillshading = useSettingsStore((s) => s.overviewHillshading);
   const units = useSettingsStore((s) => s.units);
   const shallow = usePaletteStore((s) => s.shallow);
@@ -737,6 +735,7 @@ export const Minimap: React.FC = () => {
       colormapTheme,
       terrain.topography,
       overviewHillshading ? terrain : undefined,
+      nodataColor,
     );
     // Overlay contour lines at each depth-band boundary, colored by the
     // adjacent band's color. Drawn on the same offscreen canvas immediately
@@ -763,7 +762,13 @@ export const Minimap: React.FC = () => {
       if (!v.overviewGrid) continue;
       nextBitmaps.set(
         v.datasetId,
-        buildHeatmapBitmap(v.overviewGrid, colormapTheme, v.overviewGrid.topography),
+        buildHeatmapBitmap(
+          v.overviewGrid,
+          colormapTheme,
+          v.overviewGrid.topography,
+          true,
+          nodataColor,
+        ),
       );
     }
     // Evict stale entries from the previous render by replacing the whole map.
@@ -774,7 +779,7 @@ export const Minimap: React.FC = () => {
     const cp0 = camState.cameraPosition;
     compositeFrame(ctx, cp0.known ? cp0.lon : null, cp0.known ? cp0.lat : null, camState.heading, terrain);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuildStaticLayer and compositeFrame are render-scope helpers that change every render; data deps are listed explicitly
-  }, [terrain, colormapTheme, overviewHillshading, shallow, deep, bandColors, customStops, bandBoundaries, visibleDatasets]);
+  }, [terrain, colormapTheme, nodataColor, overviewHillshading, shallow, deep, bandColors, customStops, bandBoundaries, visibleDatasets]);
 
   // Re-composite when satellite image loads (tileUrl changed)
   useEffect(() => {

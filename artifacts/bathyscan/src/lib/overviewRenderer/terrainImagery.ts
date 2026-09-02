@@ -3,26 +3,21 @@
  * bitmap generation and the scaled heatmap draw calls.
  */
 import type { TerrainData } from "@workspace/api-client-react";
-import type { ColormapTheme } from "../settingsStore";
+import { DEFAULT_SETTINGS, type ColormapTheme } from "../settingsStore";
 import * as THREE from "three";
 import { getColormap, getColormapDepthDomain, isAbsoluteDepthTheme } from "../colormap";
 import { usePaletteStore } from "../paletteStore";
-import { NO_DATA_COLOR } from "../terrain";
 import { lonRangeOf, lonLatToCanvas, type OverviewTransform } from "./transforms";
 
-// Convert a linear-sRGB channel value (as used by THREE.js vertex colours and
-// NO_DATA_COLOR) to a display-sRGB byte for the 2D canvas context.
-// Mirrors the THREE.Color.convertLinearToSRGB() path used below for colormap
-// colours so the no-data light-gray looks the same in the minimap as in the 3D
-// terrain mesh.
-function linearToSRGBByte(c: number): number {
-  const s = c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1.0 / 2.4) - 0.055;
-  return Math.max(0, Math.min(255, Math.round(s * 255)));
+function hexToCanvasRgb(hex: string): { r: number; g: number; b: number } {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex);
+  const safeHex = match ? match[1]! : DEFAULT_SETTINGS.nodataColor.slice(1);
+  return {
+    r: parseInt(safeHex.slice(0, 2), 16),
+    g: parseInt(safeHex.slice(2, 4), 16),
+    b: parseInt(safeHex.slice(4, 6), 16),
+  };
 }
-
-const NO_DATA_CANVAS_R = linearToSRGBByte(NO_DATA_COLOR.r);
-const NO_DATA_CANVAS_G = linearToSRGBByte(NO_DATA_COLOR.g);
-const NO_DATA_CANVAS_B = linearToSRGBByte(NO_DATA_COLOR.b);
 
 // ---------------------------------------------------------------------------
 // Hillshade lighting layer
@@ -158,14 +153,19 @@ export function buildHillshadeLayer(grid: TerrainData): Float32Array {
  *
  *   This is a bitmap-level decision only — it does NOT affect contour-line
  *   depth values, the legend strip, or the 3D terrain view.
+ *
+ * @param nodataColor
+ *   Settings hex colour used for both survey-gap and land cells.
  */
 export function buildHeatmapBitmap(
   grid: TerrainData,
   colormapTheme: ColormapTheme = "ocean",
   topography?: number[] | null,
   stretchContrast = true,
+  nodataColor = DEFAULT_SETTINGS.nodataColor,
 ): HTMLCanvasElement {
   const { width: W, height: H, depths, minDepth, maxDepth } = grid;
+  const nodataRgb = hexToCanvasRgb(nodataColor);
 
   // Resolve the effective domain (may be stretched for narrow surveys).
   const absoluteDomain = getColormapDepthDomain(colormapTheme, minDepth, maxDepth);
@@ -216,35 +216,27 @@ export function buildHeatmapBitmap(
       const pixelIdx = row * W + col;
       const i = pixelIdx * 4;
 
-      // Null / NaN depth → survey gap: render as the NO_DATA_COLOR light-gray
-      // so coverage boundaries are visible at a glance, matching the 3D
-      // terrain mesh which places null-depth vertices at the water surface
-      // with the same muted colour (see buildTerrainGeometry in terrain.ts).
+      // Null / NaN depth → survey gap. Keep this opaque so the configured
+      // settings colour is visible in every 2D overview path.
       if (rawDepth === null || rawDepth === undefined || Number.isNaN(rawDepth as number)) {
-        imageData.data[i]     = NO_DATA_CANVAS_R;
-        imageData.data[i + 1] = NO_DATA_CANVAS_G;
-        imageData.data[i + 2] = NO_DATA_CANVAS_B;
-        // Fully transparent so a later-drawn dataset's real depth pixels are
-        // not obscured by this survey's gap/padding region.  When only one
-        // dataset is loaded the transparent pixels simply show the dark canvas
-        // background — visually identical to the previous opaque behaviour.
-        imageData.data[i + 3] = 0;
+        imageData.data[i]     = nodataRgb.r;
+        imageData.data[i + 1] = nodataRgb.g;
+        imageData.data[i + 2] = nodataRgb.b;
+        // Survey gaps are intentionally opaque: the configured colour is part
+        // of the visible map, rather than an implementation detail.
+        imageData.data[i + 3] = 255;
         continue;
       }
 
       const hs = hillshade[pixelIdx]!;
 
-      // Land cell (above-water elevation > 0 in topography): render as fully
-      // transparent so a later-drawn dataset's real depth pixels are not
-      // obscured by this dataset's land region.  In single-dataset view the
-      // transparent pixels simply show the dark canvas background — visually
-      // equivalent to the previous opaque-gray behaviour from the user's
-      // perspective, since no other dataset is drawn underneath.
+      // Land cell (above-water elevation > 0 in topography): use the same
+      // configured nodata colour as survey gaps.
       if (topography && (topography[dataIdx] ?? 0) > 0) {
-        imageData.data[i]     = 0;
-        imageData.data[i + 1] = 0;
-        imageData.data[i + 2] = 0;
-        imageData.data[i + 3] = 0;
+        imageData.data[i]     = nodataRgb.r;
+        imageData.data[i + 1] = nodataRgb.g;
+        imageData.data[i + 2] = nodataRgb.b;
+        imageData.data[i + 3] = 255;
         continue;
       }
 

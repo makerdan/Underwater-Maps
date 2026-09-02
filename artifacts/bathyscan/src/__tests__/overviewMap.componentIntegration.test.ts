@@ -1369,6 +1369,8 @@ describe("OverviewMap — multi-dataset heatmaps drawn at correct canvas positio
       centerLat: 42.0,
       waterType: "saltwater" as const,
     } as unknown as import("@workspace/api-client-react").TerrainData;
+    const configuredNodataColor = "#123456";
+    useSettingsStore.setState({ nodataColor: configuredNodataColor });
 
     useTerrainStore.setState({
       visibleDatasets: [
@@ -1407,6 +1409,21 @@ describe("OverviewMap — multi-dataset heatmaps drawn at correct canvas positio
     await waitForCameraArrow();
     // Let the follow-up frame caused by publishing the SVG transform settle.
     await act(async () => { await new Promise((r) => setTimeout(r, 200)); });
+
+    expect(buildSpy).toHaveBeenCalledWith(
+      gridA,
+      expect.anything(),
+      gridA.topography,
+      true,
+      configuredNodataColor,
+    );
+    expect(buildSpy).toHaveBeenCalledWith(
+      gridB,
+      expect.anything(),
+      gridB.topography,
+      true,
+      configuredNodataColor,
+    );
 
     // A clean animation frame must preserve the loaded maps rather than
     // clearing the canvas before deciding whether a redraw is needed. Every

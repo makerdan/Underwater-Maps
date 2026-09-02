@@ -198,6 +198,7 @@ export const MobileChartView: React.FC<MobileChartViewProps> = ({ onOpenPicker }
   const visibleCount = useTerrainStore((s) => s.visibleDatasets.length);
 
   const colormapTheme = useSettingsStore((s) => s.colormapTheme);
+  const nodataColor = useSettingsStore((s) => s.nodataColor);
   const contoursEnabled = useSettingsStore((s) => s.contoursEnabled);
   const contourInterval = useSettingsStore((s) => s.contourInterval);
   // MOBILE-ONLY settings key: density stepper value (1|2|3).
@@ -346,11 +347,14 @@ export const MobileChartView: React.FC<MobileChartViewProps> = ({ onOpenPicker }
       overviewGrid,
       colormapTheme,
       overviewGrid.topography,
+      true,
+      nodataColor,
     );
     requestRender();
   }, [
     overviewGrid,
     colormapTheme,
+    nodataColor,
     paletteShallow,
     paletteDeep,
     paletteBandColors,

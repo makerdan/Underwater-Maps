@@ -34,9 +34,9 @@ const makeApiClientMock = vi.hoisted(() => {
 import { Minimap, drawArrow, drawHeatmap, computeMinimapUnionBbox } from "@/components/Minimap";
 import { useUiStore } from "@/lib/uiStore";
 import { useTerrainStore, type VisibleDataset } from "@/lib/terrainStore";
-import { WORLD_SIZE, NO_DATA_COLOR } from "@/lib/terrain";
+import { WORLD_SIZE } from "@/lib/terrain";
 import { usePaletteStore } from "@/lib/paletteStore";
-import type { ColormapTheme } from "@/lib/settingsStore";
+import { DEFAULT_SETTINGS, type ColormapTheme } from "@/lib/settingsStore";
 import { geographicLonRange, longitudeOnBboxFrame } from "@/lib/geographicBounds";
 
 const mockTerrain = {
@@ -294,15 +294,18 @@ describe("drawHeatmap — null depths, topography cells, and fixed preset themes
     return [data[i]!, data[i + 1]!, data[i + 2]!, data[i + 3]!];
   }
 
-  /** Replicate the linToSRGBByte transform used by drawHeatmap for NO_DATA_COLOR. */
-  function linToSRGBByte(c: number): number {
-    const s = c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1.0 / 2.4) - 0.055;
-    return Math.max(0, Math.min(255, Math.round(s * 255)));
+  function defaultNodataRgb(): [number, number, number] {
+    const hex = DEFAULT_SETTINGS.nodataColor.slice(1);
+    return [
+      parseInt(hex.slice(0, 2), 16),
+      parseInt(hex.slice(2, 4), 16),
+      parseInt(hex.slice(4, 6), 16),
+    ];
   }
 
-  // ── null / undefined depths → NO_DATA_COLOR ────────────────────────────
+  // ── null / undefined depths → configured nodata colour ─────────────────
 
-  it("null-depth pixel renders as NO_DATA_COLOR (sRGB-converted)", () => {
+  it("null-depth pixel renders as the configured nodata colour", () => {
     // Single-cell grid, depth is null → survey gap
     const depths = [null] as unknown as DepthsArray;
     const { ctx, captured } = makeHeatmapCtx();
@@ -312,9 +315,7 @@ describe("drawHeatmap — null depths, topography cells, and fixed preset themes
     expect(captured.length).toBeGreaterThan(0);
     const data = captured[0]!;
 
-    const expectedR = linToSRGBByte(NO_DATA_COLOR.r);
-    const expectedG = linToSRGBByte(NO_DATA_COLOR.g);
-    const expectedB = linToSRGBByte(NO_DATA_COLOR.b);
+    const [expectedR, expectedG, expectedB] = defaultNodataRgb();
 
     // Every canvas pixel should be the no-data colour (all cells are null).
     const [r, g, b, a] = px(data, 0, 0);
@@ -328,19 +329,28 @@ describe("drawHeatmap — null depths, topography cells, and fixed preset themes
     expect([r2, g2, b2]).toEqual([expectedR, expectedG, expectedB]);
   });
 
-  it("undefined-depth pixel also renders as NO_DATA_COLOR", () => {
+  it("undefined-depth pixel also renders as the configured nodata colour", () => {
     const depths = [undefined] as unknown as DepthsArray;
     const { ctx, captured } = makeHeatmapCtx();
 
     drawHeatmap(ctx, depths, 1, 1, 0, 100, "thermal");
 
     const data = captured[0]!;
-    const expectedR = linToSRGBByte(NO_DATA_COLOR.r);
+    const [expectedR, expectedG, expectedB] = defaultNodataRgb();
     const [r, g, b, a] = px(data, 0, 0);
     expect(a).toBe(255);
     expect(r).toBe(expectedR);
     // null and undefined must produce the identical byte — not the theme colour.
-    expect([r, g, b]).toEqual([linToSRGBByte(NO_DATA_COLOR.r), linToSRGBByte(NO_DATA_COLOR.g), linToSRGBByte(NO_DATA_COLOR.b)]);
+    expect([r, g, b]).toEqual([expectedR, expectedG, expectedB]);
+  });
+
+  it("uses a caller-supplied nodata colour for survey gaps", () => {
+    const depths = [null] as unknown as DepthsArray;
+    const { ctx, captured } = makeHeatmapCtx();
+
+    drawHeatmap(ctx, depths, 1, 1, 0, 100, "ocean", undefined, undefined, "#123456");
+
+    expect(Array.from(px(captured[0]!, 0, 0))).toEqual([0x12, 0x34, 0x56, 255]);
   });
 
   it("null-depth cells are a different colour from valid-depth cells in the same heatmap", () => {
@@ -357,14 +367,14 @@ describe("drawHeatmap — null depths, topography cells, and fixed preset themes
     // The null pixel should not match the coloured depth pixel.
     // (They would be equal if the null branch were accidentally falling through
     // into the colour calculation.)
-    const expectedNdR = linToSRGBByte(NO_DATA_COLOR.r);
+    const [expectedNdR] = defaultNodataRgb();
     expect(rNull).toBe(expectedNdR);
     expect(rReal).not.toBe(expectedNdR);
   });
 
-  // ── topography > 0 cells → flat gray (120, 120, 120) ───────────────────
+  // ── topography > 0 cells → configured nodata colour ─────────────────────
 
-  it("topography > 0 cell renders as flat gray (120, 120, 120)", () => {
+  it("topography > 0 cell renders as the configured nodata colour", () => {
     // Single-cell grid: depth 50 m but topography elevation is positive (land).
     const depths = [50] as unknown as DepthsArray;
     const topography = [1]; // > 0 → land
@@ -375,9 +385,7 @@ describe("drawHeatmap — null depths, topography cells, and fixed preset themes
     const data = captured[0]!;
     const [r, g, b, a] = px(data, 0, 0);
     expect(a).toBe(255);
-    expect(r).toBe(120);
-    expect(g).toBe(120);
-    expect(b).toBe(120);
+    expect([r, g, b]).toEqual(defaultNodataRgb());
   });
 
   it("topography = 0 cell is NOT treated as land (renders the depth colour instead)", () => {
@@ -389,10 +397,10 @@ describe("drawHeatmap — null depths, topography cells, and fixed preset themes
 
     const data = captured[0]!;
     const [r, g, b] = px(data, 0, 0);
-    // Should NOT be the flat gray — it must be a colour-mapped depth pixel.
-    expect([r, g, b]).not.toEqual([120, 120, 120]);
+    // Should NOT be the nodata colour — it must be a colour-mapped depth pixel.
+    expect([r, g, b]).not.toEqual(defaultNodataRgb());
     // And should not be no-data colour.
-    expect(r).not.toBe(linToSRGBByte(NO_DATA_COLOR.r));
+    expect(r).not.toBe(defaultNodataRgb()[0]);
   });
 
   it("topography > 0 overrides a valid depth: land colour, not depth colour", () => {
@@ -407,8 +415,8 @@ describe("drawHeatmap — null depths, topography cells, and fixed preset themes
     const [rLand, gLand, bLand] = px(data, 0, 0);
     const [rOcean] = px(data, 179, 0);
 
-    expect([rLand, gLand, bLand]).toEqual([120, 120, 120]);
-    expect(rOcean).not.toBe(120); // ocean cell gets a colormap colour, not gray
+    expect([rLand, gLand, bLand]).toEqual(defaultNodataRgb());
+    expect(rOcean).not.toBe(defaultNodataRgb()[0]); // ocean cell gets a colormap colour
   });
 
   // ── fixed preset themes: non-flat gradient ──────────────────────────────
@@ -460,7 +468,7 @@ describe("drawHeatmap — null depths, topography cells, and fixed preset themes
   );
 
   it.each(FIXED_THEMES)(
-    'theme "%s" never produces the NO_DATA_COLOR or the flat-land gray for a valid depth',
+    'theme "%s" never produces the nodata colour for a valid depth',
     (theme) => {
       const depths = [50] as unknown as DepthsArray;
       const { ctx, captured } = makeHeatmapCtx();
@@ -470,12 +478,9 @@ describe("drawHeatmap — null depths, topography cells, and fixed preset themes
       const data = captured[0]!;
       const [r, g, b] = px(data, 0, 0);
 
-      const expectedNdR = linToSRGBByte(NO_DATA_COLOR.r);
-      const expectedNdG = linToSRGBByte(NO_DATA_COLOR.g);
-      const expectedNdB = linToSRGBByte(NO_DATA_COLOR.b);
+      const expectedNodata = defaultNodataRgb();
 
-      expect([r, g, b]).not.toEqual([expectedNdR, expectedNdG, expectedNdB]);
-      expect([r, g, b]).not.toEqual([120, 120, 120]);
+      expect([r, g, b]).not.toEqual(expectedNodata);
     },
   );
 });
