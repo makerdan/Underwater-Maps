@@ -32,10 +32,18 @@ type LiveCollection = {
   defaultMemberId: string | null;
   members: Array<{
     id: string;
-    kind: "dataset";
+    kind: MemberKind;
     refId: string;
     name: string;
   }>;
+};
+
+type LiveCatalogSave = {
+  id: string;
+  catalogId: string;
+  status: "queued" | "processing" | "ready" | "failed";
+  datasetId: string | null;
+  errorMessage: string | null;
 };
 
 const CREATED_AT = "2026-01-01T00:00:00.000Z";
@@ -113,6 +121,55 @@ async function getLiveCollection(
     `live collection ${collectionId} was not returned`,
   ).toBeDefined();
   return collection!;
+}
+
+async function createReadyCatalogSave(
+  request: APIRequestContext,
+  requestBbox: {
+    minLon: number;
+    minLat: number;
+    maxLon: number;
+    maxLat: number;
+  },
+): Promise<LiveCatalogSave> {
+  const response = await request.post(
+    apiUrl("/api/datasets/catalog/preset-lake-ray-roberts/save"),
+    {
+      headers: { ...AUTH_HEADERS, "content-type": "application/json" },
+      data: { requestBbox },
+      timeout: 30_000,
+    },
+  );
+  expect(
+    response.status(),
+    `catalog save creation failed with ${response.status()}`,
+  ).toBe(201);
+  const created = (await response.json()) as { id?: string };
+  expect(created.id, "catalog save creation did not return an id").toBeTruthy();
+
+  const deadline = Date.now() + 120_000;
+  while (Date.now() < deadline) {
+    const statusResponse = await request.get(
+      apiUrl(`/api/datasets/my-saves/${created.id}/status`),
+      { headers: AUTH_HEADERS },
+    );
+    expect(
+      statusResponse.ok(),
+      `catalog save status failed with ${statusResponse.status()}`,
+    ).toBeTruthy();
+    const save = (await statusResponse.json()) as LiveCatalogSave;
+    if (save.status === "ready") {
+      expect(save.datasetId, `catalog save ${created.id} has no dataset`).toBeTruthy();
+      return save;
+    }
+    if (save.status === "failed") {
+      throw new Error(
+        `catalog save ${created.id} failed: ${save.errorMessage ?? "unknown error"}`,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`catalog save ${created.id} did not become ready within 120 seconds`);
 }
 
 function createCollectionFixtures(): CollectionFixture[] {
@@ -527,6 +584,147 @@ test.describe("collection default member reload persistence", () => {
       for (const datasetId of uploadedDatasetIds) {
         await request
           .delete(apiUrl(`/api/user/datasets/${datasetId}`), {
+            headers: AUTH_HEADERS,
+          })
+          .catch(() => {});
+      }
+    }
+  });
+
+  test("clears a removed live catalog default and reloads to the first catalog member", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(180_000);
+
+    let collectionId: string | null = null;
+    const catalogSaveIds: string[] = [];
+
+    try {
+      // Distinct request bboxes allow the same real catalog entry to be
+      // materialized twice. The preset materializer serves the bundled grid,
+      // so these small bbox changes only make the save rows distinct while
+      // keeping the setup deterministic and offline from upstream services.
+      const offset = (Date.now() % 1000) / 1_000_000;
+      const firstSave = await createReadyCatalogSave(request, {
+        minLon: -97.15 + offset,
+        minLat: 33.3,
+        maxLon: -97.14 + offset,
+        maxLat: 33.31,
+      });
+      catalogSaveIds.push(firstSave.id);
+      const secondSave = await createReadyCatalogSave(request, {
+        minLon: -97.13 + offset,
+        minLat: 33.32,
+        maxLon: -97.12 + offset,
+        maxLat: 33.33,
+      });
+      catalogSaveIds.push(secondSave.id);
+      expect(firstSave.datasetId).toBeTruthy();
+      expect(secondSave.datasetId).toBeTruthy();
+
+      const createResponse = await request.post(apiUrl("/api/user/collections"), {
+        headers: { ...AUTH_HEADERS, "content-type": "application/json" },
+        data: { name: `Live catalog default reload ${Date.now()}` },
+      });
+      expect(
+        createResponse.ok(),
+        `catalog collection creation failed with ${createResponse.status()}`,
+      ).toBeTruthy();
+      const createdCollection = (await createResponse.json()) as { id?: string };
+      expect(createdCollection.id).toBeTruthy();
+      collectionId = createdCollection.id!;
+
+      const addCatalogSave = async (catalogSaveId: string) => {
+        const response = await request.post(
+          apiUrl(`/api/user/collections/${collectionId}/members`),
+          {
+            headers: { ...AUTH_HEADERS, "content-type": "application/json" },
+            data: { catalogSaveId },
+          },
+        );
+        expect(
+          response.ok(),
+          `adding catalog save ${catalogSaveId} failed with ${response.status()}`,
+        ).toBeTruthy();
+        const body = (await response.json()) as { id?: string };
+        expect(body.id).toBeTruthy();
+        return body.id!;
+      };
+
+      const firstMemberId = await addCatalogSave(firstSave.id);
+      const secondMemberId = await addCatalogSave(secondSave.id);
+
+      const seeded = await getLiveCollection(request, collectionId);
+      expect(seeded.members.map((member) => member.kind)).toEqual([
+        "catalogSave",
+        "catalogSave",
+      ]);
+      expect(seeded.members.map((member) => member.refId)).toEqual([
+        firstSave.id,
+        secondSave.id,
+      ]);
+
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+      await expect(page.getByTestId("collections-section")).toBeVisible({
+        timeout: 12_000,
+      });
+      await expect(
+        page.getByTestId(`btn-collection-settings-${collectionId}`),
+      ).toBeVisible({ timeout: 12_000 });
+
+      await chooseDefault(page, collectionId, secondMemberId);
+      const selected = await getLiveCollection(request, collectionId);
+      expect(selected.defaultMemberId).toBe(secondMemberId);
+
+      await page.getByTestId(`btn-expand-collection-${collectionId}`).click();
+      const deleteResponsePromise = page.waitForResponse(
+        (response) =>
+          response.request().method() === "DELETE" &&
+          response
+            .url()
+            .includes(
+              `/api/user/collections/${collectionId}/members/${secondMemberId}`,
+            ),
+      );
+      await page.getByTestId(`btn-remove-member-${secondMemberId}`).click();
+      const deleteResponse = await deleteResponsePromise;
+      expect(deleteResponse.status()).toBe(204);
+      await expect(
+        page.getByTestId(`collection-member-${secondMemberId}`),
+      ).toBeHidden();
+
+      const removed = await getLiveCollection(request, collectionId);
+      expect(removed.defaultMemberId).toBeNull();
+      expect(removed.members.map((member) => member.refId)).toEqual([firstSave.id]);
+
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await expect(page.getByTestId("collections-section")).toBeVisible({
+        timeout: 12_000,
+      });
+      await expect(
+        page.getByTestId(`btn-collection-settings-${collectionId}`),
+      ).toBeVisible({ timeout: 12_000 });
+      await expectDefault(page, collectionId, "");
+
+      const finalCollection = await getLiveCollection(request, collectionId);
+      expect(finalCollection.defaultMemberId).toBeNull();
+      expect(finalCollection.members).toHaveLength(1);
+      expect(finalCollection.members[0]?.refId).toBe(firstSave.id);
+
+      await page.getByTestId(`btn-load-collection-${collectionId}`).click();
+      await expectPrimaryDataset(page, firstSave.datasetId!);
+    } finally {
+      if (collectionId) {
+        await request
+          .delete(apiUrl(`/api/user/collections/${collectionId}`), {
+            headers: AUTH_HEADERS,
+          })
+          .catch(() => {});
+      }
+      for (const saveId of catalogSaveIds) {
+        await request
+          .delete(apiUrl(`/api/datasets/my-saves/${saveId}`), {
             headers: AUTH_HEADERS,
           })
           .catch(() => {});
