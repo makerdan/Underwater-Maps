@@ -16,6 +16,31 @@ import { overviewMapCanvas } from "./_helpers/canvases";
 
 const OVERLAY_HEADER = ".overview-map-header";
 
+const BOX_SELECT_FAILED_ID = "e2e-box-select-failed";
+const BOX_SELECT_NEIGHBOR_ID = "e2e-box-select-neighbor";
+const BOX_SELECT_RESULTS = [
+  {
+    id: BOX_SELECT_FAILED_ID,
+    name: "Box Select Failure Survey",
+    sourceAgency: "E2E Hydrographic Office",
+    dataType: "bathymetry",
+    coverageBbox: { minLon: -180, minLat: -90, maxLon: 180, maxLat: 90 },
+    waterType: "saltwater",
+    createdAt: "2024-01-01T00:00:00.000Z",
+    relevanceScore: 1,
+  },
+  {
+    id: BOX_SELECT_NEIGHBOR_ID,
+    name: "Box Select Neighbor Survey",
+    sourceAgency: "E2E Hydrographic Office",
+    dataType: "bathymetry",
+    coverageBbox: { minLon: -180, minLat: -90, maxLon: 180, maxLat: 90 },
+    waterType: "saltwater",
+    createdAt: "2024-01-02T00:00:00.000Z",
+    relevanceScore: 0.9,
+  },
+] as const;
+
 async function ensureSignedInOrSkip(page: Page): Promise<boolean> {
   const canvas = page.locator("canvas").first();
   const visible = await canvas.isVisible({ timeout: 12_000 }).catch(() => false);
@@ -64,6 +89,22 @@ async function clearPendingDropIn(page: Page): Promise<void> {
       (window as unknown as { __bathyTest?: { clearPendingDropIn?: () => void } }).__bathyTest?.clearPendingDropIn?.();
     })
     .catch(() => {});
+}
+
+async function waitForOverviewHeaderOrSkip(page: Page): Promise<boolean> {
+  const headerVisible = await page
+    .locator(OVERLAY_HEADER)
+    .waitFor({ state: "visible", timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!headerVisible) {
+    test.skip(
+      true,
+      "Overview header did not appear after HUD button click — overview map may require terrain in this environment",
+    );
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -690,18 +731,7 @@ test.describe("BathyScan — Overview Map", () => {
       await hudBtn.click();
       // The OverviewMap mounts asynchronously — give it 10 s so the overlay
       // header has time to render before we assert against its children.
-      const headerVisible = await page
-        .locator(OVERLAY_HEADER)
-        .waitFor({ state: "visible", timeout: 10_000 })
-        .then(() => true)
-        .catch(() => false);
-      if (!headerVisible) {
-        test.skip(
-          true,
-          "Overview header did not appear after HUD button click — overview map may require terrain in this environment",
-        );
-        return;
-      }
+      if (!(await waitForOverviewHeaderOrSkip(page))) return;
 
       // Open the Tools popover and activate the box-select tool.
       const toolsBtn = page.getByTestId("overview-tools-toggle");
@@ -734,6 +764,162 @@ test.describe("BathyScan — Overview Map", () => {
       // Fire the request and wait for the results container to populate.
       await page.getByTestId("overview-bbox-request").dispatchEvent("click");
       await expect(page.getByTestId("overview-bbox-results")).toBeVisible({ timeout: 10_000 });
+    });
+
+    test("keeps neighboring saves independent when one catalog save fails", async ({ page }) => {
+      const savedCatalogIds = new Set<string>();
+      const saveAttempts = new Map<string, number>();
+
+      await page.route("**/api/datasets/bbox-query", async (route) => {
+        if (route.request().method() !== "POST") {
+          await route.continue();
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            bbox: { north: 90, south: -90, east: 180, west: -180 },
+            datasets: BOX_SELECT_RESULTS,
+          }),
+        });
+      });
+
+      // Start every catalog result as unsaved, then publish each successful
+      // save through the same refetch the component uses in production.
+      await page.route("**/api/datasets/my-saves*", async (route) => {
+        if (route.request().method() !== "GET") {
+          await route.continue();
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(
+            [...savedCatalogIds].map((catalogId) => ({
+              id: `e2e-save-${catalogId}`,
+              catalogId,
+              status: "ready",
+              requestedAt: "2024-01-01T00:00:00.000Z",
+              readyAt: "2024-01-01T00:00:00.000Z",
+              datasetId: null,
+            })),
+          ),
+        });
+      });
+
+      await page.route("**/api/datasets/catalog/*/save", async (route) => {
+        if (route.request().method() !== "POST") {
+          await route.continue();
+          return;
+        }
+        const catalogId = new URL(route.request().url()).pathname.split("/").at(-2);
+        if (!catalogId) {
+          await route.fulfill({
+            status: 400,
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ detail: "Missing catalog id" }),
+          });
+          return;
+        }
+
+        const attempt = (saveAttempts.get(catalogId) ?? 0) + 1;
+        saveAttempts.set(catalogId, attempt);
+        if (catalogId === BOX_SELECT_FAILED_ID && attempt === 1) {
+          await route.fulfill({
+            status: 503,
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ detail: "The library service is temporarily unavailable." }),
+          });
+          return;
+        }
+
+        savedCatalogIds.add(catalogId);
+        await route.fulfill({
+          status: 201,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            id: `e2e-save-${catalogId}`,
+            catalogId,
+            status: "ready",
+            requestedAt: "2024-01-01T00:00:00.000Z",
+            readyAt: "2024-01-01T00:00:00.000Z",
+            datasetId: null,
+          }),
+        });
+      });
+
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+      if (!(await ensureSignedInOrSkip(page))) return;
+
+      await page.evaluate(() => window.__bathyTest?.seedTerrain?.()).catch(() => {});
+      await page
+        .waitForFunction(
+          () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
+          null,
+          { timeout: 5_000 },
+        )
+        .catch(() => {});
+
+      const hudBtn = page.getByTestId("hud-toggle-overview");
+      await expect(hudBtn).toBeVisible({ timeout: 10_000 });
+      await hudBtn.click();
+
+      if (!(await waitForOverviewHeaderOrSkip(page))) return;
+
+      await expect(page.getByTestId("overview-tools-toggle")).toBeVisible({ timeout: 5_000 });
+      await page.getByTestId("overview-tools-toggle").dispatchEvent("click");
+      const selectBtn = page.getByTestId("overview-select-area-toggle");
+      await selectBtn.dispatchEvent("click");
+      await expect(selectBtn).toHaveAttribute("aria-pressed", "true");
+
+      const canvas = overviewCanvas(page);
+      const box = await canvas.boundingBox();
+      if (!box) throw new Error("Overview canvas missing");
+      const x0 = box.x + box.width * 0.35;
+      const y0 = box.y + box.height * 0.35;
+      const x1 = box.x + box.width * 0.65;
+      const y1 = box.y + box.height * 0.65;
+      await page.mouse.move(x0, y0);
+      await page.mouse.down();
+      await page.mouse.move(x1, y1, { steps: 10 });
+      await page.mouse.up();
+
+      await expect(page.getByTestId("overview-bbox-panel")).toBeVisible({ timeout: 5_000 });
+      await page.getByTestId("overview-bbox-request").dispatchEvent("click");
+      await expect(page.getByTestId("overview-bbox-results")).toBeVisible({ timeout: 10_000 });
+
+      const failedCard = page
+        .getByTestId("overview-bbox-result-card")
+        .filter({ hasText: "Box Select Failure Survey" });
+      const neighborCard = page
+        .getByTestId("overview-bbox-result-card")
+        .filter({ hasText: "Box Select Neighbor Survey" });
+      await expect(failedCard).toBeVisible();
+      await expect(neighborCard).toBeVisible();
+      await expect(page.getByTestId("overview-bbox-result-card")).toHaveCount(2);
+
+      const failedSave = failedCard.getByTestId("overview-bbox-save");
+      const neighborSave = neighborCard.getByTestId("overview-bbox-save");
+      await failedSave.click();
+
+      await expect(page.getByTestId(`overview-bbox-save-error-${BOX_SELECT_FAILED_ID}`)).toBeVisible();
+      await expect(failedCard).toContainText("The library service is temporarily unavailable.");
+      await expect(failedSave).toBeEnabled();
+      await expect(failedSave).toHaveText("+ SAVE");
+      await expect(neighborCard.getByRole("alert")).toHaveCount(0);
+      await expect(neighborSave).toBeEnabled();
+      await expect(neighborSave).toHaveText("+ SAVE");
+
+      await neighborSave.click();
+      await expect(neighborSave).toHaveText("✓ SAVED");
+      await expect(failedSave).toBeEnabled();
+      await expect(failedSave).toHaveText("+ SAVE");
+
+      await failedSave.click();
+      await expect(failedSave).toHaveText("✓ SAVED");
+      await expect(page.getByTestId(`overview-bbox-save-error-${BOX_SELECT_FAILED_ID}`)).toHaveCount(0);
+      await expect(page.getByTestId("overview-bbox-result-card")).toHaveCount(2);
     });
   });
 });
