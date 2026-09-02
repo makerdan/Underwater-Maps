@@ -1,0 +1,41 @@
+{
+  "skill_name": "Install GitHub Actions",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I am adding CI to a small Rust command-line project. It has Cargo.lock, rustfmt, clippy, unit and integration tests, doctests, a generated completion file checked into git, and a cross-platform release build. There are no GitHub workflows yet. Design the GitHub Actions setup, but do not change repository settings or publish releases.",
+      "expected_output": "An evidence-first greenfield plan that inventories the repository, maps each applicable Rust check to an exact workflow command/job, adds generated-file freshness and complete matrix aggregation, separates PR validation from release work, and explicitly leaves GitHub settings and publishing untouched.",
+      "files": [],
+      "expectations": [
+        "The response is app-agnostic and uses the project's discovered Cargo commands rather than assuming JavaScript tooling.",
+        "The response covers formatting, static analysis, unit/integration/doctest, generated-file freshness, build/package, and cross-platform matrix checks.",
+        "The response keeps release publishing separate from pull_request validation and asks for or records the missing repository-policy evidence.",
+        "The response provides a local-to-remote table with exact commands and evidence/confidence labels."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Our Python and TypeScript monorepo currently runs GitHub Actions, CircleCI, and a local validation script. The checks look green, but I suspect the browser suite only runs for one package, the OpenAPI client is stale in some jobs, and two jobs duplicate dependency auditing. Please assess whether GitHub can become the primary CI processor and propose the migration.",
+      "expected_output": "A read-only parity and migration assessment that classifies every provider and event, traces scripts to executable commands, identifies partial browser coverage, generated-client freshness, duplicate audits, and any unknown policy/run evidence, then proposes an authorized cutover without declaring GitHub primary or merge-blocking until active runs and repository policy are independently verified.",
+      "files": [],
+      "expectations": [
+        "The response distinguishes direct, indirect, sharded, package-specific, duplicate, absent, local-only, intentional-gap, and unknown coverage where applicable.",
+        "The response requires generated OpenAPI output to be regenerated serially and checked for a clean diff before consumers run.",
+        "The response does not treat green badges, workflow names, or YAML presence as proof that checks are active, passing, or required.",
+        "The response recommends consolidating duplicate audit coverage and preserving the canonical local validation contract."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "We need secure pull-request validation for a Java service that uses Maven, Testcontainers, integration tests, SAST, dependency scanning, and a performance budget. Contributors include forks and first-time external contributors. A teammate suggested pull_request_target so private secrets are available. Give me a safe workflow design and explain what should be required for merges.",
+      "expected_output": "A security-first design using pull_request for untrusted code, least-privilege permissions, no production/private secrets in PR jobs, pinned third-party actions, explicit service readiness and finite timeouts, fail-closed aggregation, and separate treatment of privileged/manual environments. It must reject pull_request_target as a shortcut and require independent evidence for active runs and merge policy.",
+      "files": [],
+      "expectations": [
+        "The response explicitly explains why checking out or executing fork code under pull_request_target is hazardous and gives a safe alternative.",
+        "The response covers Maven dependency locking, Testcontainers readiness, integration and SAST/dependency checks, performance thresholds, artifacts, retries, and timeouts.",
+        "The response includes a stable required aggregator that fails on failed, cancelled, or unexpected skipped jobs and does not use continue-on-error to hide failures.",
+        "The response includes the Regression Guard contract for security, reliability, and compatibility changes and maps recurrence tests to the owning suite."
+      ]
+    }
+  ]
+}

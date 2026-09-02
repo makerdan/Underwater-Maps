@@ -43,6 +43,10 @@ Record evidence for:
 6. Repository scripts that install, generate, build, test, upload artifacts, or
    silently skip work. Follow referenced scripts far enough to find the actual
    executable command.
+7. Validation that is not named `test`, including formatters, linters, type
+   analyzers, schema tools, fixture freshness, accessibility, performance,
+   dependency policy, documentation generation, package/release checks, and
+   project-specific guard scripts.
 
 Use read-only patterns such as these, adapting paths to the repository:
 
@@ -57,13 +61,46 @@ If a command, referenced action, remote run, or branch policy cannot be
 inspected, mark it **unknown**. Unknown is not absent, passing, active, or
 required.
 
+### Cross-project validation inventory
+
+Do not assume that a package script or a command named `test` is the whole
+contract. Search the repository's actual tooling and record one row for every
+applicable surface. The names below are a checklist, not a claim that every
+project has every surface:
+
+| Validation surface | Discover from | Record before routing |
+|---|---|---|
+| Formatting and lint | formatter config, lint config, pre-commit hooks, `format`/`lint` targets | exact check command, changed-file scope, autofix behavior |
+| Type and static analysis | compiler configs, analyzers, `check`, `typecheck`, `static` targets | runtime/tool version and whether generated inputs are needed |
+| Unit, integration, contract, and mutation tests | test configs, suite manifests, Make/Task targets, package scripts | selectors, shards, fixtures, services, retries, and all required legs |
+| Browser, device, and UI/E2E tests | Playwright/Cypress/Appium/Detox or equivalent configs | browser/device matrix, ports, auth state, screenshots/traces, and readiness |
+| Build, package, and release | build manifests, packaging metadata, lockfiles, signing/provenance config | exact artifact, target platforms, reproducibility, and whether signing/publishing is excluded |
+| Generated files and codegen | generators, schema/API inputs, checked-in outputs | source of truth, serialized generation step, freshness diff, and consumer ordering |
+| Schema, migration, and data compatibility | migration directories, schema tools, fixtures, drift checks | isolated database, forward/rollback policy, snapshot freshness, and destructive-action limits |
+| Accessibility and UI quality | a11y configs, axe rules, visual checks, component harnesses | exact automated assertions and any visual/manual-only boundary |
+| Performance and reliability | benchmark/load/stress targets, budgets, timeout checks, leak detectors | bounded workload, threshold, environment, and whether results are advisory or required |
+| Dependency and security | audit/SCA, SAST, secret/license scanners, policy files | severity policy, exception evidence, fork-safe credentials, and artifact redaction |
+| Configuration, documentation, and manifests | docs generators, config validators, route/catalog checks, CI lint | exact freshness or schema check and the files it protects |
+| Services and environment readiness | service definitions, containers, health probes, setup scripts | pinned versions, ports, health condition, teardown, and shared-state isolation |
+| Fixtures, samples, and test data | fixture generators, freshness scripts, checked-in samples | generation command, size/licensing/privacy constraints, and stale-data failure |
+| Coverage and reporting | coverage config, thresholds, reporters, result aggregation | threshold semantics, merge behavior, and whether upload is diagnostic only |
+| Smoke, deploy, and release validation | smoke targets, deployment manifests, package verification, staging checks | safe read-only/dry-run command, environment boundary, and explicit approval for mutations |
+| Custom project guards | scripts, hooks, validation manifests, policy docs, `check:*` targets | owner, exact command, inputs, and why the check is portable or local-only |
+
+For each row, distinguish **applicable**, **not applicable with evidence**, and
+**unknown**. A missing conventional filename is not evidence that a surface is
+absent: inspect the project's own build system and documentation. A check that
+needs a live production credential, a developer-only daemon, private hardware,
+or task-local state may be local-only, but record the concrete dependency rather
+than silently dropping it.
+
 ## 1. Establish the portable workflow contract
 
 Build a local-to-remote table before changing CI:
 
 | Canonical local check | Exact remote command/job | Coverage | Event scope | Evidence |
 |---|---|---|---|---|
-| command, suite, shard | executable `run:` or verified composite | direct, indirect, sharded, package-specific, local-only, or intentional gap | PR, push, schedule, manual, queue, conditional | observed, inferred, or unknown |
+| command, suite, shard | executable `run:` or verified composite | direct, indirect, sharded, package-specific, duplicate, absent, local-only, intentional gap, or unknown | PR, push, schedule, manual, queue, conditional | observed, inferred, or unknown |
 
 Enumerate every portable static check, unit suite, shard, integration check,
 browser suite, package-specific check, build, and generated-output check. For
@@ -74,6 +111,8 @@ each, choose exactly one decision:
 | Add PR/pre-merge coverage | A normal runner can execute it safely | Workflow job and exact command |
 | Intentionally local-only | CI genuinely lacks a dependency or shared local state | Dependency, reason, and local command |
 | Intentional gap | Coverage is portable but deferred | Missing command, owner, and follow-up |
+| Consolidate duplicate | Another active job already owns equivalent coverage | Both exact commands, evidence of overlap, and approved removal/cutover |
+| Absent or unknown | No equivalent exists, or the relevant source/run cannot be inspected | Distinguish proven absence from unavailable evidence; never call either a pass |
 
 Do not call package-specific or partial coverage full parity. For a sharded
 suite, list every selector and require a failing aggregate if any leg is
@@ -91,6 +130,29 @@ Hand off responsibilities rather than replacing adjacent guidance:
   hygiene. Use it when a runner or test service is unreliable.
 - Provider-specific security, deployment, and secret guidance remains separate.
 
+### Regression Guard contract
+
+Treat regression protection as part of validation coverage, not as an optional
+test after the workflow is installed. For every material change to existing
+behavior, error handling, security/privacy, data integrity, concurrency or
+lifecycle, performance/reliability, or compatibility/contracts:
+
+1. Identify the concrete old failure, unsafe boundary, invariant, lifecycle
+   property, or contract that could return.
+2. Name the recurrence test and the assertion that fails if it returns. Put the
+   guard in the layer where the wrong behavior occurs, or use an E2E guard when
+   the defect only exists across a boundary.
+3. Map that test to the owning local suite and its exact remote job or shard.
+   A green unrelated suite is not Regression Guard coverage.
+4. If deterministic automation is genuinely impossible, record a specific
+   valid exception and keep the risk visible as a gap; do not use "hard to test"
+   or an unnamed existing test as the exception.
+
+The Regression Guard section in the task plan and the Failure Gate section
+remain separate contracts. Failure Gate owns baseline provenance, test
+ownership, and the validation ceiling. Regression Guard owns the recurrence
+signal. Do not weaken either contract to make a remote workflow green.
+
 ## 2. Choose the setup path
 
 ### Greenfield
@@ -104,6 +166,10 @@ Create the smallest set of workflows that gives complete, visible coverage:
 3. A default-branch workflow for slower/full discovery suites and monitoring.
 4. Optional scheduled or manual workflows for drift, refresh, or expensive
    maintenance that is not merge protection.
+5. Before naming a required check, account for every applicable inventory
+   surface above. Keep expensive performance, release, or refresh checks in
+   separate scheduled/manual jobs unless they are explicitly part of the
+   merge contract.
 
 ### Existing CI
 
@@ -158,7 +224,7 @@ mutable tag or branch as an immutable pin. Do not run arbitrary fork code with
 a maintainer token. Do not allow a validation job to push, open pull
 requests, modify settings, deploy, or recurse by writing workflow files.
 
-## 4. Make jobs fail closed
+## 4. Make jobs fail closed (fail-closed required checks)
 
 Every required job must fail when its command fails. In particular:
 
