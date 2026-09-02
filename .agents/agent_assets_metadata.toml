@@ -172,6 +172,7 @@ uri = "file://downloads/chunk-it-skill.zip"
 type = "unspecified"
 title = "Chunk-It Skill (Canonical ZIP)"
 description = "Direct download of the canonical Chunk-It skill from .agents/skills, including SKILL.md and its evals."
+logical_id = "f521e8b0-d232-49f4-9ea3-5c96d62c92fa"
 
 [[outputs]]
 id = "SHrCg5Bvxm14NSzyju2Hh"
@@ -179,6 +180,7 @@ uri = "file://exports/skill-mirror-sync-skill.zip"
 type = "unspecified"
 title = "Skill Mirror Sync Skill (ZIP)"
 description = "Canonical Skill Mirror Sync skill ZIP from .agents/skills."
+logical_id = "3ebf97bd-643f-46be-8710-26dd7bce4c18"
 
 [[outputs]]
 id = "lK8dnsDXa7NC-lKPO_UVo"
@@ -186,6 +188,7 @@ uri = "file://exports/skill-install-confirmation.zip"
 type = "unspecified"
 title = "Skill Install Confirmation (ZIP)"
 description = "Canonical skill-install-confirmation skill ZIP from .agents/skills."
+logical_id = "e58e5716-78a6-4cdf-8519-61c39c9b4e9b"
 
 [[outputs]]
 id = "B7eC9QdC6Ug3RKgl82lUP"
@@ -193,6 +196,7 @@ uri = "file://exports/ci-validation-parity.zip"
 type = "unspecified"
 title = "CI Validation Parity Skill (ZIP)"
 description = "Canonical CI Validation Parity skill ZIP from .agents/skills."
+logical_id = "255197a0-64a7-47e5-a96f-ac791a1172a5"
 
 [[outputs]]
 id = "sxymkR-3e01w2S2Ik_8jw"
@@ -200,13 +204,21 @@ uri = "file://export/skill-mirror-sync.zip"
 type = "unspecified"
 title = "Skill Mirror Sync (Updated Canonical ZIP)"
 description = "Download of the updated canonical Skill Mirror Sync skill from .agents/skills."
+logical_id = "1fa50556-262b-4345-97e1-6da959854d5e"
 
 [[outputs]]
 id = "AkNo0279Cjvh44BK7Mk7l"
 uri = "file://exports/install-github-actions-skill.zip"
 type = "unspecified"
-title = "Install GitHub Actions Skill (ZIP)"
-description = "Direct download of the canonical Install GitHub Actions skill from .agents/skills."
+title = "Install GitHub Actions skill (canonical ZIP)"
+description = "Direct download of the canonical Install GitHub Actions skill from .agents/skills/install-github-actions/SKILL.md. The archive was verified byte-for-byte against the canonical source."
+logical_id = "1fdac9ab-ee24-4b61-a3e5-9ab220779cdf"
+content_hash = "sha256:7ca7d7db1a69fce1723ef3fe1d0ec5f2e822fe450eab5be3e635a8ba05666b93"
+size = 8522
+mtime_ms = 1788385763276
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:3cbc8e82-485c-4459-8b4c-d6abbd1a4049/1fdac9ab-ee24-4b61-a3e5-9ab220779cdf/ddc767c0-2381-4b8a-a6fa-6d7984bfffa5"
+storage_version_token = "1788385772815347"
+content_type = "application/octet-stream"
 
 [[outputs]]
 id = "VcDmPiOcuHP3q1PILJicH"
@@ -214,6 +226,7 @@ uri = "file://exports/failure-gate-skill.zip"
 type = "unspecified"
 title = "Failure Gate skill ZIP"
 description = "Direct download of the canonical Failure Gate skill packaged from .agents/skills/failure-gate/SKILL.md. The archived file was verified byte-for-byte against the canonical source."
+logical_id = "9a2ab87e-d90e-4c89-b85a-0fdcbe9075d6"
 
 [[outputs]]
 id = "fKLQihg4JTReJK-losZBr"
@@ -221,6 +234,7 @@ uri = "file://exports/skill-compression-skill.zip"
 type = "unspecified"
 title = "Skill Compression skill ZIP"
 description = "Direct download of the canonical Skill Compression skill packaged from .agents/skills/skill-compression/SKILL.md. The archived SKILL.md was verified byte-for-byte against the canonical source."
+logical_id = "cb05da67-1f53-4f4d-b3c8-ba7a7d22e7b3"
 
 [[outputs]]
 id = "EcYt_3e7r4yK9S3fJ0ftj"
@@ -228,6 +242,7 @@ uri = "file://exports/regression-guard-skill.zip"
 type = "unspecified"
 title = "Regression Guard skill ZIP"
 description = "Direct download of the canonical Regression Guard skill packaged from .agents/skills/regression-guard/SKILL.md. The archived SKILL.md was verified byte-for-byte against the canonical source."
+logical_id = "b9b05e83-d2a7-42ab-90a3-150f2e6c8f39"
 
 [[outputs]]
 id = "8oQCf_ZB5bbxc0FDxN-7X"
@@ -235,6 +250,7 @@ uri = "file://exports/port-authority-skill.zip"
 type = "unspecified"
 title = "Port Authority skill ZIP"
 description = "Direct download of the canonical Port Authority skill packaged from .agents/skills/Port-Authority, including SKILL.md and its bundled scripts. Every archived file was verified against the canonical source."
+logical_id = "8b88bb04-4685-4b8d-84a7-dc1f6d11f8e7"
 
 [[outputs]]
 id = "wuGScEvD2cLwY5GfX0S14"
@@ -242,6 +258,7 @@ uri = "file://exports/app-support-ops-skill.zip"
 type = "unspecified"
 title = "App Support Ops skill ZIP"
 description = "Direct download of the canonical App Support Ops skill packaged from .agents/skills/app-support-ops, including SKILL.md and its evaluation file. Every archived file was verified against the canonical source."
+logical_id = "758b222b-6b48-4e8d-8016-1e6278545083"
 
 [[outputs]]
 id = "OmEcKPhGxWbS3rEh5l4OD"
@@ -249,6 +266,7 @@ uri = "file://exports/replit-toml-editor-support.zip"
 type = "unspecified"
 title = "Replit TOML Editor support package"
 description = "Direct download containing docs/support/replit-toml-editor-response.md and all files in docs/support/replit-toml-editor-evidence/. Every archived file was verified against the current source."
+logical_id = "cae7bfea-8de5-4424-a193-01b15a02f8ef"
 
 [[outputs]]
 id = "7vK0qVdw1zGZQLMZdp8kv"
@@ -256,3 +274,4 @@ uri = "file://exports/poe-setup-skill.zip"
 type = "unspecified"
 title = "Poe Setup skill ZIP"
 description = "Direct download of the canonical Poe Setup skill packaged from .agents/skills/poe-setup/SKILL.md. The archived file was verified byte-for-byte against the canonical source."
+logical_id = "d9580347-4af3-4495-84b5-6dfa52e931c7"
