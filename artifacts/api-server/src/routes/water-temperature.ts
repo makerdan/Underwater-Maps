@@ -10,7 +10,7 @@
  * uses the returned SST as the surface anchor of a thermocline model so the
  * value reflects real ocean conditions for the user's dataset / GPS location.
  * When the live feed is unreachable we return { available: false } so the
- * client can gracefully fall back to its deterministic mock and the chip can
+ * client can gracefully fall back to an estimated value and the chip can
  * surface a "simulated" attribution to the user.
  */
 
