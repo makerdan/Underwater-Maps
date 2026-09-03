@@ -13,12 +13,72 @@ runButton = "Project"
 
 [[workflows.workflow]]
 name = "Project"
-mode = "sequential"
+mode = "parallel"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "echo \"BathyScan environment ready.\""
+args = "echo BathyScan environment ready."
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-fast"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-standard"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-standard-plus"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-heavy"
+
+[[workflows.workflow]]
+name = "test-fast"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node scripts/run-with-timeout.mjs tierFast -- node scripts/run-tier.mjs fast"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "test-standard"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "test-standard-plus"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node scripts/run-with-timeout.mjs tierStandardPlus -- node scripts/run-tier.mjs full"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "test-heavy"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node scripts/run-with-timeout.mjs aggregate -- node scripts/test-heavy-serial.mjs"
+
+[workflows.workflow.metadata]
+isValidation = true
 
 [agent]
 stack = "PNPM_WORKSPACE"
