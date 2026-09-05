@@ -1,242 +1,350 @@
 #!/usr/bin/env node
 /**
- * check-skill-mirror-sync.mjs — Drift guard between canonical skill sources
- * (.agents/skills/<name>/SKILL.md) and their live copies in
- * .local/custom_skills/<name>/SKILL.md.
- *
- * Replit populates .local/custom_skills/ at install time; .local/ is
- * gitignored, so those copies are never updated by git and can silently fall
- * behind the canonical .agents/skills/ source. This script detects drift by
- * comparing the md5 of each canonical SKILL.md against the stored
- * .fingerprint file in the corresponding .local/custom_skills/<name>/
- * directory.
- *
- * Behaviour:
- *   - If .local/custom_skills/ does not exist (fresh CI, no install):
- *     prints a skip notice and exits 0.
- *   - For each subdirectory in .agents/skills/ that also has a counterpart
- *     in .local/custom_skills/:
- *       • Reads .local/custom_skills/<name>/.fingerprint
- *       • Computes the md5 of .agents/skills/<name>/SKILL.md
- *       • If the hashes differ (or the fingerprint is missing), AUTO-REPAIRS
- *         by re-copying the canonical SKILL.md and re-writing the fingerprint,
- *         then logs a warning. This is safe because the mirrors are gitignored
- *         derived copies — the canonical file is the source of truth.
- *       • Exits 1 only for genuinely unfixable states (e.g. the canonical
- *         SKILL.md cannot be read, or the repair write fails).
- *   - Exits 0 when all fingerprints match (or were successfully repaired).
- *
- * Usage:
- *   node scripts/check-skill-mirror-sync.mjs
+ * Workspace skills have one direction of travel:
+ * WORKSPACE_SKILLS_SOURCE -> .agents/skills (a helper-owned projection) -> a
+ * platform-owned runtime mirror.  This module deliberately never writes .local.
  */
 import {
-  readFileSync,
-  writeFileSync,
-  copyFileSync,
-  existsSync,
-  readdirSync,
-  statSync,
+  copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync,
+  renameSync, rmSync, statSync, writeFileSync,
 } from "node:fs";
-import { resolve, join, dirname } from "node:path";
+import { createHash, randomUUID } from "node:crypto";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createHash } from "node:crypto";
+import { hostname } from "node:os";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const root = resolve(__dirname, "..");
+const here = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(here, "..");
+export const WORKSPACE_SKILLS_SOURCE = "WORKSPACE_SKILLS_SOURCE";
+export const STATUS = Object.freeze({ PASS: 0, MISMATCH: 1, UNAVAILABLE_SOURCE: 2, MISSING_MIRROR: 3 });
+const MARKER = ".workspace-skill-projection.json";
+const SET_MARKER = ".workspace-skills-projection-set.json";
+const REVISION_FILE = ".workspace-revision";
+const MIRROR_METADATA = ".workspace-skill-mirror.json";
+const LOCK = ".workspace-skills-refresh.lock";
+const STAGE_PREFIX = ".workspace-skills-stage-";
+const BACKUP_PREFIX = ".workspace-skills-backup-";
 
-const CANONICAL_DIR = resolve(root, ".agents/skills");
-const LOCAL_DIR = resolve(root, ".local/custom_skills");
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function md5OfFile(filePath) {
-  const content = readFileSync(filePath);
-  return createHash("md5").update(content).digest("hex");
+function digest(value) { return createHash("sha256").update(value).digest("hex"); }
+function safeId(id) { return typeof id === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id) && id !== "." && id !== ".."; }
+function validToken(token) { return typeof token === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(token); }
+function validHost(host) { return typeof host === "string" && /^[A-Za-z0-9._-]{1,255}$/.test(host); }
+function validOwner(owner) {
+  return owner?.version === 1 && validToken(owner.token) && validHost(owner.host) &&
+    Number.isSafeInteger(owner.pid) && owner.pid > 0;
+}
+function safeRelativePath(path) {
+  return typeof path === "string" && path.length > 0 && !path.startsWith("/") &&
+    path.split("/").every((part) => part && part !== "." && part !== "..");
+}
+function validRevision(value) { return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/.test(value); }
+function contained(root, candidate) {
+  const rel = relative(root, candidate);
+  return rel === "" || (!rel.startsWith(`..${sep}`) && rel !== ".." && !rel.includes(`..${sep}`));
+}
+function fail(message) { throw new Error(message); }
+function readJson(path, label) {
+  try { return JSON.parse(readFileSync(path, "utf8")); }
+  catch { fail(`${label} is malformed`); }
+}
+function regular(path, label) {
+  const s = lstatSync(path);
+  if (!s.isFile() || s.isSymbolicLink()) fail(`${label} contains an unsafe entry`);
 }
 
-function subdirs(dir) {
-  try {
-    return readdirSync(dir).filter((name) => {
-      try {
-        return statSync(join(dir, name)).isDirectory();
-      } catch {
-        return false;
-      }
-    });
-  } catch {
-    return null; // directory does not exist
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Discovery
-// ---------------------------------------------------------------------------
-
-/**
- * Discover skills from the canonical tree, never from the runtime mirror tree.
- *
- * This distinction matters after a canonical directory rename: an older
- * ignored runtime directory can remain under .local/custom_skills/ until the
- * platform refreshes it. That old directory is not a canonical skill and must
- * not hide the newly named canonical directory from discovery.
- */
-export function discoverCanonicalSkills(canonicalDir = CANONICAL_DIR) {
-  return subdirs(canonicalDir) ?? [];
-}
-
-/**
- * Return the existing runtime directory for a canonical name. Matching is
- * case-insensitive for platform-created casing differences, but does not
- * guess across different slugs. An orphaned old-slug directory therefore
- * remains untouched until the platform creates the new counterpart.
- */
-export function findLocalSkillDirectory(localDir, canonicalName) {
-  const localNames = subdirs(localDir) ?? [];
-  return localNames.find(
-    (localName) => localName.toLowerCase() === canonicalName.toLowerCase(),
-  ) ?? null;
-}
-
-// ---------------------------------------------------------------------------
-// Repair helper — mirrors are gitignored derived copies; re-copying is safe.
-// Returns true on success, false if the repair could not be completed.
-// ---------------------------------------------------------------------------
-
-function repairMirror(canonicalSkillMd, localSkillMd, fingerprintPath) {
-  try {
-    const actualMd5 = md5OfFile(canonicalSkillMd);
-    copyFileSync(canonicalSkillMd, localSkillMd);
-    writeFileSync(fingerprintPath, actualMd5 + "\n", "utf8");
-    return true;
-  } catch (err) {
-    return false;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Main check + auto-repair loop
-// ---------------------------------------------------------------------------
-
-/**
- * Check and repair the runtime mirrors for canonical skills.
- *
- * The directory arguments are injectable so the canonical-first discovery
- * contract can be regression-tested without touching the repository's
- * gitignored .local/custom_skills/ tree.
- *
- * @returns {number} process-style exit code
- */
-export function runSkillMirrorCheck({
-  canonicalDir = CANONICAL_DIR,
-  localDir = LOCAL_DIR,
-  logger = console,
-} = {}) {
-  if (!existsSync(localDir)) {
-    logger.log(
-      "[check-skill-mirror-sync] SKIP — .local/custom_skills/ does not exist " +
-      "(expected in fresh CI environments where the platform has not populated it).",
-    );
-    return 0;
-  }
-
-  const canonicalSkills = discoverCanonicalSkills(canonicalDir);
-  let checked = 0;
-  let repaired = 0;
-  const hardFailures = []; // genuinely unfixable (canonical unreadable / write failed)
-
-  for (const canonicalName of canonicalSkills) {
-    const localName = findLocalSkillDirectory(localDir, canonicalName);
-    if (!localName) {
-      // No counterpart in .local/custom_skills/ — out of scope per spec.
-      continue;
+/** Build a sorted SHA-256 inventory.  Symlinks, special files, and escapes fail. */
+export function buildSourceManifest(sourceDir) {
+  const root = resolve(sourceDir);
+  if (!existsSync(root)) fail("workspace skill source is unavailable");
+  const rootStat = lstatSync(root);
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) fail("workspace skill source is invalid");
+  const revisionPath = join(root, REVISION_FILE);
+  if (!existsSync(revisionPath)) fail("workspace skill source revision is unavailable");
+  regular(revisionPath, "workspace skill source revision");
+  const revision = readFileSync(revisionPath, "utf8").trim();
+  if (!validRevision(revision)) fail("workspace skill source revision is malformed");
+  const topLevelSkills = readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.name !== REVISION_FILE);
+  for (const entry of topLevelSkills) {
+    const info = lstatSync(join(root, entry.name));
+    if (!safeId(entry.name) || info.isSymbolicLink() || !info.isDirectory()) {
+      fail("workspace skill source has an invalid top-level entry");
     }
-
-    const canonicalSkillMd = join(canonicalDir, canonicalName, "SKILL.md");
-    const fingerprintPath = join(localDir, localName, ".fingerprint");
-    const localSkillMd = join(localDir, localName, "SKILL.md");
-
-    if (!existsSync(canonicalSkillMd)) {
-      // A canonical directory without its source file is an invalid source
-      // tree, not an out-of-scope missing runtime counterpart.
-      logger.error(
-        `[check-skill-mirror-sync] ERROR — canonical skill "${canonicalName}" is missing SKILL.md: ${canonicalSkillMd}`,
-      );
-      hardFailures.push(canonicalName);
-      continue;
-    }
-
-    checked++;
-
-    // Determine whether a repair is needed.
-    let needsRepair = false;
-    let repairReason = "";
-
-    if (!existsSync(localSkillMd)) {
-      needsRepair = true;
-      repairReason = "missing local SKILL.md";
-    } else if (!existsSync(fingerprintPath)) {
-      needsRepair = true;
-      repairReason = "missing .fingerprint";
-    } else {
-      try {
-        const storedFingerprint = readFileSync(fingerprintPath, "utf8").trim();
-        const actualMd5 = md5OfFile(canonicalSkillMd);
-        if (storedFingerprint !== actualMd5) {
-          needsRepair = true;
-          repairReason = `fingerprint mismatch (stored=${storedFingerprint.slice(0, 8)}… actual=${actualMd5.slice(0, 8)}…)`;
-        }
-      } catch (err) {
-        needsRepair = true;
-        repairReason = `could not read source or fingerprint (${err.message})`;
+  }
+  const files = [];
+  function visit(directory, prefix = "") {
+    for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      if (!entry.name || entry.name === "." || entry.name === "..") fail("workspace skill source has an invalid path");
+      if (prefix === "" && entry.name === REVISION_FILE) continue;
+      if (entry.name === MARKER) fail("workspace skill source contains a reserved helper file");
+      const path = join(directory, entry.name);
+      if (!contained(root, path)) fail("workspace skill source has a path escape");
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const info = lstatSync(path);
+      if (info.isSymbolicLink() || (!info.isDirectory() && !info.isFile())) fail("workspace skill source contains an unsafe entry");
+      if (info.isDirectory()) visit(path, rel);
+      else {
+        regular(path, "workspace skill source");
+        files.push({ path: rel, sha256: digest(readFileSync(path)) });
       }
     }
+  }
+  visit(root);
+  const ids = topLevelSkills.map((entry) => entry.name).sort();
+  if (!ids.length || ids.some((id) => !safeId(id))) fail("workspace skill source has no valid skill directories");
+  // Every top-level entry must be a skill directory, and a skill must contain SKILL.md.
+  for (const id of ids) {
+    const dir = join(root, id);
+    if (!lstatSync(dir).isDirectory() || !files.some((f) => f.path === `${id}/SKILL.md`)) fail("workspace skill source has an incomplete skill");
+  }
+  const fingerprint = digest(JSON.stringify(files));
+  return { version: 1, revision, fingerprint, sourceFingerprint: fingerprint, files, skills: ids };
+}
 
-    if (!needsRepair) {
-      continue;
-    }
+export function resolveWorkspaceSkillsSource({ env = process.env, root = ROOT } = {}) {
+  const value = env[WORKSPACE_SKILLS_SOURCE];
+  if (!value || !String(value).trim()) fail(`${WORKSPACE_SKILLS_SOURCE} is required`);
+  const source = resolve(root, value);
+  // Explicit relative values are rooted at the repository; source identity is never logged.
+  return source;
+}
 
-    // Attempt auto-repair: re-copy canonical → mirror and re-write fingerprint.
-    const ok = repairMirror(canonicalSkillMd, localSkillMd, fingerprintPath);
-    if (ok) {
-      logger.warn(
-        `[check-skill-mirror-sync] WARN — repaired stale mirror for skill "${canonicalName}" (${repairReason}).`,
-      );
-      repaired++;
-    } else {
-      // Repair failed — this is a hard failure (e.g. unreadable canonical or
-      // read-only local dir). Report it so the operator knows.
-      logger.error(
-        `[check-skill-mirror-sync] ERROR — could not repair mirror for skill "${canonicalName}" (${repairReason}).`,
-      );
-      logger.error(
-        `  Canonical source: ${canonicalSkillMd}`,
-      );
-      logger.error(
-        `  Local mirror:     ${localSkillMd}`,
-      );
-      hardFailures.push(canonicalName);
+function projectionMarker(path) {
+  const marker = join(path, MARKER);
+  if (!existsSync(marker)) return null;
+  const value = readJson(marker, "projection manifest");
+  if (value?.version !== 1 || !safeId(value.skill) || !validRevision(value.sourceRevision) || !/^[a-f0-9]{64}$/.test(value.sourceFingerprint) ||
+      !Array.isArray(value.files) || !value.files.every((f) => safeRelativePath(f.path) && /^[a-f0-9]{64}$/.test(f.sha256))) {
+    fail("projection manifest is malformed");
+  }
+  return value;
+}
+function setMarker(root) {
+  const value = readJson(join(root, SET_MARKER), "projection set manifest");
+  if (value?.version !== 1 || !validRevision(value.sourceRevision) || !/^[a-f0-9]{64}$/.test(value.sourceFingerprint) ||
+      !Array.isArray(value.skills) || !value.skills.every(safeId)) fail("projection set manifest is malformed");
+  return value;
+}
+function isOwnedProjection(path) {
+  try { return projectionMarker(path); } catch { return null; }
+}
+function copyTree(source, dest) {
+  for (const entry of readdirSync(source, { withFileTypes: true })) {
+    const from = join(source, entry.name), to = join(dest, entry.name);
+    const info = lstatSync(from);
+    if (info.isSymbolicLink() || (!info.isDirectory() && !info.isFile())) fail("workspace skill source contains an unsafe entry");
+    if (info.isDirectory()) { mkdirSync(to); copyTree(from, to); }
+    else { regular(from, "workspace skill source"); copyFileSync(from, to); }
+  }
+}
+function skillFiles(manifest, skill) {
+  return manifest.files.filter((f) => f.path.startsWith(`${skill}/`))
+    .map((f) => ({ path: f.path.slice(skill.length + 1), sha256: f.sha256 }));
+}
+function validateProjectionSkill(dir, manifest, skill) {
+  const marker = projectionMarker(dir);
+  const expected = skillFiles(manifest, skill);
+  if (!marker || marker.skill !== skill || marker.sourceRevision !== manifest.revision || marker.sourceFingerprint !== manifest.fingerprint ||
+      JSON.stringify(marker.files) !== JSON.stringify(expected)) fail("projection is not a freshly validated snapshot");
+  const actual = buildSourceManifestForOne(dir);
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) fail("projection content does not match its manifest");
+  return marker;
+}
+function buildSourceManifestForOne(dir) {
+  const result = [];
+  function visit(current, prefix = "") {
+    for (const entry of readdirSync(current, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      if (entry.name === MARKER) continue;
+      const path = join(current, entry.name), rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const s = lstatSync(path);
+      if (s.isSymbolicLink() || (!s.isDirectory() && !s.isFile())) fail("projection contains an unsafe entry");
+      if (s.isDirectory()) visit(path, rel); else result.push({ path: rel, sha256: digest(readFileSync(path)) });
     }
   }
+  visit(dir); return result;
+}
 
-  if (hardFailures.length > 0) {
-    logger.error(
-      `\n[check-skill-mirror-sync] FAIL — ${hardFailures.length} skill mirror(s) could not be repaired: ${hardFailures.join(", ")}`,
-    );
-    logger.error(
-      "Check that the canonical SKILL.md files are readable and .local/custom_skills/ is writable.",
-    );
-    return 1;
+function recoverAbandonedLock(parent, lock, owner) {
+  const journalPath = join(lock, "journal.json");
+  let journal;
+  try { journal = readJson(journalPath, "refresh journal"); } catch { fail("workspace skill refresh lock has no recoverable journal"); }
+  if (!Array.isArray(journal.moves) || !journal.moves.every((m) => safeId(m.skill) && typeof m.backup === "string" &&
+      basename(m.backup) === `${BACKUP_PREFIX}${owner.token}-${m.skill}` && contained(parent, m.backup))) fail("refresh journal is malformed");
+  for (const move of [...journal.moves].reverse()) {
+    const target = join(parent, move.skill);
+    // The journal entry is written before the rename. If the backup does not
+    // exist, the move never happened and the current target must be preserved.
+    if (!existsSync(move.backup)) continue;
+    if (existsSync(target)) {
+      if (!isOwnedProjection(target)) fail("abandoned refresh cannot replace project-authored state");
+      rmSync(target, { recursive: true, force: true });
+    }
+    renameSync(move.backup, target);
   }
+  const stage = join(parent, `${STAGE_PREFIX}${owner.token}`);
+  if (existsSync(stage)) rmSync(stage, { recursive: true, force: true });
+}
+function acquireLock(parent, options) {
+  const lock = join(parent, LOCK), token = options.token ?? randomUUID();
+  if (!validToken(token)) fail("workspace skill refresh token is invalid");
+  try { mkdirSync(lock); }
+  catch {
+    const owner = (() => { try { return readJson(join(lock, "owner.json"), "refresh lock"); } catch { return null; } })();
+    const sameHost = validOwner(owner) && owner.host === (options.host ?? hostname());
+    const alive = sameHost &&
+      (options.isProcessAlive ?? ((pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code !== "ESRCH"; } }))(owner.pid);
+    if (!sameHost || alive) fail("workspace skill refresh is already active");
+    // A same-host ESRCH pid is the only provable abandoned case.
+    recoverAbandonedLock(parent, lock, owner);
+    rmSync(lock, { recursive: true, force: false });
+    mkdirSync(lock);
+  }
+  const newOwner = { version: 1, token, pid: options.pid ?? process.pid, host: options.host ?? hostname() };
+  if (!validOwner(newOwner)) {
+    rmSync(lock, { recursive: true, force: true });
+    fail("workspace skill refresh owner is invalid");
+  }
+  writeFileSync(join(lock, "owner.json"), JSON.stringify(newOwner));
+  return { lock, token };
+}
 
-  const repairedNote = repaired > 0 ? `, auto-repaired ${repaired}` : "";
-  logger.log(
-    `[check-skill-mirror-sync] OK — all ${checked} skill mirror fingerprint(s) match${repairedNote}.`,
-  );
-  return 0;
+/** Atomically refresh helper-owned projections. Project-authored directories are never replaced. */
+export function refreshWorkspaceSkillProjection(options = {}) {
+  const source = options.sourceDir ?? resolveWorkspaceSkillsSource(options);
+  const projectionRoot = resolve(options.projectionDir ?? join(ROOT, ".agents", "skills"));
+  const before = buildSourceManifest(source);
+  mkdirSync(projectionRoot, { recursive: true });
+  const lock = acquireLock(projectionRoot, options);
+  const stage = join(projectionRoot, `${STAGE_PREFIX}${lock.token}`);
+  const setTemp = join(projectionRoot, `.${SET_MARKER}.${lock.token}.tmp`);
+  const backups = [];
+  let committed = false;
+  try {
+    mkdirSync(stage);
+    for (const skill of before.skills) {
+      const target = join(projectionRoot, skill);
+      if (existsSync(target) && !isOwnedProjection(target)) fail(`refusing to replace project-authored skill "${skill}"`);
+      const staged = join(stage, skill); mkdirSync(staged); copyTree(join(source, skill), staged);
+      writeFileSync(join(staged, MARKER), JSON.stringify({ version: 1, skill, sourceRevision: before.revision, sourceFingerprint: before.fingerprint, files: skillFiles(before, skill) }));
+      validateProjectionSkill(staged, before, skill);
+    }
+    // Test/embedding hook: lets callers model a workspace changing between
+    // snapshot validation and installation without exposing staging paths.
+    options.beforeInstall?.();
+    const after = buildSourceManifest(source);
+    if (after.revision !== before.revision || after.fingerprint !== before.fingerprint) fail("workspace skill source changed during refresh");
+    const existing = readdirSync(projectionRoot, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && !e.name.startsWith(".")).map((e) => e.name);
+    const replace = [...new Set([...before.skills, ...existing.filter((id) => isOwnedProjection(join(projectionRoot, id)) && !before.skills.includes(id))])];
+    for (const skill of replace) {
+      const target = join(projectionRoot, skill), backup = join(projectionRoot, `${BACKUP_PREFIX}${lock.token}-${skill}`);
+      if (existsSync(target)) {
+        backups.push([target, backup]);
+        writeFileSync(join(lock.lock, "journal.json"), JSON.stringify({ version: 1, moves: backups.map(([oldTarget, oldBackup]) => ({ skill: basename(oldTarget), backup: oldBackup })) }));
+        renameSync(target, backup);
+      }
+      if (before.skills.includes(skill)) renameSync(join(stage, skill), target);
+    }
+    writeFileSync(setTemp, JSON.stringify({ version: 1, sourceRevision: before.revision, sourceFingerprint: before.fingerprint, skills: before.skills }));
+    renameSync(setTemp, join(projectionRoot, SET_MARKER));
+    committed = true;
+    options.afterCommit?.();
+    for (const [, backup] of backups) rmSync(backup, { recursive: true, force: true });
+    return { revision: before.revision, fingerprint: before.fingerprint, skills: before.skills };
+  } catch (error) {
+    // Restore only names this invocation moved; never clean unknown work.
+    if (!committed) {
+      for (const [target, backup] of backups.reverse()) {
+        if (existsSync(target)) rmSync(target, { recursive: true, force: true });
+        if (existsSync(backup)) renameSync(backup, target);
+      }
+    }
+    throw error;
+  } finally {
+    if (existsSync(stage)) rmSync(stage, { recursive: true, force: true });
+    if (existsSync(setTemp)) rmSync(setTemp, { force: true });
+    const ownerPath = join(lock.lock, "owner.json");
+    try { if (readJson(ownerPath, "refresh lock").token === lock.token) rmSync(lock.lock, { recursive: true, force: true }); } catch { /* do not remove foreign lock */ }
+  }
+}
+
+/** Fail-closed reader: callers only receive a skill after validating projection and source identity. */
+export function loadWorkspaceSkill(skill, options = {}) {
+  if (!safeId(skill)) fail("invalid skill id");
+  const source = options.sourceDir ?? resolveWorkspaceSkillsSource(options);
+  const manifest = buildSourceManifest(source);
+  if (!manifest.skills.includes(skill)) fail("requested skill is unavailable");
+  const root = resolve(options.projectionDir ?? join(ROOT, ".agents", "skills"));
+  const set = setMarker(root);
+  if (set.sourceRevision !== manifest.revision || set.sourceFingerprint !== manifest.fingerprint ||
+      JSON.stringify(set.skills) !== JSON.stringify(manifest.skills) || !set.skills.includes(skill)) {
+    fail("projection set is not a freshly validated snapshot");
+  }
+  const managed = [];
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (entry.name.startsWith(".") || !entry.isDirectory()) continue;
+    const dir = join(root, entry.name);
+    if (existsSync(join(dir, MARKER))) {
+      projectionMarker(dir);
+      managed.push(entry.name);
+    }
+  }
+  managed.sort();
+  if (JSON.stringify(managed) !== JSON.stringify(set.skills) ||
+      JSON.stringify(managed) !== JSON.stringify(manifest.skills)) {
+    fail("projection set does not match physical helper-owned projections");
+  }
+  validateProjectionSkill(join(root, skill), manifest, skill);
+  return readFileSync(join(root, skill, "SKILL.md"), "utf8");
+}
+
+/** Read-only platform mirror comparison. Metadata must identify the same source revision and skill inventory. */
+export function getSkillMirrorStatus(skill, options = {}) {
+  if (!safeId(skill)) return STATUS.MISMATCH;
+  let manifest;
+  try { manifest = buildSourceManifest(options.sourceDir ?? resolveWorkspaceSkillsSource(options)); }
+  catch { return STATUS.UNAVAILABLE_SOURCE; }
+  if (!manifest.skills.includes(skill)) return STATUS.UNAVAILABLE_SOURCE;
+  const runtime = resolve(options.runtimeDir ?? join(ROOT, ".local", "custom_skills"));
+  const metadataPath = join(runtime, skill, MIRROR_METADATA);
+  if (!existsSync(metadataPath)) return STATUS.MISSING_MIRROR;
+  try {
+    if (lstatSync(metadataPath).isSymbolicLink() || !lstatSync(metadataPath).isFile()) return STATUS.MISMATCH;
+    const metadata = readJson(metadataPath, "runtime mirror metadata");
+    const expected = skillFiles(manifest, skill);
+    return metadata?.version === 1 && metadata.skill === skill && metadata.sourceRevision === manifest.revision &&
+      metadata.sourceFingerprint === manifest.fingerprint &&
+      JSON.stringify(metadata.files) === JSON.stringify(expected) ? STATUS.PASS : STATUS.MISMATCH;
+  } catch { return STATUS.MISMATCH; }
+}
+
+// Compatibility entry point is intentionally read-only now.
+export function runSkillMirrorCheck(options = {}) {
+  const source = options.sourceDir ?? (() => { try { return resolveWorkspaceSkillsSource(options); } catch { return null; } })();
+  if (!source) return STATUS.UNAVAILABLE_SOURCE;
+  const manifest = (() => { try { return buildSourceManifest(source); } catch { return null; } })();
+  if (!manifest) return STATUS.UNAVAILABLE_SOURCE;
+  const skill = options.skill;
+  if (skill) return getSkillMirrorStatus(skill, { ...options, sourceDir: source });
+  return manifest.skills.every((id) => getSkillMirrorStatus(id, { ...options, sourceDir: source }) === STATUS.PASS) ? STATUS.PASS : STATUS.MISMATCH;
 }
 
 if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
-  process.exitCode = runSkillMirrorCheck();
+  const command = process.argv[2] ?? "status";
+  const index = process.argv.indexOf("--skill");
+  const skill = index >= 0 ? process.argv[index + 1] : null;
+  if (command === "refresh") {
+    try {
+      const result = refreshWorkspaceSkillProjection();
+      console.log(`Refreshed ${result.skills.length} workspace skill projection(s).`);
+    } catch (error) {
+      console.error(`Workspace skill refresh failed: ${error.message}`);
+      process.exitCode = 1;
+    }
+  } else if (command === "status") {
+    process.exitCode = runSkillMirrorCheck({ skill });
+  } else {
+    console.error("Usage: check-skill-mirror-sync.mjs <refresh|status> [--skill <skill-id>]");
+    process.exitCode = 1;
+  }
 }

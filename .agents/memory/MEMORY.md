@@ -49,12 +49,10 @@
 - [Playwright globalSetup port sweep self-DOS](kill-port-holders-webserver-order.md) — webServers spawn before globalSetup AND port pre-check runs before the command; sweep at config-load time with env guard, skip own-tree holders.
 - [Playwright addInitScript drops closures](playwright-addinitscript-closures.md) — factory-closure init scripts lose captured values silently; pass values as addInitScript's second arg.
 - [Express 5 wildcard routes](express5-wildcard-routes.md) — bare "*" route patterns throw in path-to-regexp v8; use named splats like "/objects/*objectPath".
-- [Playwright webServer before globalSetup](playwright-webserver-before-globalsetup.md) — webServers boot BEFORE globalSetup; port sweeps belong in each webServer command, never in globalSetup.
 - [pg.Pool needs error listener](pg-pool-error-listener.md) — unlistened 'error' on pg.Pool causes uncaughtException → process.exit(1); add pool.on('error') in lib/db/src/index.ts.
 - [Workflow limit and validation upsert](workflow-limit-validation-upsert.md) — configureWorkflow blocked at 10/10 (hidden Project meta counts); setValidationCommand upsert bypasses it. Onboarding overlay blocks Home-route e2e clicks.
 - [Workflow limit counter goes stale](workflow-limit-stale-counter.md) — configureWorkflow keeps rejecting "10/10" after a removal; listWorkflows() shows truth, retry after a few minutes.
 - [Port cleanup /proc quirks](port-cleanup-proc-quirks.md) — fuser is not on PATH (old fuser -k was a no-op); Nix node comm is "MainThread" — use scripts/kill-port-holders.mjs for freeing ports.
-- [E2E global-setup port sweep](e2e-global-setup-port-sweep.md) — Playwright boots webServer before globalSetup; port sweeps there must exempt own-tree holders or they kill their own servers.
 - [NCEI geoportal response format](ncei-geoportal-response-format.md) — f=json now returns atom shape (empty results); omit f for ES hits.hits format; bbox lives in envelope_geo.
 - [Plan sidebar e2e breakage](plan-sidebar-e2e-breakage.md) — sidebar tabs restructure broke many e2e specs: Plan tab gating, server-persisted sidebarMode, terrain-gated Explore panel, onboarding overlay, initScript reload re-seeding.
 - [Collapsed details hide e2e targets](details-collapse-e2e-visibility.md) — controls inside collapsed <details> are hidden not missing; click the summary toggle first or toBeVisible() times out deterministically.
@@ -79,9 +77,6 @@
 - [Duplicate-hooks parser forwardRef gap](duplicate-hooks-parser-forwardref.md) — scope parser skips components whose decl line lacks a `{` (forwardRef); pending-scope branch handles them, extend it for new wrapper styles.
 - [vi.hoisted TS inference gap](vi-hoisted-ts-inference.md) — vi.hoisted() return type may not resolve correctly in workspace-level pnpm typecheck even when local tsc passes; use plain module-level const/let objects instead (same pattern as vi.fn() spies).
 - [Catalog upstream successors](catalog-upstream-successors.md) — deleted-service → live-successor map; fetch-strategy URL rules must move in lockstep; Great Lakes matched by id.
-- [api-server suite breakage — FIXED](api-server-suite-preexisting-breakage.md) — suite green 2026-07-20; recurrence patterns: terrain.js mock needs NYSDEC/MN_DNR/BUNDLED exports, app.js importers need __resetRateLimitMemory, query params use invalid_param.
-- [api-server baseline spot-run](api-server-spot-run-baseline.md) — 2026-07-31: both shards green after admin/rate-limit-prune pool-mock fixes; shared createDbPoolMock() + guard now cover @workspace/db pool drift.
-- [Aug-2026 baseline failures](unit-tier-baseline-2026-08.md) — audit 2026-08-17: only puzzle-e2e toSatisfy + plan-archive gates still live; ThrottlePanel/routes-documented/check:audit/survey.laz all FIXED 2026-08-16.
 - [Full e2e known failures](full-e2e-known-failures.md) — 9 deterministic e2e failures (find-data load, live-mode, gps-trail, follow-handoff, TOPO badge) pre-exist as of 2026-07-20; dataset-load pipeline suspect, not worth re-running.
 - [Vite 8 rolldown test breakage](vite8-rolldown-test-breakage.md) — vite 8 + vitest 3 mismatch: add esbuild jsx:"automatic" to vitest configs; rolldown keeps comments in unminified builds so never write "__bathyTest" literally in comments.
 - [Terrain mock must export catalog constants](terrain-mock-catalog-constants.md) — SOLVED: use createTerrainMock() from __tests__/helpers/terrainMock.ts; guard test terrain-mock-guard.test.ts fails first with a clear message on drift.
@@ -93,7 +88,6 @@
 - [Global catalog entries defeat "nothing nearby" tests](catalog-global-coverage-e2e.md) — seeded catalog has world-spanning bboxes (GEBCO); empty-result branches need point-radius-query mocked to [].
 - [ESLint flat config core rules off](eslint-flat-config-no-core-rules.md) — root config extends no recommended preset; core rules like no-dupe-keys are inactive unless explicitly listed.
 - [API-guard body extraction ordering](api-guard-body-extraction.md) — try concise-arrow extraction before braces-body; object literals in concise bodies fool the braces extractor, and concise bodies must span newlines.
-- [Toolchain pinned exactly](vite8-vitest-env-pitfalls.md) — vite/@vitejs/plugin-react/vitest are exact-pinned in pnpm-workspace.yaml catalog + bathyscan package.json; bump deliberately and re-run jsx tests + bundle guard.
 - [Skip-count ratchet guard](skip-count-guard.md) — check:skip-count (fast tier) pins unit static skips at 0 and e2e test.skip sites to tests/skip-baseline.json; update baseline in the same commit as any new gated skip.
 - [Font scale convention](font-scale-convention.md) — inline fontSize must be calc(Npx * var(--bs-font-scale,1)); never set inline body px (clobbers daylight CSS). drei/SVG fontSize attrs exempt.
 - [Marker library sections](marker-library-sections.md) — edit-mode type check must use full MARKER_TYPES (legacy stays valid); partial markerConstants mocks need every section export.
@@ -117,7 +111,6 @@
 - [Plan-file lint backlog](plan-file-lint-backlog.md) — .local/tasks is gitignored so bulk-fills never propagate; gate-hardening auto-stubs insert unfillable placeholders. Both failure-gate and regression-guard now use --skip-if-no-task in fast-tier steps.
 - [Validation guard --skip-if-no-task pattern](validation-guard-skip-pattern.md) — fix:*-stubs and check:* validation steps use --skip-if-no-task so ad-hoc runs skip archive scan; task-agent runs (TASK_PLAN_FILE set) still enforce single-file mode.
 - [Mobile Live 2D follow](mobile-live-2d-follow.md) — mobile chart follow reuses GpsFollowState + follow-handoff channel; boundsCheck reads activeGrid only; proximity needs the GPS→camera mirror with no 3D scene.
-- [skill-mirror-sync + foreign-commit review](skill-mirror-sync-check.md) — stale .local/custom_skills mirrors fail every tier after skill merges (fix: post-merge sync block, gitignored-only); mid-session merges from other tasks appear in YOUR completion-review diff — cite provenance in drift_reason.
 - [Validation workflow boot storm](validation-workflow-boot-storm.md) — env restart autostarts ALL validation workflows queuing on the global lock; stop extras + kill orphaned boot pgids. test:unit fail-fast hides artifact suites behind an early package failure.
 - [catalog-saves.ts concurrent-merge damage](catalog-saves-concurrent-merge.md) — parallel task-agent merges on the same route file can drop router.post wrappers and duplicate destructures; esbuild build fails first, then tsc reveals variable-name corruption in the handler bodies.
 - [Playwright route glob vs query strings](playwright-route-glob-query.md) — page.route("**/path") stops matching once the client adds ?query; append "*" to the glob (won't cross into subpaths).
@@ -137,7 +130,6 @@
 - [Validation-lock detached lifecycle](validation-lock-unref-lifecycle.md) — an unref'd detached child still needs a referenced lifecycle handle until its exit event.
 - [Offline upload route](offline-upload-route.md) — uploaded UUID terrain uses authenticated user-datasets reads, not legacy catalog paths.
 - [Mobile coordinate-search e2e](mobile-coordinate-search-e2e.md) — mobile uses a dataset picker without coordinate search; narrow-flow tests must choose their shell explicitly.
-- [Nested router prefix guards](nested-router-prefix-guards.md) — prefix-aware checks avoid false duplicate reports when Express nested mounts hide their mount path.
 - [Catalog save service boundary](catalog-save-service-boundary.md) — background save lifecycle belongs in the domain service; provider builders can be lazily resolved to avoid route cycles.
 - [Overview reference overlay e2e](overview-reference-overlay-e2e.md) — after viewport changes, wait for the next live snapshot before asserting anchored or dataset-bounds image placement.
 - [Overview zoom focal transform](overview-zoom-focal-transform.md) — use one canvas-space focal transform for toolbar, wheel, pinch, and animated frames; pinch starts from the gesture transform.
@@ -151,9 +143,9 @@
 - [Managed validation task environment](managed-validation-task-env.md) — managed validation workflows may omit TASK_PLAN_FILE; use the resolved tier directly when lock evidence matters.
 - [Test DB circular foreign keys](testdb-circular-foreign-keys.md) — add one side after table creation and validate post-table constraints alongside inline references.
 - [Exact patch file replacement](apply-patch-eof-newline.md) — whole-file patches may omit the final newline; byte-compare candidate content and add a final blank patch line if needed.
-
 - [Fly-control test camera spawn](fly-controls-test-camera-spawn.md) — snapshot camera displacement after terrain mount so spawn offsets do not look like physics failures.
 - [Deterministic collection E2E fixtures](e2e-collection-fixtures.md) — create ready upload-backed members in the test and clean them up; never skip based on persisted E2E-library contents.
 - [Multi-result save test mocks](multi-result-save-test-mocks.md) — multi-card save tests need cardinality-safe waits and refetch mocks that publish successful IDs.
 - [Dev workflow environment markers](dev-workflow-environment-markers.md) — Replit dev workflows may report REPLIT_ENVIRONMENT=production; use REPLIT_DEV_DOMAIN to distinguish interactive development.
 - [Validated .replit line endings](replit-config-line-endings.md) — normalize temp replacement candidates to LF before validated replacement or Git reports every line as trailing whitespace.
+- [Validation upserts reorder .replit](validation-upsert-reorders-dot-replit.md) — restoring an unchanged validation command can reorder metadata blocks; remove incidental drift through validated replacement.

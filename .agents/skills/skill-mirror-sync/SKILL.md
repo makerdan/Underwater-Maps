@@ -1,156 +1,172 @@
 ---
 name: Skill Mirror Sync
 description: >-
-  Keep canonical skills under .agents/skills synchronized with their
-  platform-managed .local/custom_skills mirrors, and detect or remediate
-  fingerprint drift. Use this skill when adding, auditing, renaming, or
-  repairing a user-authored skill mirror.
+  Manage workspace-owned skills through an explicit source, validated generated
+  project projections, and read-only platform runtime mirrors. Use when adding,
+  auditing, refreshing, or diagnosing a workspace-managed skill projection or
+  runtime-mirror status.
 ---
 
-# Skill: Skill Mirror Sync
+# Skill Mirror Sync
 
 ## Purpose
 
-Replit projects that maintain user-authored skills store the canonical versions
-under `.agents/skills/<name>/SKILL.md`. Replit also exposes a runtime copy of
-each skill at `.local/custom_skills/<name>/SKILL.md`. The `.local/` tree is
-gitignored and populated by the platform at environment-setup time, so those
-copies can silently lag behind edits made to the canonical `.agents/skills/`
-sources.
+Workspace-managed skills have one authority and one direction of travel:
 
-This skill documents the contract between the two trees, explains when to
-invoke it, and provides a registration checklist for new skills and remediation
-steps when drift is detected.
+`WORKSPACE_SKILLS_SOURCE` → generated project projection → platform runtime mirror
 
----
+These layers are not interchangeable:
 
-## Trigger
-
-Invoke this skill when:
-
-1. You are **adding a new user-authored skill** to `.agents/skills/` and need
-   to know what (if anything) must be updated so the mirror is tracked and
-   validated automatically.
-2. A **validation check reports that a skill mirror is stale** — a stored
-   `.fingerprint` does not match the md5 of the canonical `SKILL.md` — including
-   after a contract/catalog integration change — and you need to understand the
-   canonical-vs-local contract and how to fix it.
-3. You are **auditing skill health** and want to verify that every skill with a
-   counterpart in `.local/custom_skills/` has an up-to-date copy and a current
-   fingerprint.
-4. You are investigating **unexpected agent behaviour** that could be caused by
-   an agent reading stale skill instructions from `.local/custom_skills/`
-   instead of the canonical `.agents/skills/` source.
-
----
-
-## The Canonical-vs-Local Contract
-
-| Property | Canonical source | Live copy |
+| Layer | Authority and ownership | Allowed writes |
 |---|---|---|
-| **Location** | `.agents/skills/<name>/SKILL.md` | `.local/custom_skills/<name>/SKILL.md` |
-| **Tracked by git** | ✅ Yes | ❌ No (`.local/` is gitignored) |
-| **Edited by humans / agents** | ✅ Always edit here | ❌ Never edit here — overwritten on sync |
-| **How it is populated** | Manual creation | Platform install + project post-merge sync |
-| **Drift detection** | `.local/custom_skills/<name>/.fingerprint` stores the md5 of the last-synced canonical file | Compared on every fast-tier CI run |
+| Workspace source | Authoritative, supplied explicitly by `WORKSPACE_SKILLS_SOURCE` | Only the workspace owner or platform workflow that owns the source |
+| Project projection | Generated, helper-owned directories under `.agents/skills/` | Only the projection refresh helper |
+| Runtime mirror | Disposable, platform-owned state under `.local/custom_skills/` | Platform only; repository helpers are read-only |
+| Project-authored skill | Ordinary tracked skill under `.agents/skills/` without a projection marker | Humans and agents may edit it; refresh must never replace it |
 
-### How skills are discovered — auto-enumeration
+Never infer source authority from whichever copy currently exists. A runtime
+mirror is not a backup, and a generated projection is not an ordinary
+project-authored skill.
 
-Both the drift-detection check script and the post-merge sync step use
-**dynamic discovery**: they iterate over every subdirectory in `.agents/skills/`
-and, for each one that has a matching directory in `.local/custom_skills/`,
-compare or refresh the copy. There are **no per-skill registration entries** in
-either script; adding a new directory under `.agents/skills/` is sufficient for
-it to be picked up automatically on the next run.
+## When to use this skill
 
-If a canonical directory is renamed, discovery still starts from the new
-canonical directory name. An older ignored runtime directory with the previous
-slug is not treated as a counterpart, created over, or deleted by this
-contract. It remains platform-managed until the platform refreshes the runtime
-tree and creates the new counterpart.
+Use this contract when:
 
-### Fingerprint file
+- installing or refreshing a workspace-managed skill;
+- auditing source, projection, or runtime-mirror parity;
+- diagnosing stale instructions or a failed workspace-skill status check;
+- changing projection lifecycle, locking, manifests, or status behavior; or
+- deciding whether a directory is helper-owned or project-authored.
 
-Each live copy directory may contain a `.fingerprint` file whose sole content
-is the hex md5 of the canonical `SKILL.md` at the time of the last sync. The
-drift-detection check reads this file and re-computes the md5 of the canonical
-source; a mismatch means the live copy is stale.
+Do not use this workflow to synchronize ordinary project-authored skills or
+Replit-provided skills that have no workspace source entry.
 
-### How the live-copy directory is first created
+## Source contract
 
-The platform creates `.local/custom_skills/<name>/` at environment-setup time
-for every skill it finds under `.agents/skills/`. A brand-new skill committed
-to `.agents/skills/` will have its live-copy directory created at the **next
-environment setup** after the commit lands. Once that directory exists, the
-post-merge sync step keeps the live copy and its `.fingerprint` current on
-every subsequent merge — no manual wiring needed.
+`WORKSPACE_SKILLS_SOURCE` is mandatory for refresh, loading, and live status.
+It may be absolute or repository-relative. Do not guess a path or silently fall
+back to `.agents/skills/`.
 
-### Out-of-scope cases
+The source root must contain:
 
-- Skills that exist **only** in `.local/custom_skills/` (Replit-provided
-  skills with no `.agents/skills/` counterpart) are not tracked by this system.
-- The post-merge sync step does **not** create new `.local/custom_skills/`
-  entries on its own; it only refreshes directories that already exist (created
-  by the platform at environment-setup time, as described above).
+- a regular, non-symlink `.workspace-revision` file with a valid non-empty
+  revision supplied by the source owner; and
+- one or more immediate child skill directories, each containing `SKILL.md`.
 
----
+Every file below each skill directory participates in the projection. Discovery
+is recursive and deterministic. Sort paths, hash each regular file with
+SHA-256, and derive the source fingerprint from the normalized inventory.
+Keep the supplied source revision and computed fingerprint as separate values:
+revision drift and same-revision content drift are both failures.
 
-## Adding a New Skill — Registration Checklist
+Reject the complete source snapshot when it contains:
 
-When you create a new skill under `.agents/skills/<new-name>/SKILL.md`, verify
-**three categories** of project infrastructure before considering the skill
-fully integrated:
+- symlinks, devices, sockets, FIFOs, or other special files;
+- path escapes, malformed skill IDs, or reserved helper files;
+- top-level non-skill content other than `.workspace-revision`;
+- a missing or malformed revision; or
+- a skill without `SKILL.md`.
 
-1. **Drift-detection check** — this check auto-discovers all canonical skill
-   directories; no per-skill entry is needed. Verify only that the check itself
-   is still registered as a step in the fast-tier validation sequence (it should
-   already be — confirm it has not been accidentally removed).
+Errors and logs must not disclose source paths, file contents, or private source
+identifiers.
 
-2. **Post-merge automation** — the sync step also auto-discovers all canonical
-   skill directories; no per-skill entry is needed. Verify only that the sync
-   step itself is still present in the post-merge automation (it should already
-   be — confirm it has not been accidentally removed).
+## Refresh lifecycle
 
-3. **Fast-tier validation config** — if the drift-detection check is already
-   registered (the normal case), no change is needed. If this is the first time
-   the check is being introduced to the project, add it to the fast-tier step
-   list in the project's validation configuration and add a corresponding npm
-   script.
+Run:
 
-> **Initial live copy:** After the new canonical skill is committed and merged,
-> trigger an environment restart so the platform creates the
-> `.local/custom_skills/<new-name>/` directory. The post-merge sync step will
-> then populate it automatically on the next merge.
+```sh
+pnpm workspace-skill:refresh
+```
 
----
+The helper must:
 
-## Remediation: When the Check Fails
+1. Resolve the explicit source and build a complete revision plus SHA-256
+   inventory before taking installation action.
+2. Acquire the projection-root lock. The lock records host, PID, and an
+   unpredictable ownership token.
+3. Treat a lock as abandoned only when its owner metadata is valid, it belongs
+   to the same host, and the recorded PID is proven dead. Foreign-host,
+   malformed, unknown, or live locks remain blocking.
+4. Recover interrupted work only from a valid helper journal whose names and
+   ownership match that lock token. Never delete unknown temporary state.
+5. Copy the entire source snapshot into helper-owned staging, write per-skill
+   SHA-256 projection manifests, and validate staged contents.
+6. Refuse any target collision with an unmarked project-authored skill.
+7. Re-read the complete source revision and fingerprint immediately before
+   installation. Abort if either changed.
+8. Install through guarded renames with a rollback journal. Commit the root
+   projection-set manifest only after every skill is installed.
+9. On failure, restore moved targets. On success or failure, clean only staging,
+   backups, and temporary manifests owned by the current token.
 
-### Cause
+Per-skill projection markers and the root projection-set manifest classify
+generated state. A missing or malformed marker never grants ownership; it makes
+the directory non-replaceable until a human resolves the ambiguity.
 
-The md5 of `.agents/skills/<name>/SKILL.md` no longer matches the value stored
-in `.local/custom_skills/<name>/.fingerprint`. This means `.agents/skills/`
-was updated but the live copy was not re-synced.
+## Fail-closed loading
 
-### Fix
+Consumers must load workspace-managed instructions through the validated
+projection reader, not by reading a projected `SKILL.md` directly.
 
-Run the project's post-merge sync step. It:
+Return content only when all of these agree:
 
-1. Copies `.agents/skills/<name>/SKILL.md` → `.local/custom_skills/<name>/SKILL.md`
-2. Rewrites `.local/custom_skills/<name>/.fingerprint` with the new md5
+- the current explicit source revision and SHA-256 fingerprint;
+- the root projection-set manifest and complete skill set;
+- the requested skill's projection marker and recursive file inventory; and
+- the actual projected bytes.
 
-After the sync completes, re-run the drift-detection check; it should exit 0.
+If source, set manifest, skill marker, or projected content is unavailable,
+malformed, stale, extra, or missing, return no skill content and surface an
+error. Never continue with the last readable copy.
 
-### If the `.fingerprint` file is missing entirely
+## Runtime-mirror status
 
-The live copy directory exists but was never fingerprinted. Run the same
-post-merge sync step — it creates or overwrites `.fingerprint` unconditionally.
+Run a non-mutating per-skill comparison:
 
-### What NOT to do
+```sh
+pnpm workspace-skill:status -- --skill <skill-id>
+```
 
-- Do **not** edit `.local/custom_skills/<name>/SKILL.md` directly. It is
-  overwritten by every sync run.
-- Do **not** manually write a `.fingerprint` value by hand unless you have
-  verified it matches the md5 of the current canonical file.
-- Do **not** place a tracked deliverable under `.local/`; runtime mirrors remain
-  generated state even when a task changes the canonical skill contract.
+Status reads the authoritative source identity and platform-provided
+`.workspace-skill-mirror.json` metadata. It does not read parity from an old
+MD5 `.fingerprint`, copy files, repair metadata, create a mirror, or write
+anywhere under `.local/`.
+
+Exit codes are stable:
+
+| Code | Meaning |
+|---:|---|
+| `0` | Platform metadata exactly matches the source revision, SHA-256 fingerprint, skill ID, and recursive inventory |
+| `1` | Source is available, but mirror metadata is malformed or mismatched |
+| `2` | The explicit source, supplied revision, source snapshot, or requested source skill is unavailable |
+| `3` | No platform mirror metadata exists for the requested skill |
+
+Unavailable source data is not success. Missing mirror metadata is not inferred
+from mirror contents. The repository helper reports status; only the platform
+provisions or refreshes the runtime mirror.
+
+## Validation and post-merge behavior
+
+`pnpm run check:skill-mirror-sync` runs fixture-driven contract tests. It must
+exercise recursive integrity, unsafe input rejection, project-authored
+collisions, revision and fingerprint races, lock ownership, interrupted
+rollback, fail-closed loading, status codes, redaction, and the no-runtime-write
+boundary without fabricating a live workspace source or platform mirror.
+
+Post-merge automation may run this contract check. It must not run a mutating
+runtime sync, create source metadata, or treat unavailable live status as pass.
+
+## Prohibited shortcuts
+
+- Do not edit, copy into, delete from, or reverse-promote
+  `.local/custom_skills/`.
+- Do not restore the obsolete `.agents/skills` → runtime MD5 repair path.
+- Do not invent `WORKSPACE_SKILLS_SOURCE`, `.workspace-revision`, projection
+  markers, runtime sidecar metadata, or a successful parity result.
+- Do not follow symlinks or accept special files.
+- Do not replace an unmarked project-authored skill.
+- Do not recover a lock based only on age, PID reuse assumptions, or a foreign
+  host.
+- Do not expose a partially installed or mixed-revision projection.
+- Do not commit private workspace source contents as ordinary project-authored
+  skills.

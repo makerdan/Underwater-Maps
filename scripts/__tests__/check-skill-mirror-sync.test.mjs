@@ -1,343 +1,229 @@
-/**
- * Regression coverage for the canonical-first skill mirror synchronization
- * contract. Every test uses an isolated temporary tree so the suite never
- * edits the repository's gitignored runtime mirrors.
- */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createHash } from "node:crypto";
 import {
-  discoverCanonicalSkills,
-  findLocalSkillDirectory,
-  runSkillMirrorCheck,
+  STATUS, buildSourceManifest, getSkillMirrorStatus, loadWorkspaceSkill,
+  refreshWorkspaceSkillProjection,
 } from "../check-skill-mirror-sync.mjs";
 
-function quietLogger() {
-  return {
-    log() {},
-    warn() {},
-    error() {},
-  };
+function fixture() {
+  const root = mkdtempSync(join(tmpdir(), "workspace-skills-"));
+  const source = join(root, "source"), projection = join(root, ".agents", "skills"), runtime = join(root, ".local", "custom_skills");
+  mkdirSync(join(source, "alpha", "nested"), { recursive: true });
+  writeFileSync(join(source, ".workspace-revision"), "workspace-r1\n");
+  writeFileSync(join(source, "alpha", "SKILL.md"), "alpha\n");
+  writeFileSync(join(source, "alpha", "nested", "guide.txt"), "nested\n");
+  return { root, source, projection, runtime };
 }
+function done(f) { rmSync(f.root, { recursive: true, force: true }); }
 
-function recordingLogger() {
-  const messages = [];
-  return {
-    messages,
-    log(message) {
-      messages.push(String(message));
-    },
-    warn(message) {
-      messages.push(String(message));
-    },
-    error(message) {
-      messages.push(String(message));
-    },
-  };
-}
-
-function createFixture({
-  canonicalName = "example-skill",
-  localName = canonicalName,
-  canonicalContent = "canonical skill content\n",
-  localContent = canonicalContent,
-  fingerprint,
-  createCanonicalFile = true,
-  createLocalDir = true,
-} = {}) {
-  const root = mkdtempSync(join(tmpdir(), "skill-mirror-"));
-  const canonicalDir = join(root, ".agents", "skills");
-  const localDir = join(root, ".local", "custom_skills");
-  const canonicalSkillDir = join(canonicalDir, canonicalName);
-  const localSkillDir = join(localDir, localName);
-
-  mkdirSync(canonicalSkillDir, { recursive: true });
-  mkdirSync(localDir, { recursive: true });
-  if (createLocalDir) mkdirSync(localSkillDir, { recursive: true });
-  if (createCanonicalFile) {
-    writeFileSync(join(canonicalSkillDir, "SKILL.md"), canonicalContent, "utf8");
-  }
-  if (createLocalDir) {
-    writeFileSync(join(localSkillDir, "SKILL.md"), localContent, "utf8");
-    if (fingerprint !== undefined) {
-      writeFileSync(join(localSkillDir, ".fingerprint"), fingerprint, "utf8");
-    }
-  }
-
-  return {
-    root,
-    canonicalDir,
-    localDir,
-    canonicalSkill: join(canonicalSkillDir, "SKILL.md"),
-    localSkill: join(localSkillDir, "SKILL.md"),
-    fingerprintPath: join(localSkillDir, ".fingerprint"),
-  };
-}
-
-function cleanupFixture(fixture) {
-  rmSync(fixture.root, { recursive: true, force: true });
-}
-
-function md5(content) {
-  return createHash("md5").update(content).digest("hex");
-}
-
-describe("skill mirror sync", () => {
-  it("leaves a matching mirror unchanged", () => {
-    const content = "matching canonical content\n";
-    const fixture = createFixture({
-      canonicalContent: content,
-      localContent: content,
-      fingerprint: `${md5(content)}\n`,
-    });
-
+describe("workspace skill projection", () => {
+  it("projects a deterministic recursive SHA-256 snapshot", () => {
+    const f = fixture();
     try {
-      const before = {
-        skill: readFileSync(fixture.localSkill, "utf8"),
-        fingerprint: readFileSync(fixture.fingerprintPath, "utf8"),
-      };
-      assert.equal(
-        runSkillMirrorCheck({ ...fixture, logger: quietLogger() }),
-        0,
-      );
-      assert.deepEqual(
-        {
-          skill: readFileSync(fixture.localSkill, "utf8"),
-          fingerprint: readFileSync(fixture.fingerprintPath, "utf8"),
-        },
-        before,
-      );
-    } finally {
-      cleanupFixture(fixture);
-    }
+      const result = refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+      assert.equal(result.revision, "workspace-r1");
+      assert.match(result.fingerprint, /^[a-f0-9]{64}$/);
+      assert.equal(loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), "alpha\n");
+      assert.equal(readFileSync(join(f.projection, "alpha", "nested", "guide.txt"), "utf8"), "nested\n");
+    } finally { done(f); }
   });
-
-  it("repairs a stale fingerprint and mirror content", () => {
-    const canonicalContent = "new canonical content\n";
-    const fixture = createFixture({
-      canonicalContent,
-      localContent: "stale runtime content\n",
-      fingerprint: "00000000000000000000000000000000\n",
-    });
-
+  it("rejects symlinks and malformed source/projection manifests", () => {
+    const f = fixture();
     try {
-      assert.equal(
-        runSkillMirrorCheck({ ...fixture, logger: quietLogger() }),
-        0,
-      );
-      assert.equal(readFileSync(fixture.localSkill, "utf8"), canonicalContent);
-      assert.equal(
-        readFileSync(fixture.fingerprintPath, "utf8"),
-        `${md5(canonicalContent)}\n`,
-      );
-    } finally {
-      cleanupFixture(fixture);
-    }
+      symlinkSync(join(f.source, "alpha", "SKILL.md"), join(f.source, "alpha", "link"));
+      assert.throws(() => buildSourceManifest(f.source), /unsafe/);
+      rmSync(join(f.source, "alpha", "link"));
+      refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+      writeFileSync(join(f.projection, "alpha", ".workspace-skill-projection.json"), "{");
+      assert.throws(() => loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), /malformed/);
+    } finally { done(f); }
   });
-
-  it("repairs a mirror with a missing fingerprint", () => {
-    const canonicalContent = "fingerprintless canonical content\n";
-    const fixture = createFixture({
-      canonicalContent,
-      localContent: "stale content without fingerprint\n",
-    });
-
+  it("preserves authored skills and rolls back a blocked install", () => {
+    const f = fixture();
     try {
-      assert.equal(
-        runSkillMirrorCheck({ ...fixture, logger: quietLogger() }),
-        0,
-      );
-      assert.equal(readFileSync(fixture.localSkill, "utf8"), canonicalContent);
-      assert.equal(
-        readFileSync(fixture.fingerprintPath, "utf8"),
-        `${md5(canonicalContent)}\n`,
-      );
-    } finally {
-      cleanupFixture(fixture);
-    }
+      mkdirSync(join(f.projection, "alpha"), { recursive: true });
+      writeFileSync(join(f.projection, "alpha", "SKILL.md"), "authored");
+      assert.throws(() => refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection }), /project-authored/);
+      assert.equal(readFileSync(join(f.projection, "alpha", "SKILL.md"), "utf8"), "authored");
+    } finally { done(f); }
   });
-
-  it("repairs a missing local SKILL.md inside an existing counterpart", () => {
-    const canonicalContent = "canonical replacement content\n";
-    const fixture = createFixture({
-      canonicalContent,
-      fingerprint: `${md5(canonicalContent)}\n`,
-    });
-    rmSync(fixture.localSkill);
-
+  it("fails closed after source revision or projected content drift", () => {
+    const f = fixture();
     try {
-      assert.equal(
-        runSkillMirrorCheck({ ...fixture, logger: quietLogger() }),
-        0,
-      );
-      assert.equal(readFileSync(fixture.localSkill, "utf8"), canonicalContent);
-      assert.equal(
-        readFileSync(fixture.fingerprintPath, "utf8"),
-        `${md5(canonicalContent)}\n`,
-      );
-    } finally {
-      cleanupFixture(fixture);
-    }
+      refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+      writeFileSync(join(f.source, "alpha", "SKILL.md"), "new");
+      assert.throws(() => loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), /freshly validated/);
+      refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+      writeFileSync(join(f.projection, "alpha", "extra"), "x");
+      assert.throws(() => loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), /content/);
+      rmSync(join(f.projection, "alpha", "extra"));
+      rmSync(join(f.projection, "alpha", "nested", "guide.txt"));
+      assert.throws(() => loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), /content/);
+    } finally { done(f); }
   });
-
-  it("matches local counterparts case-insensitively without creating another directory", () => {
-    const canonicalContent = "case-insensitive canonical content\n";
-    const fixture = createFixture({
-      canonicalName: "Case-Sensitive-Skill",
-      localName: "case-sensitive-skill",
-      canonicalContent,
-      localContent: "stale casing copy\n",
-      fingerprint: "stale\n",
-    });
-
+  it("does not install a snapshot when the source changes during refresh", () => {
+    const f = fixture();
     try {
-      assert.equal(
-        findLocalSkillDirectory(fixture.localDir, "Case-Sensitive-Skill"),
-        "case-sensitive-skill",
-      );
-      assert.equal(
-        runSkillMirrorCheck({ ...fixture, logger: quietLogger() }),
-        0,
-      );
-      assert.equal(readFileSync(fixture.localSkill, "utf8"), canonicalContent);
-      assert.equal(
-        readFileSync(fixture.fingerprintPath, "utf8"),
-        `${md5(canonicalContent)}\n`,
-      );
-      assert.equal(
-        existsSync(join(fixture.localDir, "Case-Sensitive-Skill")),
-        false,
-      );
-    } finally {
-      cleanupFixture(fixture);
-    }
+      assert.throws(() => refreshWorkspaceSkillProjection({
+        sourceDir: f.source, projectionDir: f.projection,
+        beforeInstall: () => writeFileSync(join(f.source, "alpha", "SKILL.md"), "changed mid-refresh"),
+      }), /changed during refresh/);
+      assert.equal(existsSync(join(f.projection, "alpha")), false);
+    } finally { done(f); }
   });
-
-  it("fails explicitly when a canonical skill is missing SKILL.md", () => {
-    const fixture = createFixture({
-      createCanonicalFile: false,
-      localContent: "preserved runtime content\n",
-      fingerprint: "preserved\n",
-    });
-
+  it("only recovers a provably abandoned same-host lock", () => {
+    const f = fixture();
     try {
-      const logger = recordingLogger();
-      assert.equal(
-        runSkillMirrorCheck({ ...fixture, logger }),
-        1,
-      );
-      assert.match(logger.messages.join("\n"), /missing SKILL\.md/);
-      assert.equal(
-        readFileSync(fixture.localSkill, "utf8"),
-        "preserved runtime content\n",
-      );
-      assert.equal(readFileSync(fixture.fingerprintPath, "utf8"), "preserved\n");
-    } finally {
-      cleanupFixture(fixture);
-    }
+      mkdirSync(join(f.projection, ".workspace-skills-refresh.lock"), { recursive: true });
+      writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "owner.json"), JSON.stringify({ version: 1, token: "11111111-1111-4111-8111-111111111111", pid: 7, host: "test" }));
+      writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "journal.json"), JSON.stringify({ version: 1, moves: [] }));
+      refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection, host: "test", isProcessAlive: () => false });
+      assert.equal(loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), "alpha\n");
+    } finally { done(f); }
   });
-
-  it("skips a canonical skill with no local counterpart without creating one", () => {
-    const fixture = createFixture({ createLocalDir: false });
-
+  it("blocks live, foreign-host, and malformed locks", () => {
+    const f = fixture(), lock = join(f.projection, ".workspace-skills-refresh.lock");
+    const token = "22222222-2222-4222-8222-222222222222";
     try {
-      assert.equal(
-        findLocalSkillDirectory(fixture.localDir, "example-skill"),
-        null,
-      );
-      assert.equal(
-        runSkillMirrorCheck({ ...fixture, logger: quietLogger() }),
-        0,
-      );
-      assert.equal(existsSync(join(fixture.localDir, "example-skill")), false);
-    } finally {
-      cleanupFixture(fixture);
-    }
+      mkdirSync(lock, { recursive: true });
+      writeFileSync(join(lock, "owner.json"), JSON.stringify({ version: 1, token, pid: 1, host: "here" }));
+      assert.throws(() => refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection, host: "here", isProcessAlive: () => true }), /active/);
+      rmSync(lock, { recursive: true });
+      mkdirSync(lock);
+      writeFileSync(join(lock, "owner.json"), JSON.stringify({ version: 1, token, pid: 1, host: "away" }));
+      assert.throws(() => refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection, host: "here", isProcessAlive: () => false }), /active/);
+      rmSync(lock, { recursive: true });
+      mkdirSync(lock);
+      writeFileSync(join(lock, "owner.json"), "{");
+      assert.throws(() => refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection, host: "here", isProcessAlive: () => false }), /active/);
+      rmSync(lock, { recursive: true });
+      mkdirSync(lock);
+      writeFileSync(join(lock, "owner.json"), JSON.stringify({ version: 2, token, pid: 1, host: "here" }));
+      assert.throws(() => refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection, host: "here", isProcessAlive: () => false }), /active/);
+    } finally { done(f); }
   });
-
-  it("protects orphan runtime directories from canonical discovery and repair", () => {
-    const fixture = createFixture({
-      canonicalName: "new-skill-name",
-      localName: "old-skill-name",
-      localContent: "old runtime copy\n",
-      fingerprint: "old\n",
-    });
-    const oldRuntimeSkill = fixture.localSkill;
-
+  it("recovers an interrupted helper-owned install from its journal", () => {
+    const f = fixture(), token = "33333333-3333-4333-8333-333333333333";
     try {
-      assert.deepEqual(discoverCanonicalSkills(fixture.canonicalDir), [
-        "new-skill-name",
-      ]);
-      assert.equal(
-        findLocalSkillDirectory(fixture.localDir, "new-skill-name"),
-        null,
-      );
-      assert.equal(
-        runSkillMirrorCheck({ ...fixture, logger: quietLogger() }),
-        0,
-      );
-      assert.equal(readFileSync(oldRuntimeSkill, "utf8"), "old runtime copy\n");
-      assert.equal(readFileSync(fixture.fingerprintPath, "utf8"), "old\n");
-      assert.equal(
-        existsSync(join(fixture.localDir, "new-skill-name")),
-        false,
-      );
-    } finally {
-      cleanupFixture(fixture);
-    }
+      refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+      const target = join(f.projection, "alpha");
+      const backup = join(f.projection, `.workspace-skills-backup-${token}-alpha`);
+      renameSync(target, backup);
+      mkdirSync(join(f.projection, ".workspace-skills-refresh.lock"));
+      writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "owner.json"), JSON.stringify({ version: 1, token, pid: 9, host: "test" }));
+      writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "journal.json"), JSON.stringify({ version: 1, moves: [{ skill: "alpha", backup }] }));
+      writeFileSync(join(f.source, ".workspace-revision"), "workspace-r2\n");
+      refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection, host: "test", isProcessAlive: () => false });
+      assert.equal(loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), "alpha\n");
+      assert.equal(existsSync(backup), false);
+    } finally { done(f); }
   });
-
-  it("reports repair failures without creating or replacing the mirror", () => {
-    const fixture = createFixture({
-      canonicalContent: "canonical content\n",
-      localContent: "runtime content\n",
-      fingerprint: "stale\n",
-    });
-    rmSync(fixture.localSkill, { force: true });
-    mkdirSync(fixture.localSkill);
-
+  it("preserves the current target when a dead journal move never reached backup", () => {
+    const f = fixture(), token = "44444444-4444-4444-8444-444444444444";
     try {
-      const logger = recordingLogger();
-      assert.equal(
-        runSkillMirrorCheck({ ...fixture, logger }),
-        1,
-      );
-      assert.match(logger.messages.join("\n"), /could not repair mirror/);
-      assert.match(logger.messages.join("\n"), /Check that the canonical/);
-      assert.equal(existsSync(fixture.localSkill), true);
-      assert.equal(readFileSync(fixture.fingerprintPath, "utf8"), "stale\n");
-    } finally {
-      cleanupFixture(fixture);
-    }
+      mkdirSync(join(f.projection, "alpha"), { recursive: true });
+      writeFileSync(join(f.projection, "alpha", "SKILL.md"), "authored current");
+      mkdirSync(join(f.projection, ".workspace-skills-refresh.lock"));
+      writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "owner.json"), JSON.stringify({ version: 1, token, pid: 9, host: "test" }));
+      writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "journal.json"), JSON.stringify({
+        version: 1, moves: [{ skill: "alpha", backup: join(f.projection, `.workspace-skills-backup-${token}-alpha`) }],
+      }));
+      assert.throws(() => refreshWorkspaceSkillProjection({
+        sourceDir: f.source, projectionDir: f.projection, host: "test", isProcessAlive: () => false,
+      }), /project-authored/);
+      assert.equal(readFileSync(join(f.projection, "alpha", "SKILL.md"), "utf8"), "authored current");
+    } finally { done(f); }
   });
-
-  it("skips safely when the runtime mirror root is absent", () => {
-    const fixture = createFixture();
-    rmSync(fixture.localDir, { recursive: true, force: true });
-
+  it("rejects traversal tokens before creating helper state", () => {
+    const f = fixture();
     try {
-      assert.equal(
-        runSkillMirrorCheck({ ...fixture, logger: quietLogger() }),
-        0,
-      );
-    } finally {
-      cleanupFixture(fixture);
-    }
+      assert.throws(() => refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection, token: "../escape" }), /token is invalid/);
+      assert.equal(existsSync(join(f.projection, "escape")), false);
+    } finally { done(f); }
   });
-
-  it("delegates post-merge synchronization to the canonical checker", () => {
-    const postMerge = readFileSync("scripts/post-merge.sh", "utf8");
-    assert.match(postMerge, /node scripts\/check-skill-mirror-sync\.mjs/);
-    assert.doesNotMatch(postMerge, /for canonical_dir in \.agents\/skills/);
+  it("fails closed for an extra physical helper-owned projection", () => {
+    const f = fixture();
+    try {
+      refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+      const m = buildSourceManifest(f.source);
+      mkdirSync(join(f.projection, "stale"));
+      writeFileSync(join(f.projection, "stale", ".workspace-skill-projection.json"), JSON.stringify({
+        version: 1, skill: "stale", sourceRevision: m.revision, sourceFingerprint: m.fingerprint, files: [],
+      }));
+      assert.throws(() => loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), /physical helper-owned/);
+    } finally { done(f); }
+  });
+  it("keeps the committed snapshot when post-commit cleanup fails", () => {
+    const f = fixture();
+    try {
+      refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+      writeFileSync(join(f.source, "alpha", "SKILL.md"), "new alpha\n");
+      writeFileSync(join(f.source, ".workspace-revision"), "workspace-r2\n");
+      assert.throws(() => refreshWorkspaceSkillProjection({
+        sourceDir: f.source, projectionDir: f.projection, afterCommit: () => { throw new Error("cleanup boundary"); },
+      }), /cleanup boundary/);
+      assert.equal(loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), "new alpha\n");
+    } finally { done(f); }
+  });
+  it("rejects empty top-level source skill directories", () => {
+    const f = fixture();
+    try {
+      mkdirSync(join(f.source, "empty"));
+      assert.throws(() => buildSourceManifest(f.source), /incomplete skill/);
+    } finally { done(f); }
+  });
+  it("rejects dot-prefixed source skill IDs reserved for helper state", () => {
+    const f = fixture();
+    try {
+      mkdirSync(join(f.source, ".hidden-skill"));
+      writeFileSync(join(f.source, ".hidden-skill", "SKILL.md"), "hidden");
+      assert.throws(() => buildSourceManifest(f.source), /invalid top-level entry/);
+    } finally { done(f); }
+  });
+  it("reports read-only mirror statuses without writing runtime state", () => {
+    const f = fixture();
+    try {
+      assert.equal(getSkillMirrorStatus("alpha", { sourceDir: f.source, runtimeDir: f.runtime }), STATUS.MISSING_MIRROR);
+      const m = buildSourceManifest(f.source);
+      mkdirSync(join(f.runtime, "alpha"), { recursive: true });
+      const files = m.files.filter((x) => x.path.startsWith("alpha/")).map((x) => ({ path: x.path.slice(6), sha256: x.sha256 }));
+      writeFileSync(join(f.runtime, "alpha", ".workspace-skill-mirror.json"), JSON.stringify({ version: 1, skill: "alpha", sourceRevision: m.revision, sourceFingerprint: m.fingerprint, files }));
+      const before = lstatSync(join(f.runtime, "alpha", ".workspace-skill-mirror.json")).mtimeMs;
+      assert.equal(getSkillMirrorStatus("alpha", { sourceDir: f.source, runtimeDir: f.runtime }), STATUS.PASS);
+      assert.equal(lstatSync(join(f.runtime, "alpha", ".workspace-skill-mirror.json")).mtimeMs, before);
+      writeFileSync(join(f.runtime, "alpha", ".workspace-skill-mirror.json"), "{}");
+      assert.equal(getSkillMirrorStatus("alpha", { sourceDir: f.source, runtimeDir: f.runtime }), STATUS.MISMATCH);
+      assert.equal(getSkillMirrorStatus("alpha", { sourceDir: join(f.root, "nope"), runtimeDir: f.runtime }), STATUS.UNAVAILABLE_SOURCE);
+    } finally { done(f); }
+  });
+  it("requires supplied revision and detects revision and fingerprint mirror drift", () => {
+    const f = fixture();
+    try {
+      rmSync(join(f.source, ".workspace-revision"));
+      assert.throws(() => buildSourceManifest(f.source), /revision is unavailable/);
+      writeFileSync(join(f.source, ".workspace-revision"), "r1");
+      const m = buildSourceManifest(f.source), files = m.files.filter((x) => x.path.startsWith("alpha/")).map((x) => ({ path: x.path.slice(6), sha256: x.sha256 }));
+      mkdirSync(join(f.runtime, "alpha"), { recursive: true });
+      const metadata = { version: 1, skill: "alpha", sourceRevision: "wrong", sourceFingerprint: m.fingerprint, files };
+      writeFileSync(join(f.runtime, "alpha", ".workspace-skill-mirror.json"), JSON.stringify(metadata));
+      assert.equal(getSkillMirrorStatus("alpha", { sourceDir: f.source, runtimeDir: f.runtime }), STATUS.MISMATCH);
+      metadata.sourceRevision = m.revision; metadata.sourceFingerprint = "0".repeat(64);
+      writeFileSync(join(f.runtime, "alpha", ".workspace-skill-mirror.json"), JSON.stringify(metadata));
+      assert.equal(getSkillMirrorStatus("alpha", { sourceDir: f.source, runtimeDir: f.runtime }), STATUS.MISMATCH);
+    } finally { done(f); }
+  });
+  it("redacts source paths and revision values from validation errors", () => {
+    const f = fixture();
+    try {
+      writeFileSync(join(f.source, "unexpected-private-file"), "private");
+      let message = "";
+      try { buildSourceManifest(f.source); } catch (error) { message = error.message; }
+      assert.ok(message);
+      assert.equal(message.includes(f.root), false);
+      assert.equal(message.includes("workspace-r1"), false);
+    } finally { done(f); }
   });
 });

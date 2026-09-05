@@ -109,7 +109,6 @@ jobs:
       #
       # Intentional GitHub exclusions are enforced by
       # scripts/check-runner-step-sync.mjs:
-      #   • check:skill-mirror-sync      reads gitignored .local/custom_skills/
       #   • fix:*gate-stubs              writes agent-local .local/tasks/
       #   • check:stale-lock-cleanup     exercises Replit validation-lock state
       #   • audit:marker-bbox            needs a live development database
@@ -129,6 +128,9 @@ jobs:
 
       - name: 'check:lock-skill-sync'
         run: pnpm run check:lock-skill-sync
+
+      - name: 'check:skill-mirror-sync'
+        run: pnpm run check:skill-mirror-sync
 
       - name: 'check:failure-gate-zip'
         run: pnpm run check:failure-gate-zip

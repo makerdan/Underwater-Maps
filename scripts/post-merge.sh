@@ -184,12 +184,11 @@ if [ -f "artifacts/bathyscan/public/port-authority-heavy-skill.zip" ]; then
     echo "[post-merge] port-authority-heavy-skill.zip updated."
   fi
 fi
-# Guardrail: keep .local/custom_skills/<name>/SKILL.md in sync with the
-# canonical .agents/skills/<name>/SKILL.md. The checker owns canonical-first
-# discovery, case-insensitive matching, repair, and explicit error handling;
-# invoking it here prevents this post-merge path from drifting from the
-# fast-tier validation path. It also preserves the safe no-local-directory skip.
-node scripts/check-skill-mirror-sync.mjs
+# Guardrail: exercise the workspace-source/projection/runtime-metadata contract
+# without guessing a live source or mutating the platform-owned runtime mirror.
+# Live refresh and status remain explicit commands because post-merge runners
+# are not guaranteed to receive WORKSPACE_SKILLS_SOURCE or platform metadata.
+pnpm run check:skill-mirror-sync
 # Re-register tiered validation commands so they survive future merges and are
 # always available on a fresh environment. The commands are defined in
 # scripts/register-validation-commands.mjs; agent sessions call

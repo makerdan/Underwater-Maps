@@ -107,8 +107,7 @@ export const GITHUB_CI_COVERAGE = {
   lint: { tokens: ["pnpm run lint"] },
   "check:lock-skill-sync": { tokens: ["pnpm run check:lock-skill-sync"] },
   "check:skill-mirror-sync": {
-    excluded: "Reads the gitignored .local/custom_skills mirror, which is Agent-local and absent from GitHub checkouts.",
-    dependency: "gitignored-local-data",
+    tokens: ["pnpm run check:skill-mirror-sync"],
   },
   "check:failure-gate-zip": { tokens: ["pnpm run check:failure-gate-zip"] },
   "check:poe-setup-zip": { tokens: ["pnpm run check:poe-setup-zip"] },
