@@ -13,28 +13,12 @@ runButton = "Project"
 
 [[workflows.workflow]]
 name = "Project"
-mode = "parallel"
+mode = "sequential"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "echo BathyScan environment ready."
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "test-fast"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "test-standard"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "test-standard-plus"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "test-heavy"
 
 [[workflows.workflow]]
 name = "test-fast"
