@@ -55,6 +55,7 @@ const SETTINGS_TESTED_FIELDS = new Set<string>([
 
   // ── Camera / controls (settings-validation.test.ts) ──────────────────────
   "defaultSpeedTier",
+  "verticalSpeedMultiplier",
   "invertMouseY",
   "mouseSensitivity",
   "cameraSpawnBehaviour",

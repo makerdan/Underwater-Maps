@@ -72,6 +72,25 @@ export function NavigationSection() {
           </div>
         </div>
         <SliderRow
+          label="Vertical speed multiplier"
+          value={clampSlider(
+            s.verticalSpeedMultiplier,
+            1,
+            10,
+            DEFAULT_SETTINGS.verticalSpeedMultiplier,
+          )}
+          min={1}
+          max={10}
+          step={0.5}
+          format={(v) => `${v.toFixed(1)}×`}
+          onChange={(v) =>
+            s.setVerticalSpeedMultiplier(
+              clampSlider(v, 1, 10, DEFAULT_SETTINGS.verticalSpeedMultiplier),
+            )
+          }
+          sublabel="Multiplier applied to ascend and descend movement"
+        />
+        <SliderRow
           label="Mouse Sensitivity"
           value={clampSlider(s.mouseSensitivity, 0.1, 3.0, DEFAULT_SETTINGS.mouseSensitivity)}
           min={0.1} max={3.0} step={0.1}

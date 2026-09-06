@@ -6675,6 +6675,12 @@ components:
           minimum: 0
           maximum: 4
           default: 2
+        verticalSpeedMultiplier:
+          type: number
+          minimum: 1
+          maximum: 10
+          default: 3
+          description: Multiplier applied to vertical fly-camera movement while ascending or descending.
         invertMouseY:
           type: boolean
           default: false

@@ -15,6 +15,7 @@ import { render, screen } from "@testing-library/react";
 const h = vi.hoisted(() => {
   const data = {
     mouseSensitivity: 1.0,
+    verticalSpeedMultiplier: 3,
     mouseZoomSensitivity: 1.0,
     touchpadZoomSensitivity: 1.0,
     pinchZoomSensitivity: 1.0,
@@ -31,6 +32,8 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
   const state = () => ({
     defaultSpeedTier: h.data.defaultSpeedTier,
     setDefaultSpeedTier: vi.fn(),
+    verticalSpeedMultiplier: h.data.verticalSpeedMultiplier,
+    setVerticalSpeedMultiplier: vi.fn(),
     mouseSensitivity: h.data.mouseSensitivity,
     setMouseSensitivity: vi.fn(),
     invertMouseY: false,
@@ -107,6 +110,7 @@ import { NavigationSection } from "../NavigationSection";
 
 beforeEach(() => {
   h.data.mouseSensitivity = 1.0;
+  h.data.verticalSpeedMultiplier = 3;
   h.data.mouseZoomSensitivity = 1.0;
   h.data.touchpadZoomSensitivity = 1.0;
   h.data.pinchZoomSensitivity = 1.0;

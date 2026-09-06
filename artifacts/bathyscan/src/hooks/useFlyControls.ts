@@ -98,6 +98,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
 
   // Settings: sensitivity and invert-Y for mouse look
   const mouseSensitivity = useSettingsStore((s) => s.mouseSensitivity);
+  const verticalSpeedMultiplier = useSettingsStore((s) => s.verticalSpeedMultiplier);
   const invertMouseY = useSettingsStore((s) => s.invertMouseY);
   const mouseZoomSensitivity = useSettingsStore((s) => s.mouseZoomSensitivity);
   const touchpadZoomSensitivity = useSettingsStore((s) => s.touchpadZoomSensitivity);
@@ -108,6 +109,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   const keyBindings = useSettingsStore((s) => s.keyBindings);
   const crosshairMenuGamepadButton = useSettingsStore((s) => s.crosshairMenuGamepadButton);
   const sensitivityRef = useRef(mouseSensitivity);
+  const verticalSpeedMultiplierRef = useRef(verticalSpeedMultiplier);
   const invertMouseYRef = useRef(invertMouseY);
   const mouseZoomSensRef = useRef(mouseZoomSensitivity);
   const touchpadZoomSensRef = useRef(touchpadZoomSensitivity);
@@ -115,6 +117,9 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   const keyBindingsRef = useRef(keyBindings);
   const crosshairMenuGamepadButtonRef = useRef(crosshairMenuGamepadButton);
   useEffect(() => { sensitivityRef.current = mouseSensitivity; }, [mouseSensitivity]);
+  useEffect(() => {
+    verticalSpeedMultiplierRef.current = verticalSpeedMultiplier;
+  }, [verticalSpeedMultiplier]);
   useEffect(() => { invertMouseYRef.current = invertMouseY; }, [invertMouseY]);
   useEffect(() => { mouseZoomSensRef.current = mouseZoomSensitivity; }, [mouseZoomSensitivity]);
   useEffect(() => { touchpadZoomSensRef.current = touchpadZoomSensitivity; }, [touchpadZoomSensitivity]);
@@ -1039,14 +1044,16 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         if (keys.current[back] || keys.current["ArrowDown"]) camera.position.addScaledVector(moveDir.current, -scaledSpeed * reverseScale);
         if (keys.current[left] || keys.current["ArrowLeft"]) camera.position.addScaledVector(rightDir.current, -scaledSpeed);
         if (keys.current[right] || keys.current["ArrowRight"]) camera.position.addScaledVector(rightDir.current, scaledSpeed);
-        if (keys.current[up]) camera.position.y += scaledSpeed * 3;
+        if (keys.current[up]) {
+          camera.position.y += scaledSpeed * verticalSpeedMultiplierRef.current;
+        }
         // ShiftRight stays as a permanent secondary "descend" so the user
         // doesn't lose a sensible default when they rebind ShiftLeft.
         if (
           keys.current[down] ||
           (down !== "ShiftRight" && keys.current["ShiftRight"])
         ) {
-          camera.position.y -= scaledSpeed * 3;
+          camera.position.y -= scaledSpeed * verticalSpeedMultiplierRef.current;
         }
 
         // Virtual joystick (touch devices)

@@ -58,6 +58,7 @@ export const settingsFieldSchemas = {
 
   // Camera
   defaultSpeedTier: num,
+  verticalSpeedMultiplier: num,
   mouseSensitivity: num,
   invertMouseY: bool,
   mouseZoomSensitivity: num,

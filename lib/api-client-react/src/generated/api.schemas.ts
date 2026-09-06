@@ -1027,6 +1027,12 @@ export interface UserSettings {
      * @maximum 4
      */
   defaultSpeedTier?: number;
+  /**
+     * Multiplier applied to vertical fly-camera movement while ascending or descending.
+     * @minimum 1
+     * @maximum 10
+     */
+  verticalSpeedMultiplier?: number;
   invertMouseY?: boolean;
   /**
      * @minimum 0.1

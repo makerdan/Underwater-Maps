@@ -29,6 +29,8 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
   const state = () => ({
     defaultSpeedTier: 0,
     setDefaultSpeedTier: vi.fn(),
+    verticalSpeedMultiplier: 3,
+    setVerticalSpeedMultiplier: vi.fn(),
     mouseSensitivity: 1.0,
     setMouseSensitivity: vi.fn(),
     invertMouseY: false,

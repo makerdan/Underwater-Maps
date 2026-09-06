@@ -18,13 +18,16 @@ vi.mock("@/lib/terrainContextMenu", () => ({
 }));
 
 // ── Mock @react-three/fiber to feed a real camera + a real DOM canvas ────
+let capturedFrameCb: ((state: unknown, delta: number) => void) | null = null;
 const fakeCamera = new THREE.PerspectiveCamera();
 const fakeCanvas = document.createElement("canvas");
 document.body.appendChild(fakeCanvas);
 
 vi.mock("@react-three/fiber", () => ({
   useThree: () => ({ camera: fakeCamera, gl: { domElement: fakeCanvas } }),
-  useFrame: () => {},
+  useFrame: (cb: (state: unknown, delta: number) => void) => {
+    capturedFrameCb = cb;
+  },
 }));
 
 // Stable queryClient: returning a new object each render puts queryClient into
@@ -103,6 +106,7 @@ vi.mock("@/lib/resetCameraRegistry", () => ({
 // ── Imports under test (after the mocks) ─────────────────────────────────
 import { useFlyControls } from "@/hooks/useFlyControls";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
+import { computeFlyScaledSpeed } from "@/lib/boatSpeed";
 
 function mountHook() {
   const terrainMeshRef = React.createRef<THREE.Mesh | null>();
@@ -116,6 +120,7 @@ function mountHook() {
 }
 
 beforeEach(() => {
+  capturedFrameCb = null;
   openCrosshairContextMenuSpy.mockClear();
   try { localStorage.clear(); } catch { /* ignore */ }
   useSettingsStore.setState({
@@ -123,6 +128,29 @@ beforeEach(() => {
     ...DEFAULT_SETTINGS,
   });
 });
+
+function pumpFrame(delta = 0.5) {
+  act(() => {
+    capturedFrameCb?.({}, delta);
+  });
+}
+
+function displacementForKey(code: string, delta = 0.5): THREE.Vector3 {
+  const { unmount } = mountHook();
+  const before = fakeCamera.position.clone();
+
+  act(() => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { code, bubbles: true }));
+  });
+  pumpFrame(delta);
+  act(() => {
+    window.dispatchEvent(new KeyboardEvent("keyup", { code, bubbles: true }));
+  });
+
+  const displacement = fakeCamera.position.clone().sub(before);
+  unmount();
+  return displacement;
+}
 
 afterEach(() => {
   vi.useRealTimers();
@@ -248,5 +276,37 @@ describe("useFlyControls — gamepad shortcut", () => {
 
     expect(openCrosshairContextMenuSpy).not.toHaveBeenCalled();
     unmount();
+  });
+});
+
+describe("useFlyControls — persisted vertical speed multiplier", () => {
+  it("uses the configured multiplier for E-key ascent while horizontal movement stays at base speed", () => {
+    const delta = 0.5;
+    const multiplier = 4;
+    useSettingsStore.getState().setKeyBinding("ascend", "KeyE");
+    useSettingsStore.getState().setVerticalSpeedMultiplier(multiplier);
+
+    const ascend = displacementForKey("KeyE", delta);
+    fakeCamera.position.set(0, 0, 0);
+    const forward = displacementForKey("KeyW", delta);
+
+    // No terrain is loaded in this focused test, so the hook uses the same
+    // fallback MPU as computeFlyScaledSpeed.
+    const scaledSpeed = computeFlyScaledSpeed(0, 200, delta);
+    expect(ascend.x).toBeCloseTo(0, 8);
+    expect(ascend.z).toBeCloseTo(0, 8);
+    expect(ascend.y).toBeCloseTo(scaledSpeed * multiplier, 8);
+    expect(forward.length()).toBeCloseTo(scaledSpeed, 8);
+  });
+
+  it("uses the configured multiplier for descend movement", () => {
+    const delta = 0.5;
+    const multiplier = 2;
+    useSettingsStore.getState().setVerticalSpeedMultiplier(multiplier);
+
+    const descend = displacementForKey("ShiftLeft", delta);
+
+    const scaledSpeed = computeFlyScaledSpeed(0, 200, delta);
+    expect(descend.y).toBeCloseTo(-scaledSpeed * multiplier, 8);
   });
 });

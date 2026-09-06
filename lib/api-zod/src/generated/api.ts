@@ -2208,6 +2208,9 @@ export const getSettingsResponseDefaultSpeedTierDefault = 2;
 export const getSettingsResponseDefaultSpeedTierMin = 0;
 export const getSettingsResponseDefaultSpeedTierMax = 4;
 
+export const getSettingsResponseVerticalSpeedMultiplierDefault = 3;
+export const getSettingsResponseVerticalSpeedMultiplierMax = 10;
+
 export const getSettingsResponseInvertMouseYDefault = false;
 export const getSettingsResponseMouseSensitivityDefault = 1;
 export const getSettingsResponseMouseSensitivityMin = 0.1;
@@ -2485,6 +2488,7 @@ export const GetSettingsResponse = zod.object({
   "maxActiveDatasets": zod.number().min(1).max(getSettingsResponseMaxActiveDatasetsMax).int().default(getSettingsResponseMaxActiveDatasetsDefault).describe('Maximum number of datasets rendered simultaneously in the 3D scene. Lower values reduce GPU load on slower devices.'),
   "proximityMode": zod.boolean().default(getSettingsResponseProximityModeDefault).describe('When true, all user-uploaded datasets and preset catalog entries are automatically added to the proximity streaming pool on startup. When false, only manually selected datasets are streamed.'),
   "defaultSpeedTier": zod.number().min(getSettingsResponseDefaultSpeedTierMin).max(getSettingsResponseDefaultSpeedTierMax).int().default(getSettingsResponseDefaultSpeedTierDefault),
+  "verticalSpeedMultiplier": zod.number().min(1).max(getSettingsResponseVerticalSpeedMultiplierMax).default(getSettingsResponseVerticalSpeedMultiplierDefault).describe('Multiplier applied to vertical fly-camera movement while ascending or descending.'),
   "invertMouseY": zod.boolean().default(getSettingsResponseInvertMouseYDefault),
   "mouseSensitivity": zod.number().min(getSettingsResponseMouseSensitivityMin).max(getSettingsResponseMouseSensitivityMax).default(getSettingsResponseMouseSensitivityDefault),
   "cameraSpawnBehaviour": zod.enum(['deepest', 'home', 'last', 'center']).default(getSettingsResponseCameraSpawnBehaviourDefault),
@@ -2743,6 +2747,9 @@ export const putSettingsBodyProximityModeDefault = true;
 export const putSettingsBodyDefaultSpeedTierDefault = 2;
 export const putSettingsBodyDefaultSpeedTierMin = 0;
 export const putSettingsBodyDefaultSpeedTierMax = 4;
+
+export const putSettingsBodyVerticalSpeedMultiplierDefault = 3;
+export const putSettingsBodyVerticalSpeedMultiplierMax = 10;
 
 export const putSettingsBodyInvertMouseYDefault = false;
 export const putSettingsBodyMouseSensitivityDefault = 1;
@@ -3021,6 +3028,7 @@ export const PutSettingsBody = zod.object({
   "maxActiveDatasets": zod.number().min(1).max(putSettingsBodyMaxActiveDatasetsMax).int().default(putSettingsBodyMaxActiveDatasetsDefault).describe('Maximum number of datasets rendered simultaneously in the 3D scene. Lower values reduce GPU load on slower devices.'),
   "proximityMode": zod.boolean().default(putSettingsBodyProximityModeDefault).describe('When true, all user-uploaded datasets and preset catalog entries are automatically added to the proximity streaming pool on startup. When false, only manually selected datasets are streamed.'),
   "defaultSpeedTier": zod.number().min(putSettingsBodyDefaultSpeedTierMin).max(putSettingsBodyDefaultSpeedTierMax).int().default(putSettingsBodyDefaultSpeedTierDefault),
+  "verticalSpeedMultiplier": zod.number().min(1).max(putSettingsBodyVerticalSpeedMultiplierMax).default(putSettingsBodyVerticalSpeedMultiplierDefault).describe('Multiplier applied to vertical fly-camera movement while ascending or descending.'),
   "invertMouseY": zod.boolean().default(putSettingsBodyInvertMouseYDefault),
   "mouseSensitivity": zod.number().min(putSettingsBodyMouseSensitivityMin).max(putSettingsBodyMouseSensitivityMax).default(putSettingsBodyMouseSensitivityDefault),
   "cameraSpawnBehaviour": zod.enum(['deepest', 'home', 'last', 'center']).default(putSettingsBodyCameraSpawnBehaviourDefault),
@@ -3274,6 +3282,9 @@ export const putSettingsResponseProximityModeDefault = true;
 export const putSettingsResponseDefaultSpeedTierDefault = 2;
 export const putSettingsResponseDefaultSpeedTierMin = 0;
 export const putSettingsResponseDefaultSpeedTierMax = 4;
+
+export const putSettingsResponseVerticalSpeedMultiplierDefault = 3;
+export const putSettingsResponseVerticalSpeedMultiplierMax = 10;
 
 export const putSettingsResponseInvertMouseYDefault = false;
 export const putSettingsResponseMouseSensitivityDefault = 1;
@@ -3552,6 +3563,7 @@ export const PutSettingsResponse = zod.object({
   "maxActiveDatasets": zod.number().min(1).max(putSettingsResponseMaxActiveDatasetsMax).int().default(putSettingsResponseMaxActiveDatasetsDefault).describe('Maximum number of datasets rendered simultaneously in the 3D scene. Lower values reduce GPU load on slower devices.'),
   "proximityMode": zod.boolean().default(putSettingsResponseProximityModeDefault).describe('When true, all user-uploaded datasets and preset catalog entries are automatically added to the proximity streaming pool on startup. When false, only manually selected datasets are streamed.'),
   "defaultSpeedTier": zod.number().min(putSettingsResponseDefaultSpeedTierMin).max(putSettingsResponseDefaultSpeedTierMax).int().default(putSettingsResponseDefaultSpeedTierDefault),
+  "verticalSpeedMultiplier": zod.number().min(1).max(putSettingsResponseVerticalSpeedMultiplierMax).default(putSettingsResponseVerticalSpeedMultiplierDefault).describe('Multiplier applied to vertical fly-camera movement while ascending or descending.'),
   "invertMouseY": zod.boolean().default(putSettingsResponseInvertMouseYDefault),
   "mouseSensitivity": zod.number().min(putSettingsResponseMouseSensitivityMin).max(putSettingsResponseMouseSensitivityMax).default(putSettingsResponseMouseSensitivityDefault),
   "cameraSpawnBehaviour": zod.enum(['deepest', 'home', 'last', 'center']).default(putSettingsResponseCameraSpawnBehaviourDefault),

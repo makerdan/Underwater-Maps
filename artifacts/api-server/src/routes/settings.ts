@@ -117,6 +117,7 @@ export const DEFAULT_SETTINGS = {
   // ── Newly promoted from extras path (previously validated client-side only) ──
   schemaVersion: 19,
   showAdvancedEverywhere: false,
+  verticalSpeedMultiplier: 3,
   mouseZoomSensitivity: 1.0,
   touchpadZoomSensitivity: 1.0,
   pinchZoomSensitivity: 1.0,

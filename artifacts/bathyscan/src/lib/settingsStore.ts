@@ -71,7 +71,26 @@ import {
 import { toValidContourDensity, type ContourDensity } from "./contourDensity";
 import { isValidDailyRouteTimezone } from "./gpsImport";
 
-export const SETTINGS_SCHEMA_VERSION = 39;
+export const SETTINGS_SCHEMA_VERSION = 40;
+
+/** Supported vertical fly-speed multiplier range. */
+export const VERTICAL_SPEED_MULTIPLIER_MIN = 1;
+export const VERTICAL_SPEED_MULTIPLIER_MAX = 10;
+export const VERTICAL_SPEED_MULTIPLIER_DEFAULT = 3;
+
+/**
+ * Normalize the vertical fly-speed multiplier so persisted or server-provided
+ * values cannot make vertical movement unusably slow or unexpectedly fast.
+ */
+export function clampVerticalSpeedMultiplier(v: unknown): number {
+  const n = typeof v === "number" && Number.isFinite(v)
+    ? v
+    : VERTICAL_SPEED_MULTIPLIER_DEFAULT;
+  return Math.min(
+    VERTICAL_SPEED_MULTIPLIER_MAX,
+    Math.max(VERTICAL_SPEED_MULTIPLIER_MIN, n),
+  );
+}
 
 /** Supported vertical-exaggeration range (matches the Settings slider). */
 export const TERRAIN_EXAGGERATION_MIN = 1;
@@ -261,6 +280,7 @@ export interface SettingsState {
 
   // ── Camera & Controls ─────────────────────────────────────────────────
   defaultSpeedTier: number;
+  verticalSpeedMultiplier: number;
   mouseSensitivity: number;
   invertMouseY: boolean;
   mouseZoomSensitivity: number;
@@ -684,6 +704,7 @@ export interface SettingsState {
 interface SettingsActions {
   // Camera & Controls
   setDefaultSpeedTier: (v: number) => void;
+  setVerticalSpeedMultiplier: (v: number) => void;
   setMouseSensitivity: (v: number) => void;
   setInvertMouseY: (v: boolean) => void;
   setMouseZoomSensitivity: (v: number) => void;
@@ -997,6 +1018,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
 
   // Camera
   defaultSpeedTier: FLY_DEFAULT_SPEED_TIER,
+  verticalSpeedMultiplier: VERTICAL_SPEED_MULTIPLIER_DEFAULT,
   mouseSensitivity: 1.0,
   invertMouseY: false,
   mouseZoomSensitivity: 1.0,
@@ -1190,7 +1212,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
 
 export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   camera: [
-    "defaultSpeedTier", "mouseSensitivity", "invertMouseY",
+    "defaultSpeedTier", "verticalSpeedMultiplier", "mouseSensitivity", "invertMouseY",
     "mouseZoomSensitivity", "touchpadZoomSensitivity", "pinchZoomSensitivity",
     "joystickMode", "showJoystickInOrbit", "fieldOfView", "renderDistance", "cameraSpawnBehaviour",
   ],
@@ -1327,6 +1349,8 @@ export const useSettingsStore = create<SettingsStore>()(
 
         // Camera
         setDefaultSpeedTier: setter("defaultSpeedTier"),
+        setVerticalSpeedMultiplier: (v) =>
+          set({ verticalSpeedMultiplier: clampVerticalSpeedMultiplier(v) }),
         setMouseSensitivity: setter("mouseSensitivity"),
         setInvertMouseY: setter("invertMouseY"),
         setMouseZoomSensitivity: setter("mouseZoomSensitivity"),
@@ -1699,6 +1723,7 @@ export const useSettingsStore = create<SettingsStore>()(
               else if (k === "colormapTheme") safeVal = toValidColormapTheme(serverVal);
               else if (k === "waterType") safeVal = toValidWaterType(serverVal);
               else if (k === "defaultSpeedTier") safeVal = toValidDefaultSpeedTier(serverVal);
+              else if (k === "verticalSpeedMultiplier") safeVal = clampVerticalSpeedMultiplier(serverVal);
               else if (k === "terrainExaggeration") safeVal = clampTerrainExaggeration(serverVal);
               else if (k === "dailyRouteTimezone") {
                 safeVal =
@@ -2049,6 +2074,12 @@ export const useSettingsStore = create<SettingsStore>()(
           ) {
             migratedDailyRouteTimezone.dailyRouteTimezone = DEFAULT_SETTINGS.dailyRouteTimezone;
           }
+          // v39 → v40: inject the configurable vertical fly-speed multiplier.
+          const migratedVerticalSpeed: Partial<SettingsState> = {
+            verticalSpeedMultiplier: clampVerticalSpeedMultiplier(
+              (rest as Record<string, unknown>).verticalSpeedMultiplier,
+            ),
+          };
           const mergedState: SettingsState = {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -2077,6 +2108,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedContourDensity,
             ...migratedMobileMapTilt,
             ...migratedDailyRouteTimezone,
+            ...migratedVerticalSpeed,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,
@@ -2096,6 +2128,9 @@ export const useSettingsStore = create<SettingsStore>()(
           mergedState.colormapTheme = toValidColormapTheme(mergedState.colormapTheme);
           mergedState.waterType = toValidWaterType(mergedState.waterType);
           mergedState.defaultSpeedTier = toValidDefaultSpeedTier(mergedState.defaultSpeedTier);
+          mergedState.verticalSpeedMultiplier = clampVerticalSpeedMultiplier(
+            mergedState.verticalSpeedMultiplier,
+          );
           return mergedState;
         }
         // Even at the current version, ensure newly added actions get
@@ -2110,6 +2145,7 @@ export const useSettingsStore = create<SettingsStore>()(
           colormapTheme: toValidColormapTheme(cur.colormapTheme),
           waterType: toValidWaterType(cur.waterType),
           defaultSpeedTier: toValidDefaultSpeedTier(cur.defaultSpeedTier),
+          verticalSpeedMultiplier: clampVerticalSpeedMultiplier(cur.verticalSpeedMultiplier),
           terrainExaggeration: clampTerrainExaggeration(cur.terrainExaggeration),
           dailyRouteTimezone: isValidDailyRouteTimezone(cur.dailyRouteTimezone)
             ? cur.dailyRouteTimezone
