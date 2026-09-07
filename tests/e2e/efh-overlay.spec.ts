@@ -501,3 +501,377 @@ test.describe("EFH overlay — Task #314 dataset coverage", () => {
     });
   });
 });
+
+test.describe("EFH species selection — browser regression", () => {
+  test("limits the active pair and clears it when switching datasets", async ({
+    page,
+  }) => {
+    const thorneTerrain = {
+      waterType: "saltwater" as const,
+      minLon: -133.1,
+      maxLon: -132.5,
+      minLat: 55.6,
+      maxLat: 56,
+      centerLon: -132.8,
+      centerLat: 55.8,
+    };
+    const glacierTerrain = {
+      waterType: "saltwater" as const,
+      minLon: -137.1,
+      maxLon: -135.8,
+      minLat: 58.4,
+      maxLat: 59.15,
+      centerLon: -136.45,
+      centerLat: 58.75,
+    };
+
+    // Keep both catalog responses deterministic while preserving the server's
+    // real catalog entries. Thorne Bay supplies the three-plus species needed
+    // to exercise the capacity guard; Glacier Bay supplies a different
+    // catalog for the dataset-switch assertions.
+    await page.route(
+      (url) => new URL(url).pathname === "/api/datasets",
+      async (route) => {
+        const response = await route.fetch();
+        let existing: Array<Record<string, unknown>> = [];
+        try {
+          existing = (await response.json()) as typeof existing;
+        } catch {
+          // Keep the injected catalog usable even if the upstream response is
+          // unavailable in the browser test environment.
+        }
+        const injected = [
+          ["thorne-bay", thorneTerrain],
+          ["glacier-bay", glacierTerrain],
+        ].map(([id, terrain]) => ({
+          id,
+          name: id,
+          description: "",
+          waterType: "saltwater",
+          hasEfh: true,
+          minDepth: 0,
+          maxDepth: 20,
+          centerLon: (terrain as typeof thorneTerrain).centerLon,
+          centerLat: (terrain as typeof thorneTerrain).centerLat,
+          bbox: {
+            minLon: (terrain as typeof thorneTerrain).minLon,
+            minLat: (terrain as typeof thorneTerrain).minLat,
+            maxLon: (terrain as typeof thorneTerrain).maxLon,
+            maxLat: (terrain as typeof thorneTerrain).maxLat,
+          },
+        }));
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([
+            ...existing.filter(
+              (dataset) =>
+                dataset.id !== "thorne-bay" && dataset.id !== "glacier-bay",
+            ),
+            ...injected,
+          ]),
+        });
+      },
+    );
+    await page.route(
+      (url) =>
+        /^\/api\/datasets\/(thorne-bay|glacier-bay)\/(terrain|overview)$/.test(
+          new URL(url).pathname,
+        ),
+      async (route) => {
+        const path = new URL(route.request().url()).pathname;
+        const datasetId = path.includes("glacier-bay")
+          ? "glacier-bay"
+          : "thorne-bay";
+        const terrain =
+          datasetId === "glacier-bay" ? glacierTerrain : thorneTerrain;
+        const resolution = 64;
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            datasetId,
+            name: datasetId,
+            waterType: "saltwater",
+            resolution,
+            width: resolution,
+            height: resolution,
+            depths: new Array(resolution * resolution).fill(10),
+            minDepth: 0,
+            maxDepth: 20,
+            ...terrain,
+          }),
+        });
+      },
+    );
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    if (!(await waitForTestHelpers(page))) {
+      test.skip(true, "window.__bathyTest not installed — dev test helpers missing");
+      return;
+    }
+    if (!(await waitForBridge(page))) {
+      test.skip(
+        true,
+        "TestBridge setActiveDatasetId not registered — signed-in shell not mounted",
+      );
+      return;
+    }
+
+    await page.evaluate(
+      ({ thorne }) => {
+        const api = (
+          window as unknown as {
+            __bathyTest?: {
+              seedCatalogEntry?: (entry: {
+                id: string;
+                hasEfh?: boolean;
+                waterType?: "saltwater" | "freshwater";
+              }) => void;
+              seedTerrain?: (overrides: Record<string, unknown>) => boolean;
+              setWaterType?: (value: "saltwater" | "freshwater") => void;
+              setActiveDatasetId?: (id: string | null) => boolean;
+            };
+          }
+        ).__bathyTest;
+        api?.seedCatalogEntry?.({
+          id: "thorne-bay",
+          hasEfh: true,
+          waterType: "saltwater",
+        });
+        api?.seedCatalogEntry?.({
+          id: "thorne-bay",
+          hasEfh: true,
+          waterType: "freshwater",
+        });
+        api?.seedCatalogEntry?.({
+          id: "glacier-bay",
+          hasEfh: true,
+          waterType: "saltwater",
+        });
+        api?.seedCatalogEntry?.({
+          id: "glacier-bay",
+          hasEfh: true,
+          waterType: "freshwater",
+        });
+        api?.seedTerrain?.({ datasetId: "thorne-bay", ...thorne });
+        api?.setWaterType?.("saltwater");
+        api?.setActiveDatasetId?.("thorne-bay");
+      },
+      { thorne: thorneTerrain },
+    );
+
+    await page.waitForTimeout(50);
+    await page.evaluate(() => {
+      const api = (
+        window as unknown as {
+          __bathyTest?: {
+            seedCatalogEntry?: (entry: {
+              id: string;
+              hasEfh?: boolean;
+              waterType?: "saltwater" | "freshwater";
+            }) => void;
+            seedTerrain?: (overrides: Record<string, unknown>) => boolean;
+            setActiveDatasetId?: (id: string | null) => boolean;
+          };
+        }
+      ).__bathyTest;
+      api?.setWaterType?.("saltwater");
+      api?.seedCatalogEntry?.({
+        id: "thorne-bay",
+        hasEfh: true,
+        waterType: "saltwater",
+      });
+      api?.seedTerrain?.({
+        datasetId: "thorne-bay",
+        waterType: "saltwater",
+        minLon: -133.1,
+        maxLon: -132.5,
+        minLat: 55.6,
+        maxLat: 56,
+        centerLon: -132.8,
+        centerLat: 55.8,
+      });
+      api?.setActiveDatasetId?.("thorne-bay");
+    });
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () =>
+              (
+                window as unknown as {
+                  __bathyTest?: {
+                    getTerrainSummary?: () => { datasetId?: string } | null;
+                  };
+                }
+              ).__bathyTest?.getTerrainSummary?.()?.datasetId ?? null,
+          ),
+        { timeout: 20_000, intervals: [100, 200, 400, 800] },
+      )
+      .toBe("thorne-bay");
+    await page.evaluate(() => {
+      (
+        window as unknown as {
+          __bathyTest?: {
+            seedCatalogEntry?: (entry: {
+              id: string;
+              hasEfh?: boolean;
+              waterType?: "saltwater" | "freshwater";
+            }) => void;
+          };
+        }
+      ).__bathyTest?.seedCatalogEntry?.({
+        id: "thorne-bay",
+        hasEfh: true,
+        waterType: "saltwater",
+      });
+    });
+    await page.waitForTimeout(100);
+
+    const overlays = page.getByTestId("overlays-tools-panel");
+    await expect(overlays).toBeVisible({ timeout: 10_000 });
+    const efhToggle = overlays.getByRole("button", {
+      name: /ESSENTIAL FISH HABITAT/,
+    });
+    const efhToggleVisible = await efhToggle
+      .waitFor({ state: "visible", timeout: 10_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!efhToggleVisible) {
+      test.skip(
+        true,
+        "EFH controls were not surfaced for the seeded authenticated dataset",
+      );
+      return;
+    }
+    if ((await efhToggle.getAttribute("aria-pressed")) !== "true") {
+      await efhToggle.click();
+    }
+
+    const speciesButtons = overlays.locator(
+      'button[title^="Load "], button[title^="Deselect "]',
+    );
+    await expect.poll(() => speciesButtons.count(), { timeout: 15_000 }).toBeGreaterThan(2);
+    const activeButtons = overlays.locator('button[aria-pressed="true"]');
+    await expect(activeButtons).toHaveCount(2);
+
+    const inactiveButtons = overlays.locator('button[aria-pressed="false"]');
+    const thirdSpecies = inactiveButtons.first();
+    await expect(thirdSpecies).toHaveAttribute("aria-disabled", "true");
+
+    const firstSpecies = activeButtons.first();
+    await firstSpecies.click();
+    await expect(thirdSpecies).toHaveAttribute("aria-disabled", "false");
+    await thirdSpecies.click();
+    await expect(activeButtons).toHaveCount(2);
+    await expect(firstSpecies).toHaveAttribute("aria-pressed", "false");
+    await expect(thirdSpecies).toHaveAttribute("aria-pressed", "true");
+
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () =>
+              (
+                window as unknown as {
+                  __bathyTest?: {
+                    getEfhFeatureCount?: (id: string) => number;
+                  };
+                }
+              ).__bathyTest?.getEfhFeatureCount?.("thorne-bay") ?? 0,
+          ),
+        { timeout: 15_000, intervals: [100, 200, 400, 800] },
+      )
+      .toBeGreaterThan(0);
+
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() =>
+            (
+              window as unknown as {
+                __bathyTest?: {
+                  openEfhDetailForFeature?: (id: string, index: number) => boolean;
+                };
+              }
+            ).__bathyTest?.openEfhDetailForFeature?.("thorne-bay", 0) ?? false,
+          ),
+        { timeout: 5_000, intervals: [200, 400, 800] },
+      )
+      .toBe(true);
+    const detail = page.getByRole("dialog", {
+      name: /^Essential Fish Habitat details for /,
+    });
+    await expect(detail).toBeVisible();
+
+    await page.evaluate(() => {
+      const api = (
+        window as unknown as {
+          __bathyTest?: {
+            setActiveDatasetId?: (id: string | null) => boolean;
+            seedTerrain?: (overrides: Record<string, unknown>) => boolean;
+          };
+        }
+      ).__bathyTest;
+      api?.seedTerrain?.({
+        datasetId: "glacier-bay",
+        waterType: "saltwater",
+        minLon: -137.1,
+        maxLon: -135.8,
+        minLat: 58.4,
+        maxLat: 59.15,
+        centerLon: -136.45,
+        centerLat: 58.75,
+      });
+      api?.setActiveDatasetId?.("glacier-bay");
+    });
+    await page.waitForTimeout(50);
+    await page.evaluate(() => {
+      (
+        window as unknown as {
+          __bathyTest?: { setActiveDatasetId?: (id: string | null) => boolean };
+        }
+      ).__bathyTest?.setActiveDatasetId?.("glacier-bay");
+    });
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () =>
+              (
+                window as unknown as {
+                  __bathyTest?: {
+                    getTerrainSummary?: () => { datasetId?: string } | null;
+                  };
+                }
+              ).__bathyTest?.getTerrainSummary?.()?.datasetId ?? null,
+          ),
+        { timeout: 20_000, intervals: [100, 200, 400, 800] },
+      )
+      .toBe("glacier-bay");
+
+    await expect(detail).toBeHidden();
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () =>
+              (
+                window as unknown as {
+                  __bathyTest?: {
+                    getEfhFeatureCount?: (id: string) => number;
+                  };
+                }
+              ).__bathyTest?.getEfhFeatureCount?.("glacier-bay") ?? 0,
+          ),
+        { timeout: 15_000, intervals: [100, 200, 400, 800] },
+      )
+      .toBeGreaterThan(0);
+    await expect(overlays.locator('button[aria-pressed="true"]')).toHaveCount(2);
+    await expect(overlays.getByText("Load species (2/2)")).toBeVisible();
+    await expect(
+      overlays.locator('button[title*="Yelloweye Rockfish"]'),
+    ).toHaveCount(0);
+  });
+});

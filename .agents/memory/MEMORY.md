@@ -1,153 +1,36 @@
-- [Raster-extract is SSE not JSON](raster-extract-sse-endpoint.md) — POST /api/datasets/raster-extract always returns HTTP 200 text/event-stream; errors/success come as stage:"error"/"done" events; never check res.status or res.body directly.
-- [Depth sign convention is positive-down](depth-sign-convention.md) — terrain grids are positive-down; a Math.min(depth,0) land clamp flattens the whole mesh to Y=0 (invisible terrain). Land clamp must be Math.max(depth,0).
-- [Terrain grid row-order contract](terrain-row-orientation.md) — served grids must be row 0 = SOUTH; GeoTIFF/bundle sources are north-first and flip at read time; never flip client-side; orientation changes need a TERRAIN_CACHE_VERSION bump.
-- [Upscale disk cache key extension](upscale-disk-cache-key.md) — disk files are stored as `<sha256>.json`; `UPSCALE_CACHE_KEY_RE` matches bare hex with no extension, so `filter(RE.test)` on filenames always returns zero matches. Use `f.endsWith(".json") && isValidUpscaleCacheKey(f.slice(0,-5))`.
-- [Poe disk-cache cross-run isolation](poe-disk-cache-isolation.md) — ZONE_CACHE_DIR / UPSCALE_CACHE_DIR now read env vars set to pid-unique dirs in setup.ts; cross-run contamination eliminated. Within-run: still call __clearZoneAndDatasetCaches() + __clearUpscaleCaches() in beforeEach.
-- [Express trust proxy required for XFF rate-limit tests](express-trust-proxy-xff.md) — Express ignores X-Forwarded-For unless `app.set("trust proxy", 1)` is set; rate-limit tests using supertest `.set("X-Forwarded-For", ip)` will see all requests as the same loopback IP without it.
-- [Zustand no-selector crash](zustand-no-selector-crash.md) — useDriftStore() without a selector causes "getSnapshot should be cached" in React 18 Concurrent Mode; always use per-field selectors.
-- [Vite 8 + vitest env pitfalls](vite8-vitest-env-pitfalls.md) — plugin-react ≥5.2 stops applying JSX under vitest (set esbuild jsx:"automatic"); NODE_ENV=test defeats mode:"production" in programmatic build() guards.
-- [Vite dedupe zustand](vite-dedupe-zustand.md) — tunnel-rat (via @react-three/drei) pulls in Zustand v4 alongside app's v5; dedupe "zustand" in vite.config.ts resolve.dedupe.
-- [TS project refs need rebuild after codegen](ts-project-refs-codegen.md) — running orval codegen alone is not enough; must also run typecheck:libs to emit .d.ts files before consuming packages see new types.
-- [vitest queryHook must use data:undefined](vitest-queryHook-data-undefined.md) — returning data:[] in queryHook causes infinite useEffect setState loop; act() never settles. Also: mock ViewscreenTooltip in FindDataPanel tests to avoid compose-refs@1.1.2+React19 ref loop.
-- [laz-perf WASM heap detach on memory growth](laz-perf-wasm-heap.md) — capturing lp.HEAPU8 before the decompression loop is unsafe; WASM memory can grow mid-loop, detaching the ArrayBuffer. Re-read lp.HEAPU8.buffer on each getPoint() call.
-- [Nix pip vs uv for Python deps](nix-pip-vs-uv.md) — python3 -m pip and uv add both fail with permission denied against Nix read-only store; use bare `pip` wrapper + PYTHONUSERBASE=.pythonlibs instead.
-- [NOAA gzip magic-byte detection](noaa-gzip-magic-byte.md) — NOAA archives have descriptive filenames with no .gz extension; use isGzipFile() (0x1F 0x8B magic) as fallback in processUploadJob and bucketMonitor before the gz-decompression gate.
-- [settingsStore mock must include persist+setState](settingsstore-mock-persist.md) — uiStore.ts calls useSettingsStore.persist.hasHydrated() at module init and useSettingsStore.setState() in action handlers; mocks must use importOriginal + Object.assign with persist/setState/getState/subscribe stubs or tests crash.
-- [Fake-timer clock reset breaks TTL caches](fake-timer-clock-reset.md) — vi.useRealTimers() in a global beforeEach resets the fake clock; clean cross-file leaks at file level (top-level setupFile), never per-test.
-- [bypassUseClerk session needs getToken](bypass-use-clerk-session.md) — ClerkAuthTokenWirer in App.tsx calls session.getToken(); the bypass mock must include getToken: async () => null on the session object or every browser-side PUT/GET throws TypeError and waitForServerSettingsSync times out.
-- [BAG parser subprocess pitfalls](bag-parser-subprocess.md) — three non-obvious issues when replacing h5wasm with Python subprocess BAG parsing.
-- [Error boundary retry must use componentDidCatch](error-boundary-retry.md) — componentDidUpdate's prevState.hasError stays true→true on re-catch; use componentDidCatch for retry scheduling instead.
-- [fetchJsonWithProgress missing Bearer token](fetchjsonwithprogress-auth.md) — fetchJsonWithProgress bypasses customFetch auth wiring; any caller on an authed route must pass getAuthToken() result via init.headers.
-- [Running long test suites](long-test-runs.md) — bathyscan unit ~7.5 min; run via temporarily narrowed test-unit workflow, not bash; budgets live in tests/timeout-guard/budgets.json.
-- [Serialized heavy test suites](test-heavy-serialized.md) — unit+palette+e2e run as one serialized test-heavy validation command; never re-parallelize; breach reports carry an under-load verdict.
-- [Long-running commands](long-running-commands.md) — nohup/setsid background jobs die when the shell call ends; use a temp validation command or a workflow for >2 min runs.
-- [Replit proxy needs native WS ping to stay alive](replit-proxy-ws-ping.md) — Replit mTLS proxy drops WS after ~30 s idle; only opcode-0x9 frames reset the timer, not JSON data frames. Fix: hmrNativePingPlugin() in vite.config.ts.
-- [Disposed texture uniform resurrect](disposed-texture-uniform-resurrect.md) — three.js re-uploads a disposed texture still bound to a uniform; rebind (placeholder) before dispose or it leaks forever.
-- [terrainStore promote wipes grids](terrainstore-promote-wipes-grids.md) — re-promoting a visible dataset must preserve its loaded grids; null-grid rebuilds silently break Overview Map bbox flows.
-- [Health probe must use /api/healthz](health-probe-routing.md) — root-relative probes hit the SPA fallback 200; only /api/* reaches the API server. Dev restart button lives on the Vite server.
-- [__proto__ evades own-key checks](proto-key-own-property-evasion.md) — copying untrusted keys into a plain {} lets __proto__ vanish from Object.keys; use Object.create(null) + denylist.
-- [Drizzle schema-drift check quirks](drizzle-schema-drift-check.md) — drizzle-kit generate needs relative `out`; hand-written migrations must be journaled or drift check always fires.
-- [Drizzle journal cannot bootstrap a fresh DB](drizzle-journal-no-bootstrap.md) — 0000_baseline is empty, real baseline journaled after migrations that use its tables; migrate always exits 1 silently on empty DBs — use push-force.
-- [Headless geometry probe](headless-geometry-probe.md) — probeTerrainGeometry() builds the real render geometry CPU-only and publishes crosshairGps only when the mesh has relief; use for viewport-visibility e2e checks.
-- [Headless test-bridge fallback](headless-test-bridge-fallback.md) — Canvas-hook-registered __bathyTest callbacks never register headless; fall back to pure lib functions run on the rig camera.
-- [Playwright contextmenu dispatchEvent drops coords](playwright-contextmenu-dispatchevent.md) — dispatchEvent("contextmenu",{clientX}) builds a plain Event, coords become NaN; construct MouseEvent in-page via evaluate.
-- [Validation harness concurrency race](validation-concurrency-race.md) — parallel validation steps race on generated api.ts (codegen patch=0) and e2e port 3161; reproduce the failing step alone before iterating.
-- [uiStore/settingsStore ordering](uistore-settings-ordering.md) — mirrored setters must commit uiStore via set() first, then useSettingsStore.setState; never setState another store inside a set((state)=>…) transition.
-- [Concurrent codegen race](codegen-concurrent-race.md) — typecheck + test-all both regenerate api.ts; concurrent runs fail patch-zod-integer-settings with "missing .int()"; re-run solo, not a schema bug.
-- [PUT /api/settings extra-keys 400](put-settings-extra-keys-400.md) — palette e2e 400s come from MAX_EXTRA_KEYS=32 guard, not Zod; browser sends 76 extras not in PutSettingsBody schema.
-- [New settings key checklist](settings-key-checklist.md) — new PutSettingsBody keys also need DEFAULT_SETTINGS; test-settings-validation subset misses this, only full unit catches it.
-- [Settings backup schema checklist](settings-backup-schema-checklist.md) — every exported DEFAULT_SETTINGS field needs a matching validated import schema or fresh backups report it as skipped.
-- [useUiStore selector declarations must precede JSX usage](uistore-selector-declarations.md) — adding JSX usages of useUiStore fields without the corresponding const hook declaration causes TS2304; check App.tsx hook block when TS reports unknown names that clearly live in the store.
-- [Dynamic import of mocked modules races under vitest](vitest-dynamic-import-mock-race.md) — concurrent await import() of a vi.mock’d module can hand the loser the real module; use static imports (safe: missing-export errors fire on access, not import).
-- [vi.hoisted required for mock vars read at module init](vi-hoisted-mock-vars.md) — if a vi.mock() factory closure reads a let variable that is also read during module initialization (e.g. uiStore.ts:608 calls getState()), use vi.hoisted() not plain let; plain let is in TDZ when the factory/module runs.
-- [No deliverables under .local/](no-deliverables-in-dot-local.md) — .local/ is gitignored; anything written there is lost at task merge. Deliverables go in tracked paths; only .local/tasks plan files are exempt.
-- [js-yaml override breaks orval ESM import](js-yaml-override-breaks-orval.md) — override must stay in 4.x; a bare >=4.2.0 resolves to v5.x which breaks orval's default ESM import. Pinned as `js-yaml@4: 4.3.1` in package.json pnpm.overrides.
-- [pnpm overrides dual-source trap](pnpm-overrides-dual-source.md) — package.json pnpm.overrides silently wins over pnpm-workspace.yaml overrides for the same key; security override changes must be made in package.json or both places.
-- [Post-merge git identity](post-merge-git-identity.md) — Replit runner has no global git identity; `git commit` in post-merge.sh fails with "unable to auto-detect email". Set `git config --local user.email/name` just before every commit in the script.
-- [vitest v3 sequencer types](vitest-v3-sequencer-types.md) — BaseSequencer.sort() takes TestFile[] in v3; WorkspaceSpec (v2 name) doesn't exist and causes silent failure.
-- [Rate-limit prefill pattern](rate-limit-prefill-pattern.md) — use __prefillRateLimitMemory(key, count) to set bucket state directly in tests; avoids 43+ s combined sleep waits.
-- [Playwright globalSetup port sweep self-DOS](kill-port-holders-webserver-order.md) — webServers spawn before globalSetup AND port pre-check runs before the command; sweep at config-load time with env guard, skip own-tree holders.
-- [Playwright addInitScript drops closures](playwright-addinitscript-closures.md) — factory-closure init scripts lose captured values silently; pass values as addInitScript's second arg.
-- [Express 5 wildcard routes](express5-wildcard-routes.md) — bare "*" route patterns throw in path-to-regexp v8; use named splats like "/objects/*objectPath".
-- [pg.Pool needs error listener](pg-pool-error-listener.md) — unlistened 'error' on pg.Pool causes uncaughtException → process.exit(1); add pool.on('error') in lib/db/src/index.ts.
-- [Workflow limit and validation upsert](workflow-limit-validation-upsert.md) — configureWorkflow blocked at 10/10 (hidden Project meta counts); setValidationCommand upsert bypasses it. Onboarding overlay blocks Home-route e2e clicks.
-- [Workflow limit counter goes stale](workflow-limit-stale-counter.md) — configureWorkflow keeps rejecting "10/10" after a removal; listWorkflows() shows truth, retry after a few minutes.
-- [Port cleanup /proc quirks](port-cleanup-proc-quirks.md) — fuser is not on PATH (old fuser -k was a no-op); Nix node comm is "MainThread" — use scripts/kill-port-holders.mjs for freeing ports.
-- [NCEI geoportal response format](ncei-geoportal-response-format.md) — f=json now returns atom shape (empty results); omit f for ES hits.hits format; bbox lives in envelope_geo.
-- [Plan sidebar e2e breakage](plan-sidebar-e2e-breakage.md) — sidebar tabs restructure broke many e2e specs: Plan tab gating, server-persisted sidebarMode, terrain-gated Explore panel, onboarding overlay, initScript reload re-seeding.
-- [Collapsed details hide e2e targets](details-collapse-e2e-visibility.md) — controls inside collapsed <details> are hidden not missing; click the summary toggle first or toBeVisible() times out deterministically.
-- [Stale validation-lock holders](validation-lock-stale-holders.md) — aborted validation runs leave orphaned validation-lock.mjs holders that deadlock later runs; kill their pgids + rm .local/validation-lock-*.lock.
-- [Validation lock reentrancy](validation-lock-reentrancy.md) — double-wrapped validation-lock (workflow + npm script) self-deadlocks; nested wrappers skip via VALIDATION_LOCK_HELD_PID ancestor check.
-- [Validation serialization lock](validation-serialization-lock.md) — heavy validation steps wrap scripts/validation-lock.mjs so run budgets start after lock acquisition; concurrency caused false budget breaches.
-- [Settings sync flush races](settings-sync-flush-races.md) — serialize PUT flushes (old snapshot lands last = silent revert); one-way hasSeenOnboarding apply must not cancel intentional local resets.
-- [Live-mode follow e2e pitfalls](live-mode-follow-e2e.md) — enterLiveMode auto-engages follow; useFrame logic never runs in the headless stub canvas; seedTerrain needs a real preset id.
-- [Skill frontmatter YAML must parse](skill-frontmatter-yaml.md) — unquoted colon in a SKILL.md description breaks YAML and silently hides the skill from skillSearch; use a >- block scalar.
-- [Stale workflow log tails](stale-workflow-logs.md) — after restart_workflow, tailing the latest /tmp/logs file can show the PREVIOUS run; use refresh_all_logs.
-- [Playwright dispatchEvent arg order](playwright-dispatchevent-options.md) — timeout goes in the 3rd arg; `{timeout}` as 2nd arg is eventInit and the call hangs to test timeout on absent elements.
-- [Sparse-track gridder blowup](upload-event-loop-freeze.md) — minutes-long upload "freezes" were O(N⁴) IDW ring-fill on sparse tracks in the parse worker; healthz stayed fast — profile the worker, not the server.
-- [startValidationRun poll budget](validation-run-poll-budget.md) — validation runs are force-STOPPED after ~10 min; split long tiers into sub-10-min commands (static-with-skips + per-package unit) and read stopped-run logs immediately.
-- [Standalone bathyscan vite](bathyscan-standalone-vite.md) — throwaway dev server needs PORT+BASE_PATH=/bathyscan/+VITE_DEV_AUTH_BYPASS=1; playwright needs chromium.launch({channel:"chromium"}) here.
-- [Validation tiers](validation-tiers.md) — three registered commands (test-fast/standard/heavy); pick by task type using the decision table in .agents/skills/validation-tiers/SKILL.md.
-- [Circuit breaker forceOpen for tests](circuit-breaker-force-open.md) — use `forceOpen()` on PoeCircuitBreaker (or `__forceOpenPoeBreaker()` test helper) instead of firing 5 failing requests to trip the breaker; saves ~15 s per run.
-- [bucketMonitor concurrency test under load](bucketmonitor-concurrency-leak.md) — settle(10) is not enough at position 132/155 in singleFork (6.9 GB RSS); use waitFor(condition, 3000ms) polling instead of fixed rounds.
-- [Zustand no-op set skips subscription](zustand-noop-set-skips-subscription.md) — calling set({field: sameValue}) fires no subscription; mirrored setters must call the target store's setState directly for write-through to be reliable when the value doesn't change.
-- [validateQuery/Body/Params requires error.issues in mock](validate-middleware-error-issues.md) — all three middlewares call parsed.error.issues.map(); mock safeParse returning {success:false} without error.issues crashes to 500. Always include error:{issues:[]} in failure mocks.
-- [GpsImportDialog hook mock pattern](gps-import-raw-api-mock.md) — GpsImportDialog uses usePostMarkers/usePostTrollingPresets/useDeleteMarkersId hooks (.mutateAsync); mock each hook to return {mutateAsync: mockFn} — NOT raw api functions.
-- [api-server unit suite sharded](api-server-oom-ceiling.md) — suite outgrew any single-process heap (~185+ files); test:unit runs two sequential vitest shards; never re-merge or parallelize, and prefer more shards over raising the heap cap.
-- [Duplicate-hooks parser forwardRef gap](duplicate-hooks-parser-forwardref.md) — scope parser skips components whose decl line lacks a `{` (forwardRef); pending-scope branch handles them, extend it for new wrapper styles.
-- [vi.hoisted TS inference gap](vi-hoisted-ts-inference.md) — vi.hoisted() return type may not resolve correctly in workspace-level pnpm typecheck even when local tsc passes; use plain module-level const/let objects instead (same pattern as vi.fn() spies).
-- [Catalog upstream successors](catalog-upstream-successors.md) — deleted-service → live-successor map; fetch-strategy URL rules must move in lockstep; Great Lakes matched by id.
-- [Full e2e known failures](full-e2e-known-failures.md) — 9 deterministic e2e failures (find-data load, live-mode, gps-trail, follow-handoff, TOPO badge) pre-exist as of 2026-07-20; dataset-load pipeline suspect, not worth re-running.
-- [Vite 8 rolldown test breakage](vite8-rolldown-test-breakage.md) — vite 8 + vitest 3 mismatch: add esbuild jsx:"automatic" to vitest configs; rolldown keeps comments in unminified builds so never write "__bathyTest" literally in comments.
-- [Terrain mock must export catalog constants](terrain-mock-catalog-constants.md) — SOLVED: use createTerrainMock() from __tests__/helpers/terrainMock.ts; guard test terrain-mock-guard.test.ts fails first with a clear message on drift.
-- [catalog-search waterType filter count](catalog-search-watertype-count.md) — test that filters SEEDED_PLUS_FRESHWATER by waterType must use dynamic count; stale comment said EXTRA_CATALOG_ENTRIES was saltwater-only.
-- [ArcGIS/WCS upstream endpoint drift](arcgis-upstream-endpoint-drift.md) — bathymetry services get deleted/moved; use outFields=*, inSR/outSR=4326; curl base ?f=json first, then AGO search for the moved service.
-- [survey.laz fixture nondeterminism](laz-fixture-nondeterminism.md) — check:fixture-freshness can flag survey.laz with no code change; regen via fixtures:regen, commit only the .laz, restore the .bag files.
-- [supertest requireAuth bypass header](supertest-requireauth-bypass-header.md) — test apps mounting requireAuth routers must inject x-e2e-user-id or getAuth() throws and every request 500s.
-- [Shared mock factories + guards](terrain-mock-export-sync.md) — terrain, tileClassify, shoreZoneData, bucketMonitor wholesale mocks all use helpers/ factories; guard tests enforce missing+stale keys. Copy pattern for new modules.
-- [Global catalog entries defeat "nothing nearby" tests](catalog-global-coverage-e2e.md) — seeded catalog has world-spanning bboxes (GEBCO); empty-result branches need point-radius-query mocked to [].
-- [ESLint flat config core rules off](eslint-flat-config-no-core-rules.md) — root config extends no recommended preset; core rules like no-dupe-keys are inactive unless explicitly listed.
-- [API-guard body extraction ordering](api-guard-body-extraction.md) — try concise-arrow extraction before braces-body; object literals in concise bodies fool the braces extractor, and concise bodies must span newlines.
-- [Skip-count ratchet guard](skip-count-guard.md) — check:skip-count (fast tier) pins unit static skips at 0 and e2e test.skip sites to tests/skip-baseline.json; update baseline in the same commit as any new gated skip.
-- [Font scale convention](font-scale-convention.md) — inline fontSize must be calc(Npx * var(--bs-font-scale,1)); never set inline body px (clobbers daylight CSS). drei/SVG fontSize attrs exempt.
-- [Marker library sections](marker-library-sections.md) — edit-mode type check must use full MARKER_TYPES (legacy stays valid); partial markerConstants mocks need every section export.
-- [pdfjs v6 server parsing](pdfjs-v6-server-parsing.md) — destroy() is on the loading task not the doc proxy; isEvalSupported missing from typings (cast); constructPath arg format for vector extraction.
-- [Colormap depth-domain convention](colormap-depth-domain-convention.md) — ocean/custom themes normalise depth on absolute 0–2000 ft; fixed ramps stay grid-relative; legends crop via getColormapTRange.
-- [Terrain shader palette dominance](terrain-shader-palette-dominance.md) — palette hue is the base color; textures are clamped luminance detail, never a multiplier; guarded by a TS-mirror test.
-- [mark_task_complete validation window](mark-complete-validation-window.md) — completion workflow polls ~10.5 min but full suite takes 45+ min; never re-call immediately, drain orphaned lock waiters, verify run logs, then finalize with skip reason.
-- [Tesseract OCR upscale requirement](tesseract-ocr-upscale.md) — LSTM silently returns empty on <1200 px images; upscale to 2400 px short-side; labels must sit ≥60 px clear of any drawn lines in test fixtures.
-- [lib/db test DDL drift](lib-db-testdb-ddl-drift.md) — lib/db constraint tests create tables from hand-written SQL in test-db.ts, not the Drizzle schema; every new schema column must be added there too or all inserts fail.
-- [Server-owned uploadIds in tests](server-owned-upload-ids.md) — chunk-0 requires POST /api/datasets/upload/start; its success is not exposed until chunk 0 and the durable row both exist.
-- [Chunk status is disk-authoritative](chunk-status-db-synthesis.md) — never synthesize received chunk indexes from a DB count; return exact disk indexes or [] so clients safely re-upload holes.
-- [Upload finalize durable handoff](upload-finalize-durable-handoff.md) — never expose a polling jobId until the full queued state is durable; in-flight finalize replies must omit jobId.
-- [cacheRegistry lint for new lib caches](cache-registry-lint.md) — any api-server lib module-level Map cache must call registerCache(() => cache.clear()) or cacheRegistry-lint.test.ts fails.
-- [Tier-gate baseline triage rules](unit-tier-baseline-route-guard.md) — gate policies that must not regress (tier-lock hard-fail, task-agnostic validation commands) + rules for pre-existing-vs-new failure triage.
-- [Current dependency-audit baseline](unit-tier-baseline-2026-08.md) — check:audit can fail on an 18-advisory signature distinct from the older raw-audit baseline; require fresh isolated evidence.
-- [Task-locked scripts suite interaction](task-locked-scripts-suite-interaction.md) — check-failure-gate is green in isolation but can fail inside the full scripts unit aggregation when TASK_PLAN_FILE is inherited.
-- [Tier-lock TASK_PLAN_FILE requirement](tier-lock-plan-file.md) — tier runs hard-fail without TASK_PLAN_FILE + compliant ## Validation/## Regression Guard sections; fix-stub then hand-fill, run via upserted validation command.
-- [Orval "Failed to resolve input" root cause](orval-failed-resolve-input.md) — malformed OpenAPI YAML (duplicate key or bad indentation) is silently swallowed as an input-resolution error.
-- [Hand-edited generated api.ts trap](generated-api-hand-edit-trap.md) — fields added only to lib/api-zod generated output vanish on regeneration; openapi.yaml is the sole source of truth.
-- [Vitest unhandled-error gate fails green runs](unhandled-rejection-gate.md) — "N errors, exit 1" with all tests passing = stale wholesale mock missing a newly-called export, not a test regression; check the Unhandled Errors section first.
-- [Shared walker ignore-dirs](shared-walker-ignore-dirs.md) — walker scripts must import IGNORED_DIRS from scripts/lib/ignored-dirs.mjs; local copies fail check:runner-step-sync in CI.
-- [Plan-file lint backlog](plan-file-lint-backlog.md) — .local/tasks is gitignored so bulk-fills never propagate; gate-hardening auto-stubs insert unfillable placeholders. Both failure-gate and regression-guard now use --skip-if-no-task in fast-tier steps.
-- [Validation guard --skip-if-no-task pattern](validation-guard-skip-pattern.md) — fix:*-stubs and check:* validation steps use --skip-if-no-task so ad-hoc runs skip archive scan; task-agent runs (TASK_PLAN_FILE set) still enforce single-file mode.
-- [Mobile Live 2D follow](mobile-live-2d-follow.md) — mobile chart follow reuses GpsFollowState + follow-handoff channel; boundsCheck reads activeGrid only; proximity needs the GPS→camera mirror with no 3D scene.
-- [Validation workflow boot storm](validation-workflow-boot-storm.md) — env restart autostarts ALL validation workflows queuing on the global lock; stop extras + kill orphaned boot pgids. test:unit fail-fast hides artifact suites behind an early package failure.
-- [catalog-saves.ts concurrent-merge damage](catalog-saves-concurrent-merge.md) — parallel task-agent merges on the same route file can drop router.post wrappers and duplicate destructures; esbuild build fails first, then tsc reveals variable-name corruption in the handler bodies.
-- [Playwright route glob vs query strings](playwright-route-glob-query.md) — page.route("**/path") stops matching once the client adds ?query; append "*" to the glob (won't cross into subpaths).
-- [Markers bbox guard vs bundled presets](markers-bbox-bundled-presets.md) — resolveDatasetBbox only checks DB tables; bundled ids (thorne-bay) crash the custom_datasets UUID query → every marker POST 500s; quick-drop/marker-flow e2e are the detectors.
-- [Validation command editor outage](validation-command-editor-outage.md) — when setValidationCommand fails with "toml-editor error" for adds AND updates, run registered commands as-is; test-standard fits the ~10 min window (~9.3 min observed).
-- [New route module checklist](new-route-module-checklist.md) — mounting a new api-server router breaks wholesale api-zod mocks (add new exports) and the router-duplicate-route-guard ROUTERS list; sweep both in one pass.
-- [Approval gate bootstrap](approval-gate-bootstrap.md) — an admin-list fix does not rewrite an existing pending row; distinguish admin bypass configuration from the stored development approval state.
-- [Rolldown manual-chunk dependency merging](rolldown-manual-chunk-merging.md) — grouping R3F/Drei manually can absorb shared Three and make the renderer static; verify the emitted entry closure, not chunk names.
-- [PWA bundle guard sees stale dist assets](pwa-bundle-stale-dist.md) — bundle tests preserve dist/public, so Workbox can fail on an obsolete oversized hash even when the current entry is under 2 MiB.
-- [Timeout-wrapper test readiness](timeout-wrapper-test-readiness.md) — nested process cleanup tests need explicit readiness polling under concurrent validation load.
-- [API route test mock fallback](api-route-test-mock-fallback.md) — wrap stateful route-test overrides in complete schema/table fallbacks so app-wide mounts cannot crash unrelated suites.
-- [Reference image decode fallback](reference-image-decode-fallback.md) — `createImageBitmap` can reject valid uploaded images in constrained Chromium; preserve the HTMLImageElement decode fallback.
-- [PWA service-worker base normalization](pwa-service-worker-base-normalization.md) — never append `/` to an already-root base; emitted `//sw.js` becomes cross-origin and leaves `serviceWorker.ready` pending.
-- [Offline cache rollback fences](offline-cache-rollback-fences.md) — cache rollback snapshots need per-URL ownership fencing so an older cancelled save cannot restore over a newer retry.
-- [Nested router guard prefixes](express-nested-router-guard-prefixes.md) — aggregate Express route guards need explicit mount prefixes; nested layer internals do not reliably expose them.
-- [Environmental observation boundary](environmental-observation-boundary.md) — weather, tide, marine temperature, and profile callers use one facade while adapters retain behavior.
-- [Validation-lock detached lifecycle](validation-lock-unref-lifecycle.md) — an unref'd detached child still needs a referenced lifecycle handle until its exit event.
-- [Offline upload route](offline-upload-route.md) — uploaded UUID terrain uses authenticated user-datasets reads, not legacy catalog paths.
-- [Mobile coordinate-search e2e](mobile-coordinate-search-e2e.md) — mobile uses a dataset picker without coordinate search; narrow-flow tests must choose their shell explicitly.
-- [Catalog save service boundary](catalog-save-service-boundary.md) — background save lifecycle belongs in the domain service; provider builders can be lazily resolved to avoid route cycles.
-- [Overview reference overlay e2e](overview-reference-overlay-e2e.md) — after viewport changes, wait for the next live snapshot before asserting anchored or dataset-bounds image placement.
-- [Overview zoom focal transform](overview-zoom-focal-transform.md) — use one canvas-space focal transform for toolbar, wheel, pinch, and animated frames; pinch starts from the gesture transform.
-- [Puzzle layout density metadata](puzzle-layout-density.md) — pair legacy pixel offsets with optional save-time density so restores stay geographically aligned across viewports.
-- [Geographic continuous longitude frame](geographic-continuous-frame.md) — compare wrapped GPS/map longitudes on the eastward interval beginning at the dataset minLon.
-- [Sidebar responsive CSSOM expectation](sidebar-responsive-cssom.md) — wide sidebar min-width assertion is a deterministic jsdom/CSSOM baseline mismatch, unrelated to Plan tools.
-- [Schema unique-index definition parity](schema-unique-index-definition-parity.md) — compare ordered expressions and bounded, normalized partial predicates, not only index names.
-- [Mobile Playwright GPU crash](mobile-playwright-gpu-crash.md) — host Chromium may crash before Pixel-device contexts stabilize; classify those runs as environment-limited.
-- [JSDOM reload spying](jsdom-location-reload-spy.md) — Location.reload is non-redefinable; stub the global window before invoking reload handlers.
-- [Validation-lock suite aggregation](validation-lock-suite-aggregation.md) — scripts lock tests can hang in the aggregate unit command while isolated retries remain green.
-- [Managed validation task environment](managed-validation-task-env.md) — managed validation workflows may omit TASK_PLAN_FILE; use the resolved tier directly when lock evidence matters.
-- [Test DB circular foreign keys](testdb-circular-foreign-keys.md) — add one side after table creation and validate post-table constraints alongside inline references.
-- [Exact patch file replacement](apply-patch-eof-newline.md) — whole-file patches may omit the final newline; byte-compare candidate content and add a final blank patch line if needed.
-- [Fly-control test camera spawn](fly-controls-test-camera-spawn.md) — snapshot camera displacement after terrain mount so spawn offsets do not look like physics failures.
-- [Deterministic collection E2E fixtures](e2e-collection-fixtures.md) — create ready upload-backed members in the test and clean them up; never skip based on persisted E2E-library contents.
-- [Multi-result save test mocks](multi-result-save-test-mocks.md) — multi-card save tests need cardinality-safe waits and refetch mocks that publish successful IDs.
-- [Dev workflow environment markers](dev-workflow-environment-markers.md) — Replit dev workflows may report REPLIT_ENVIRONMENT=production; use REPLIT_DEV_DOMAIN to distinguish interactive development.
-- [Validated .replit line endings](replit-config-line-endings.md) — normalize temp replacement candidates to LF before validated replacement or Git reports every line as trailing whitespace.
-- [Validation upserts reorder .replit](validation-upsert-reorders-dot-replit.md) — restoring an unchanged validation command can reorder metadata blocks; remove incidental drift through validated replacement.
-- [Skill projection boundaries](skill-projection-boundaries.md) — reject canonical source/projection overlap and use identity-aware snapshots to catch change-and-revert races.
+- [Raster-extract is SSE not JSON](raster-extract-sse-endpoint.md) — POST /api/datasets/raster-extract always returns HTTP 200 text/event-stream; errors/success come as stage:"error"/"done" events.
+- [Depth sign convention is positive-down](depth-sign-convention.md) — terrain grids are positive-down; land clamp must be Math.max(depth,0).
+- [Terrain grid row-order contract](terrain-row-orientation.md) — served grids are row 0 = SOUTH; sources flip at read time; never flip client-side.
+- [Poe disk-cache cross-run isolation](poe-disk-cache-isolation.md) — cache directories are pid-unique; clear zone, dataset, and upscale caches between tests.
+- [Zustand no-selector crash](zustand-no-selector-crash.md) — always use per-field selectors in React 18 Concurrent Mode.
+- [TS project refs need rebuild after codegen](ts-project-refs-codegen.md) — codegen must be followed by typecheck:libs before consuming generated types.
+- [Running long test suites](long-test-runs.md) — bathyscan unit is long-running; use the registered validation workflow, not a shell background job.
+- [Serialized heavy test suites](test-heavy-serialized.md) — unit, palette, and e2e heavy validation must remain serialized.
+- [Replit proxy needs native WS ping](replit-proxy-ws-ping.md) — only native opcode-0x9 frames keep the mTLS preview proxy alive.
+- [Health probe must use /api/healthz](health-probe-routing.md) — root-relative probes hit the SPA fallback; only /api reaches the API server.
+- [Playwright webServer before globalSetup](playwright-webserver-before-globalsetup.md) — webServers boot before globalSetup; port sweeps belong in each webServer command.
+- [Port cleanup /proc quirks](port-cleanup-proc-quirks.md) — use scripts/kill-port-holders.mjs; fuser is unavailable and Nix node comm is MainThread.
+- [Settings sync flush races](settings-sync-flush-races.md) — serialize PUT flushes so an older snapshot cannot land after a newer one.
+- [Headless test-bridge fallback](headless-test-bridge-fallback.md) — canvas-hook helpers may be absent headlessly; use pure library probes where possible.
+- [Validation harness concurrency race](validation-concurrency-race.md) — codegen and e2e ports must not be validated concurrently.
+- [Skip-count ratchet guard](skip-count-guard.md) — every new e2e test.skip site needs a matching skip-baseline and audit entry.
+- [No deliverables under .local/](no-deliverables-in-dot-local.md) — tracked deliverables must not be written under .local/.
+- [Shared mock factories + guards](terrain-mock-export-sync.md) — wholesale mocks use factories and guard tests to prevent export drift.
+- [Full e2e known failures](full-e2e-known-failures.md) — deterministic dataset-load and related e2e failures have known baseline provenance.
+- [Toolchain pinned exactly](vite8-vitest-env-pitfalls.md) — Vite, plugin-react, and Vitest are exact-pinned; bump deliberately.
+- [Catalog upstream successors](catalog-upstream-successors.md) — deleted services require successor mapping and fetch-strategy updates together.
+- [API route test mock fallback](api-route-test-mock-fallback.md) — stateful route-test overrides need complete schema/table fallbacks.
+- [PWA service-worker base normalization](pwa-service-worker-base-normalization.md) — never append a slash to an already-root base.
+- [Overview reference overlay e2e](overview-reference-overlay-e2e.md) — wait for the next live snapshot after viewport changes before asserting anchored overlays.
+- [Overview zoom focal transform](overview-zoom-focal-transform.md) — use one canvas-space focal transform for toolbar, wheel, pinch, and animation.
+- [Geographic continuous longitude frame](geographic-continuous-frame.md) — compare wrapped longitudes on the eastward interval beginning at dataset minLon.
+- [Deterministic collection E2E fixtures](e2e-collection-fixtures.md) — create ready upload-backed members in tests; never skip from persisted library contents.
+- [Dev workflow environment markers](dev-workflow-environment-markers.md) — REPLIT_DEV_DOMAIN distinguishes interactive development from misleading environment markers.
+- [Validated .replit line endings](replit-config-line-endings.md) — normalize replacement candidates to LF before validated replacement.
+- [Validation upserts reorder .replit](validation-upserts-reorder-dot-replit.md) — remove incidental metadata reorder through validated replacement.
+- [Current dependency-audit baseline](unit-tier-baseline-2026-08.md) — dependency audit signatures need fresh isolated evidence before reassignment.
+- [Skill mirror sync + foreign commits](skill-mirror-sync-check.md) — stale custom-skill mirrors fail tiers; cite foreign merge provenance in drift reasons.
+- [Validation workflow boot storm](validation-workflow-boot-storm.md) — stop extra validation workflows and orphaned boot groups before retrying a locked run.
+- [Playwright route glob vs query strings](playwright-route-glob-query.md) — append * when route matching must include query strings.
+- [Reference image decode fallback](reference-image-decode-fallback.md) — preserve HTMLImageElement decode fallback when createImageBitmap rejects valid images.
+- [EFH browser fixture hydration](efh-browser-fixture-hydration.md) — bridge-seeded EFH catalog state can be overwritten by settings/API hydration; seed after hydration and document authenticated-shell gates.
