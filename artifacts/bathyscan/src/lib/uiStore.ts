@@ -601,22 +601,45 @@ export const useUiStore = create<UiStore>((set, get) => {
     setActiveEfhSpecies: (species) => {
       const next = [...new Set(species.filter((name) => name.trim()))].slice(0, 2);
       const selected = get().selectedEfh;
+      const state = get();
       set({
         activeEfhSpecies: next,
         ...(selected && !next.includes(selected.commonName ?? "")
           ? { selectedEfh: null }
           : {}),
       });
+      if (
+        state.activeEfhDatasetId &&
+        Object.prototype.hasOwnProperty.call(
+          useSettingsStore.getState().efhSpeciesPreferences ?? {},
+          state.activeEfhDatasetId,
+        )
+      ) {
+        useSettingsStore.getState().setEfhSpeciesPreference(state.activeEfhDatasetId, next);
+      }
     },
     toggleActiveEfhSpecies: (commonName) => {
       const state = get();
+      let nextSpecies: string[] | null = null;
       if (state.activeEfhSpecies.includes(commonName)) {
+        nextSpecies = state.activeEfhSpecies.filter((name) => name !== commonName);
         set({
-          activeEfhSpecies: state.activeEfhSpecies.filter((name) => name !== commonName),
+          activeEfhSpecies: nextSpecies,
           ...(state.selectedEfh?.commonName === commonName ? { selectedEfh: null } : {}),
         });
       } else if (state.activeEfhSpecies.length < 2) {
-        set({ activeEfhSpecies: [...state.activeEfhSpecies, commonName] });
+        nextSpecies = [...state.activeEfhSpecies, commonName];
+        set({ activeEfhSpecies: nextSpecies });
+      }
+      if (
+        nextSpecies &&
+        state.activeEfhDatasetId &&
+        Object.prototype.hasOwnProperty.call(
+          useSettingsStore.getState().efhSpeciesPreferences ?? {},
+          state.activeEfhDatasetId,
+        )
+      ) {
+        useSettingsStore.getState().setEfhSpeciesPreference(state.activeEfhDatasetId, nextSpecies);
       }
     },
     initializeActiveEfhSpecies: (datasetId, available) => {
@@ -626,7 +649,15 @@ export const useUiStore = create<UiStore>((set, get) => {
       const datasetChanged = state.activeEfhDatasetId !== datasetId;
       const shouldInitialize = datasetChanged ||
         (names.length > 0 && state.activeEfhSpecies.length === 0);
-      const next = shouldInitialize ? names.slice(0, 2) : kept;
+      const remembered = datasetId
+        ? useSettingsStore.getState().efhSpeciesPreferences?.[datasetId]
+        : undefined;
+      const rememberedValid = Array.isArray(remembered)
+        ? [...new Set(remembered.filter((name) => names.includes(name)))].slice(0, 2)
+        : [];
+      const next = shouldInitialize
+        ? (rememberedValid.length > 0 ? rememberedValid : names.slice(0, 2))
+        : kept;
       set({
         activeEfhDatasetId: datasetId,
         activeEfhSpecies: next,
@@ -634,6 +665,16 @@ export const useUiStore = create<UiStore>((set, get) => {
           ? { selectedEfh: null }
           : {}),
       });
+      // Keep the persisted opt-in clean when a dataset no longer advertises
+      // one of the remembered names. Do not touch the map until metadata is
+      // available, because an empty response can be an in-flight query state.
+      if (
+        names.length > 0 &&
+        Array.isArray(remembered) &&
+        JSON.stringify(remembered) !== JSON.stringify(rememberedValid)
+      ) {
+        useSettingsStore.getState().setEfhSpeciesPreference(datasetId, rememberedValid);
+      }
     },
     findDataPanelOpen: false,
     openFindDataCount: 0,

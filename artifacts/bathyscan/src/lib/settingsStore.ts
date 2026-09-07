@@ -71,7 +71,7 @@ import {
 import { toValidContourDensity, type ContourDensity } from "./contourDensity";
 import { isValidDailyRouteTimezone } from "./gpsImport";
 
-export const SETTINGS_SCHEMA_VERSION = 40;
+export const SETTINGS_SCHEMA_VERSION = 41;
 
 /** Supported vertical fly-speed multiplier range. */
 export const VERTICAL_SPEED_MULTIPLIER_MIN = 1;
@@ -603,6 +603,13 @@ export interface SettingsState {
    */
   hiddenEfhSpecies: string[];
   /**
+   * Optional remembered EFH load selections, keyed by dataset id.
+   * A missing key means the user has chosen session-only behaviour for that
+   * dataset. Values are capped at two names and validated against live
+   * dataset metadata before activation.
+   */
+  efhSpeciesPreferences: Record<string, string[]>;
+  /**
    * HYD93 feature type codes currently visible.
    * Codes: 89 (Rocks), 103 (Kelp), 146 (Ledge), 530 (Rocky reef), 988 (Obstruction).
    * Stored as a plain array for JSON serialisability; uiStore converts to Set.
@@ -889,6 +896,8 @@ interface SettingsActions {
   setIntertidalMhhwOverrideFt: (v: number | null) => void;
   setEfhOverlayEnabled: (v: boolean) => void;
   setHiddenEfhSpecies: (v: string[]) => void;
+  setEfhSpeciesPreference: (datasetId: string, species: string[]) => void;
+  clearEfhSpeciesPreference: (datasetId: string) => void;
   setHyd93ActiveFeatureCodes: (v: number[]) => void;
   setHyd93FeaturesEnabled: (v: boolean) => void;
   setShowNodataBoundary: (v: boolean) => void;
@@ -1190,6 +1199,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   intertidalMhhwOverrideFt: null,
   efhOverlayEnabled: false,
   hiddenEfhSpecies: [],
+  efhSpeciesPreferences: {},
   hyd93ActiveFeatureCodes: [89, 103, 146, 530, 988],
   hyd93FeaturesEnabled: false,
   showNodataBoundary: true,
@@ -1262,7 +1272,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "substrateColorMode", "hiddenSubstrateClasses",
     "intertidalHotspotsEnabled", "intertidalScoreMode",
     "intertidalMhwOverrideFt", "intertidalMhhwOverrideFt",
-    "efhOverlayEnabled", "hiddenEfhSpecies",
+    "efhOverlayEnabled", "hiddenEfhSpecies", "efhSpeciesPreferences",
     "hyd93ActiveFeatureCodes", "hyd93FeaturesEnabled",
   ],
   gps: [
@@ -1600,6 +1610,31 @@ export const useSettingsStore = create<SettingsStore>()(
           set({ intertidalMhhwOverrideFt: v === null || !Number.isFinite(v) ? null : v }),
         setEfhOverlayEnabled: setter("efhOverlayEnabled"),
         setHiddenEfhSpecies: setter("hiddenEfhSpecies"),
+        setEfhSpeciesPreference: (datasetId, species) =>
+          set((state) => {
+            const id = datasetId.trim();
+            if (!id) return {};
+            const nextSpecies = [...new Set(
+              species
+                .filter((name): name is string => typeof name === "string")
+                .map((name) => name.trim())
+                .filter(Boolean),
+            )].slice(0, 2);
+            const nextPreferences = { ...(state.efhSpeciesPreferences ?? {}) };
+            if (nextSpecies.length === 0) delete nextPreferences[id];
+            else nextPreferences[id] = nextSpecies;
+            return { efhSpeciesPreferences: nextPreferences };
+          }),
+        clearEfhSpeciesPreference: (datasetId) =>
+          set((state) => {
+            const id = datasetId.trim();
+            if (!id || !Object.prototype.hasOwnProperty.call(state.efhSpeciesPreferences ?? {}, id)) {
+              return {};
+            }
+            const nextPreferences = { ...(state.efhSpeciesPreferences ?? {}) };
+            delete nextPreferences[id];
+            return { efhSpeciesPreferences: nextPreferences };
+          }),
         setHyd93ActiveFeatureCodes: setter("hyd93ActiveFeatureCodes"),
         setHyd93FeaturesEnabled: setter("hyd93FeaturesEnabled"),
         setShowNodataBoundary: setter("showNodataBoundary"),
@@ -2074,6 +2109,11 @@ export const useSettingsStore = create<SettingsStore>()(
           ) {
             migratedDailyRouteTimezone.dailyRouteTimezone = DEFAULT_SETTINGS.dailyRouteTimezone;
           }
+          // v40 → v41: inject the opt-in, per-dataset EFH species preference map.
+          const migratedEfhSpeciesPreferences: Partial<SettingsState> = {};
+          if ((rest as Record<string, unknown>).efhSpeciesPreferences === undefined) {
+            migratedEfhSpeciesPreferences.efhSpeciesPreferences = DEFAULT_SETTINGS.efhSpeciesPreferences;
+          }
           // v39 → v40: inject the configurable vertical fly-speed multiplier.
           const migratedVerticalSpeed: Partial<SettingsState> = {
             verticalSpeedMultiplier: clampVerticalSpeedMultiplier(
@@ -2108,6 +2148,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedContourDensity,
             ...migratedMobileMapTilt,
             ...migratedDailyRouteTimezone,
+            ...migratedEfhSpeciesPreferences,
             ...migratedVerticalSpeed,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,

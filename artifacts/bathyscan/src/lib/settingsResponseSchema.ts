@@ -240,6 +240,7 @@ export const settingsFieldSchemas = {
   intertidalMhhwOverrideFt: numNull,
   efhOverlayEnabled: bool,
   hiddenEfhSpecies: strArr,
+  efhSpeciesPreferences: z.record(z.string(), z.array(z.string())).optional().catch(undefined),
   hyd93ActiveFeatureCodes: numArr,
   hyd93FeaturesEnabled: bool,
   showNodataBoundary: bool,

@@ -498,6 +498,9 @@ export const OverlaysToolsPanel: React.FC = () => {
   const activeEfhSpecies = useUiStore((s) => s.activeEfhSpecies);
   const toggleActiveEfhSpecies = useUiStore((s) => s.toggleActiveEfhSpecies);
   const initializeActiveEfhSpecies = useUiStore((s) => s.initializeActiveEfhSpecies);
+  const efhSpeciesPreferences = useSettingsStore((s) => s.efhSpeciesPreferences ?? {});
+  const setEfhSpeciesPreference = useSettingsStore((s) => s.setEfhSpeciesPreference);
+  const clearEfhSpeciesPreference = useSettingsStore((s) => s.clearEfhSpeciesPreference);
   const windOverlayActive = useUiStore((s) => s.windOverlayActive);
   const setWindOverlayActive = useUiStore((s) => s.setWindOverlayActive);
   const tideOverlayActive = useUiStore((s) => s.tideOverlayActive);
@@ -691,6 +694,8 @@ export const OverlaysToolsPanel: React.FC = () => {
   const efhSpeciesEntries = useMemo(() => {
     return availableSpecies.map(({ commonName, color }) => [commonName, color] as const);
   }, [availableSpecies]);
+  const rememberEfhSpecies = datasetId.length > 0 &&
+    Object.prototype.hasOwnProperty.call(efhSpeciesPreferences, datasetId);
 
   // --- Error recovery: revert overlays to inactive on fetch failure ---
   // Use refs to detect false→true transitions only (avoid re-triggering on
@@ -1525,6 +1530,37 @@ export const OverlaysToolsPanel: React.FC = () => {
                         </ViewscreenTooltip>
                       );
                     })}
+                    <label
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        marginTop: 5,
+                        color: "#94a3b8",
+                        fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={rememberEfhSpecies}
+                        onChange={(event) => {
+                          if (event.target.checked) {
+                            setEfhSpeciesPreference(
+                              datasetId,
+                              activeEfhSpecies.filter((name) =>
+                                availableSpecies.some((species) => species.commonName === name),
+                              ),
+                            );
+                          } else {
+                            clearEfhSpeciesPreference(datasetId);
+                          }
+                        }}
+                        data-testid="efh-remember-species"
+                        style={{ accentColor: "#4ade80", cursor: "pointer" }}
+                      />
+                      Remember these species for this dataset
+                    </label>
                   </div>
                 )}
               </div>

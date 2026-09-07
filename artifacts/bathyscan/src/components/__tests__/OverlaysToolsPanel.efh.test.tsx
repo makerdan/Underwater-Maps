@@ -70,6 +70,9 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     waterType: "salt",
     colormapTheme: "ocean" as const,
     setColormapThemeByUser: paletteHarness.setColormapThemeByUser,
+    efhSpeciesPreferences: {} as Record<string, string[]>,
+    setEfhSpeciesPreference: vi.fn(),
+    clearEfhSpeciesPreference: vi.fn(),
   };
   const useSettingsStore = Object.assign(
     (sel: (s: typeof storeState) => unknown) => sel(storeState),
@@ -149,6 +152,7 @@ vi.mock("@workspace/api-client-react", () =>
 
 import { OverlaysToolsPanel } from "@/components/OverlaysToolsPanel";
 import { useUiStore } from "@/lib/uiStore";
+import { useSettingsStore } from "@/lib/settingsStore";
 import { usePaletteStore, DEFAULT_BAND_COLORS, DEFAULT_BAND_BOUNDARIES } from "@/lib/paletteStore";
 
 // Inline snapshot of the GOA EFH species list used by the static checklist.
@@ -193,6 +197,8 @@ beforeEach(() => {
     })),
   };
   resetUiStore();
+  const settings = useSettingsStore.getState();
+  settings.efhSpeciesPreferences = {};
   paletteHarness.setColormapThemeByUser.mockClear();
   paletteHarness.flushServerSync.mockClear();
   usePaletteStore.setState({
@@ -349,6 +355,62 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
     );
     expect(dynamicBtn).toBeDefined();
     expect(dynamicBtn!.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("lets users opt in to remembering the compatible species for this dataset", () => {
+    resetUiStore({ efhOverlayEnabled: true });
+    render(<OverlaysToolsPanel />);
+
+    fireEvent.click(screen.getByTestId("efh-remember-species"));
+
+    expect(useSettingsStore.getState().setEfhSpeciesPreference).toHaveBeenCalledWith(
+      "ds-efh",
+      [EFH_SPECIES_PALETTE[0]!.commonName, EFH_SPECIES_PALETTE[1]!.commonName],
+    );
+  });
+
+  it("does not let a remembered species pair exceed two entries or bleed into another dataset", () => {
+    const settings = useSettingsStore.getState();
+    settings.efhSpeciesPreferences["ds-other"] = [
+      EFH_SPECIES_PALETTE[0]!.commonName,
+      EFH_SPECIES_PALETTE[1]!.commonName,
+      EFH_SPECIES_PALETTE[2]!.commonName,
+    ];
+    resetUiStore({
+      efhOverlayEnabled: true,
+      activeEfhSpecies: [],
+      activeEfhDatasetId: null,
+    });
+    render(<OverlaysToolsPanel />);
+
+    expect(useUiStore.getState().activeEfhSpecies).toEqual([
+      EFH_SPECIES_PALETTE[0]!.commonName,
+      EFH_SPECIES_PALETTE[1]!.commonName,
+    ]);
+    expect(useUiStore.getState().activeEfhSpecies.length).toBeLessThanOrEqual(2);
+  });
+
+  it("filters unavailable remembered species before activation", () => {
+    const settings = useSettingsStore.getState();
+    settings.efhSpeciesPreferences["ds-efh"] = [
+      "No Longer Available",
+      "Pacific Halibut",
+      "Pacific Cod",
+    ];
+    mockEfhData = {
+      features: [
+        { properties: { commonName: "Pacific Halibut", color: "#f59e0b" } },
+        { properties: { commonName: "Pacific Cod", color: "#6366f1" } },
+      ],
+    };
+    resetUiStore({ efhOverlayEnabled: true });
+    render(<OverlaysToolsPanel />);
+
+    expect(useUiStore.getState().activeEfhSpecies).toEqual([
+      "Pacific Halibut",
+      "Pacific Cod",
+    ]);
+    expect(useUiStore.getState().activeEfhSpecies).not.toContain("No Longer Available");
   });
 });
 
