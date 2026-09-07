@@ -45,3 +45,16 @@ way: `git diff <last-good> HEAD -- <file>` shows the dropped hunk verbatim —
 restore it rather than rewriting. Raw brace-counting is misleading (braces in
 strings/regexes); trust tsc, not counts. Sibling symptom in the same batch of
 merges: unused-import TS6133 errors (`beforeEach` imported, never used).
+
+Parser errors can be only the first visible symptom: one merge interleaved unrelated
+test bodies across more than twenty distant hunks while lint reported a single error
+near EOF. After restoring the apparent broken block, compare the entire file byte-for-byte
+with the last known-good revision; otherwise parse-clean but semantically corrupted tests
+can remain.
+
+**Why:** lint stops at the first structural error and does not prove that earlier merged
+test bodies, mocks, or assertions still belong to their original suites.
+
+**How to apply:** derive a whole-file diff against the immediate pre-merge revision, restore
+all unrelated hunks, then run file-level lint before the post-merge hook. Preserve deliberate
+feature tests only when they can be reconstructed independently from trustworthy source.
