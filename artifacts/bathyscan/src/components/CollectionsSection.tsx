@@ -916,6 +916,10 @@ export const CollectionsSection: React.FC = () => {
       terrain.activateCollection(
         resolved.entries.map(({ datasetId, source }) => ({ datasetId, source })),
       );
+      // Open Overview before the authenticated reference-image fetch finishes.
+      // The map can then explain the intentional gap between clearing the old
+      // overlay and installing the new collection's image.
+      useUiStore.getState().setOverviewOpen(true);
       await useSpecialCollectionStore.getState().activateForPuzzle(c, resolved.unresolvedMemberNames);
       if (useTerrainStore.getState().collectionScopeId === c.id) {
         useUiStore.getState().setOverviewOpen(true);

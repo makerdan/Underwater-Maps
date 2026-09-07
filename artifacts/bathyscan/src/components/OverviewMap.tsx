@@ -1336,8 +1336,11 @@ export const OverviewMap: React.FC = () => {
 
   // --- Special collection (reference-image puzzle assembly) ----------------
   const spcActive = useSpecialCollectionStore((s) => s.active);
+  const spcImageLoadingCollectionId = useSpecialCollectionStore((s) => s.bgImageLoadingCollectionId);
   const spcPendingRestore = useSpecialCollectionStore((s) => s.pendingRestore);
   const spcPendingPuzzleOn = useSpecialCollectionStore((s) => s.pendingPuzzleOn);
+  const referenceImageLoading =
+    collectionScopeId !== null && spcImageLoadingCollectionId === collectionScopeId;
   const referenceImageCannotBePlaced =
     Boolean(spcActive?.bgImage) &&
     !hasValidBgGeoAnchorPair(spcActive?.bgGeoAnchors) &&
@@ -4882,6 +4885,32 @@ export const OverviewMap: React.FC = () => {
           }}
         >
           Reference image can’t be placed. Load a dataset or save two valid GPS anchors.
+        </div>
+      )}
+
+      {referenceImageLoading && (
+        <div
+          data-testid="overview-reference-image-loading"
+          role="status"
+          aria-live="polite"
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: 62,
+            transform: "translateX(-50%)",
+            zIndex: 42,
+            padding: "7px 10px",
+            border: "1px solid rgba(0,229,255,0.4)",
+            borderRadius: 4,
+            background: "rgba(2,8,24,0.92)",
+            color: "#67e8f9",
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: "calc(11px * var(--bs-font-scale, 1))",
+            letterSpacing: "0.02em",
+            whiteSpace: "nowrap",
+          }}
+        >
+          Loading reference image…
         </div>
       )}
 

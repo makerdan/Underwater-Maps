@@ -61,6 +61,8 @@ export interface GeoLayoutState {
 
 interface SpecialCollectionStore {
   active: ActiveSpecialCollection | null;
+  /** Collection whose authenticated reference image is currently loading. */
+  bgImageLoadingCollectionId: string | null;
   pendingRestore: PendingRestore | null;
   /** Bumped when puzzle mode should turn on even without a revision. */
   pendingPuzzleOn: number;
@@ -181,6 +183,7 @@ function closeImageBitmap(image: CanvasImageSource | null): void {
 
 export const useSpecialCollectionStore = create<SpecialCollectionStore>((set, get) => ({
   active: null,
+  bgImageLoadingCollectionId: null,
   pendingRestore: null,
   pendingPuzzleOn: 0,
   geoLayout: null,
@@ -188,6 +191,7 @@ export const useSpecialCollectionStore = create<SpecialCollectionStore>((set, ge
 
   activateForPuzzle: async (collection, unresolvedMemberNames = []) => {
     const gen = ++activationGen;
+    const meta = collection.specialMeta;
     // Do not keep drawing the previous collection while the new collection's
     // authenticated reference image is loading. Terrain scope switches before
     // this await completes, so leaving `active` populated here would briefly
@@ -195,16 +199,22 @@ export const useSpecialCollectionStore = create<SpecialCollectionStore>((set, ge
     closeImageBitmap(get().active?.bgImage ?? null);
     set({
       active: null,
+      bgImageLoadingCollectionId: meta?.bgImageKey ? collection.id : null,
       pendingRestore: null,
       geoLayout: null,
       unresolvedMemberNames: [],
     });
-    const meta = collection.specialMeta;
     const loaded = meta?.bgImageKey ? await loadBgImage(collection.id) : null;
     // Stale continuation: a sign-out, deactivate, or newer activation happened
     // while the image request was in flight. Drop everything.
-    if (gen !== activationGen) return;
-    set({ unresolvedMemberNames: [...unresolvedMemberNames] });
+    if (gen !== activationGen) {
+      closeImageBitmap(loaded?.img ?? null);
+      return;
+    }
+    set({
+      bgImageLoadingCollectionId: null,
+      unresolvedMemberNames: [...unresolvedMemberNames],
+    });
     const revisions = meta?.layoutRevisions ?? [];
     const activeRevisionId = meta?.activeRevisionId ?? null;
 
@@ -238,13 +248,26 @@ export const useSpecialCollectionStore = create<SpecialCollectionStore>((set, ge
   deactivate: () => {
     activationGen++; // invalidate any in-flight activation
     closeImageBitmap(get().active?.bgImage ?? null);
-    set({ active: null, pendingRestore: null, geoLayout: null, unresolvedMemberNames: [] });
+    set({
+      active: null,
+      bgImageLoadingCollectionId: null,
+      pendingRestore: null,
+      geoLayout: null,
+      unresolvedMemberNames: [],
+    });
   },
 
   resetForSignOut: () => {
     activationGen++; // invalidate any in-flight activation (sign-out race)
     closeImageBitmap(get().active?.bgImage ?? null);
-    set({ active: null, pendingRestore: null, pendingPuzzleOn: 0, geoLayout: null, unresolvedMemberNames: [] });
+    set({
+      active: null,
+      bgImageLoadingCollectionId: null,
+      pendingRestore: null,
+      pendingPuzzleOn: 0,
+      geoLayout: null,
+      unresolvedMemberNames: [],
+    });
   },
 
   markGeoLayoutApplied: (collectionId, datasetIds) => {
@@ -324,11 +347,17 @@ export const useSpecialCollectionStore = create<SpecialCollectionStore>((set, ge
 
   reloadBgImage: async (collectionId) => {
     const gen = activationGen;
+    if (get().active?.collectionId === collectionId) {
+      set({ bgImageLoadingCollectionId: collectionId });
+    }
     const loaded = await loadBgImage(collectionId);
     // Discard if sign-out/deactivate/re-activation happened mid-fetch; the
     // collectionId match below additionally scopes the update to the still-
     // active collection.
-    if (gen !== activationGen) return;
+    if (gen !== activationGen) {
+      closeImageBitmap(loaded?.img ?? null);
+      return;
+    }
     set((s) =>
       s.active?.collectionId === collectionId
         ? {
@@ -341,6 +370,7 @@ export const useSpecialCollectionStore = create<SpecialCollectionStore>((set, ge
                 bgImageH: loaded?.h ?? 0,
               };
             })(),
+            bgImageLoadingCollectionId: null,
           }
         : {},
     );

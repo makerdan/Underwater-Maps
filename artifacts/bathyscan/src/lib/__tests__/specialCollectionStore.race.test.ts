@@ -43,7 +43,12 @@ beforeEach(() => {
     close: bitmapClose,
   }));
   bitmapClose.mockClear();
-  useSpecialCollectionStore.setState({ active: null, pendingRestore: null, pendingPuzzleOn: 0 });
+  useSpecialCollectionStore.setState({
+    active: null,
+    bgImageLoadingCollectionId: null,
+    pendingRestore: null,
+    pendingPuzzleOn: 0,
+  });
 });
 
 function makeCollection(id: string, withImage = true): DatasetCollection {
@@ -75,6 +80,7 @@ describe("specialCollectionStore — in-flight activation races", () => {
     const store = useSpecialCollectionStore.getState();
     const activation = store.activateForPuzzle(makeCollection("col-1"));
     expect(deferredFetch.calls).toEqual(["col-1"]);
+    expect(useSpecialCollectionStore.getState().bgImageLoadingCollectionId).toBe("col-1");
 
     // Sign-out lands while the authed image request is still in flight.
     useSpecialCollectionStore.getState().resetForSignOut();
@@ -89,6 +95,7 @@ describe("specialCollectionStore — in-flight activation races", () => {
     expect(s.active).toBeNull();
     expect(s.pendingRestore).toBeNull();
     expect(s.pendingPuzzleOn).toBe(0);
+    expect(s.bgImageLoadingCollectionId).toBeNull();
   });
 
   it("deactivate during the fetch also discards the stale continuation", async () => {
@@ -111,11 +118,13 @@ describe("specialCollectionStore — in-flight activation races", () => {
     const first = store.activateForPuzzle(makeCollection("col-1"));
     const second = store.activateForPuzzle(makeCollection("col-2"));
     expect(deferredFetch.calls).toEqual(["col-1", "col-2"]);
+    expect(useSpecialCollectionStore.getState().bgImageLoadingCollectionId).toBe("col-2");
 
     // Second collection's image arrives first…
     deferredFetch.resolvers[1]!(new Blob(["b"], { type: "image/png" }));
     await second;
     expect(useSpecialCollectionStore.getState().active?.collectionId).toBe("col-2");
+    expect(useSpecialCollectionStore.getState().bgImageLoadingCollectionId).toBeNull();
     const restoreAfterSecond = useSpecialCollectionStore.getState().pendingRestore;
     expect(restoreAfterSecond?.payload.tiles[0]?.datasetId).toBe("ds-a");
 
@@ -125,6 +134,7 @@ describe("specialCollectionStore — in-flight activation races", () => {
 
     const s = useSpecialCollectionStore.getState();
     expect(s.active?.collectionId).toBe("col-2");
+    expect(s.bgImageLoadingCollectionId).toBeNull();
     // The queued restore was not replaced by the stale collection's revision.
     expect(s.pendingRestore?.requestId).toBe(restoreAfterSecond?.requestId);
   });
@@ -135,11 +145,13 @@ describe("specialCollectionStore — in-flight activation races", () => {
     expect(useSpecialCollectionStore.getState().active?.collectionId).toBe("col-1");
 
     const reload = useSpecialCollectionStore.getState().reloadBgImage("col-1");
+    expect(useSpecialCollectionStore.getState().bgImageLoadingCollectionId).toBe("col-1");
     useSpecialCollectionStore.getState().resetForSignOut();
     deferredFetch.resolvers[0]!(new Blob(["x"], { type: "image/png" }));
     await reload;
 
     expect(useSpecialCollectionStore.getState().active).toBeNull();
+    expect(useSpecialCollectionStore.getState().bgImageLoadingCollectionId).toBeNull();
   });
 
   it("deactivate closes the decoded reference ImageBitmap before clearing it", async () => {
@@ -169,11 +181,13 @@ describe("specialCollectionStore — in-flight activation races", () => {
     bitmapClose.mockClear();
 
     const reload = useSpecialCollectionStore.getState().reloadBgImage("col-1");
+    expect(useSpecialCollectionStore.getState().bgImageLoadingCollectionId).toBe("col-1");
     deferredFetch.resolvers[1]!(new Blob(["new"], { type: "image/png" }));
     await reload;
 
     expect(bitmapClose).toHaveBeenCalledOnce();
     expect(useSpecialCollectionStore.getState().active?.bgImage).not.toBeNull();
+    expect(useSpecialCollectionStore.getState().bgImageLoadingCollectionId).toBeNull();
   });
 
   it("falls back to HTMLImageElement when createImageBitmap rejects a valid reference image", async () => {

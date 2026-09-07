@@ -1194,6 +1194,7 @@ describe("OverviewMap — reference-image placement guidance", () => {
   beforeEach(() => {
     mockConfig.efhData = undefined;
     setupStores();
+    useTerrainStore.setState({ collectionScopeId: "loading-reference" });
     useTerrainStore.setState({
       visibleDatasets: [],
       primaryDatasetId: null,
@@ -1202,6 +1203,7 @@ describe("OverviewMap — reference-image placement guidance", () => {
       activeGrid: null,
     });
     useSpecialCollectionStore.setState({
+      bgImageLoadingCollectionId: "loading-reference",
       active: {
         collectionId: "unplaced-reference",
         name: "Unplaced reference",
@@ -1217,7 +1219,11 @@ describe("OverviewMap — reference-image placement guidance", () => {
   });
 
   afterEach(() => {
-    useSpecialCollectionStore.setState({ active: null, pendingRestore: null });
+    useSpecialCollectionStore.setState({
+      active: null,
+      bgImageLoadingCollectionId: null,
+      pendingRestore: null,
+    });
   });
 
   it("explains how to place a loaded reference image with no anchors or dataset bounds", async () => {
@@ -1228,6 +1234,26 @@ describe("OverviewMap — reference-image placement guidance", () => {
     expect(screen.getByTestId("overview-reference-image-placement-hint")).toHaveTextContent(
       "Load a dataset or save two valid GPS anchors.",
     );
+  });
+
+  it("shows and clears the loading affordance only for the selected collection", async () => {
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+
+    expect(screen.getByTestId("overview-reference-image-loading")).toHaveTextContent(
+      "Loading reference image",
+    );
+
+    act(() => {
+      useSpecialCollectionStore.setState({ bgImageLoadingCollectionId: "another-collection" });
+    });
+    expect(screen.queryByTestId("overview-reference-image-loading")).not.toBeInTheDocument();
+
+    act(() => {
+      useSpecialCollectionStore.setState({ bgImageLoadingCollectionId: null });
+    });
+    expect(screen.queryByTestId("overview-reference-image-loading")).not.toBeInTheDocument();
   });
 });
 
