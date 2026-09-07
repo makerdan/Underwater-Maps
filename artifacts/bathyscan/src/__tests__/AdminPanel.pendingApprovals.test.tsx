@@ -47,6 +47,18 @@ const STATS = {
   generatedAt: new Date().toISOString(),
 };
 
+const POE_DIAGNOSTICS = {
+  windowMs: 15 * 60 * 1000,
+  generatedAt: new Date().toISOString(),
+  count: 1,
+  rows: [{
+    route: "query",
+    code: "model_unavailable",
+    count: 3,
+    lastOccurredAt: "2026-09-07T12:34:56.000Z",
+  }],
+};
+
 interface TestPendingUser {
   clerkUserId: string;
   status: "pending";
@@ -74,6 +86,7 @@ function mockRoutes(pending: TestPendingUser[]) {
   authorizedFetchMock.mockImplementation(async (...args: unknown[]) => {
     const url = String(args[0]);
     if (url.includes("upscale-cache-stats")) return jsonResponse(200, STATS);
+    if (url.includes("poe-verification")) return jsonResponse(200, POE_DIAGNOSTICS);
     if (url.includes("/api/admin/users/test-notification")) {
       return jsonResponse(200, { sent: true, recipientCount: 1 });
     }
@@ -109,6 +122,17 @@ describe("AdminPanel — pending approvals badge after batch actions", () => {
     expect(screen.getByText("Large Dataset Changes")).toBeInTheDocument();
     expect(screen.getByText("Rate Limit Activity")).toBeInTheDocument();
     expect(screen.getByText("Skill Download")).toBeInTheDocument();
+    expect(screen.getByText("Poe Verification Health")).toBeInTheDocument();
+    expect(await screen.findByText("model_unavailable")).toBeInTheDocument();
+    const diagnosticsTable = screen.getByRole("table", { name: "Poe verification diagnostics" });
+    expect(diagnosticsTable).toHaveTextContent("Route");
+    expect(diagnosticsTable).toHaveTextContent("query");
+    expect(diagnosticsTable).toHaveTextContent("Failure code");
+    expect(diagnosticsTable).toHaveTextContent("Count");
+    expect(diagnosticsTable).toHaveTextContent("3");
+    expect(diagnosticsTable).toHaveTextContent("Last occurrence");
+    expect(diagnosticsTable).toHaveTextContent("2026");
+    expect(screen.getByTestId("poe-verification-window")).toHaveTextContent("15 minutes window");
   });
 
   it("sends an email-delivery verification through the protected admin route", async () => {
@@ -171,6 +195,51 @@ describe("AdminPanel — pending approvals badge after batch actions", () => {
     await waitFor(() =>
       expect(toastMock).toHaveBeenCalledWith({ title: "User approved" }),
     );
+  });
+});
+
+describe("AdminPanel — Poe verification health", () => {
+  it("shows a clear empty state when the short-lived window has expired", async () => {
+    mockRoutes([]);
+    authorizedFetchMock.mockImplementation(async (...args: unknown[]) => {
+      const url = String(args[0]);
+      if (url.includes("upscale-cache-stats")) return jsonResponse(200, STATS);
+      if (url.includes("poe-verification")) {
+        return jsonResponse(200, {
+          ...POE_DIAGNOSTICS,
+          count: 0,
+          rows: [],
+        });
+      }
+      return jsonResponse(200, {});
+    });
+
+    render(<AdminPanel />);
+
+    expect(await screen.findByTestId("poe-verification-empty")).toHaveTextContent(
+      "No verification failures recorded in the active diagnostic window.",
+    );
+    expect(screen.getByText("Counters expire after 15 minutes.")).toBeInTheDocument();
+  });
+
+  it("does not expose provider details when the diagnostics endpoint is unavailable", async () => {
+    mockRoutes([]);
+    authorizedFetchMock.mockImplementation(async (...args: unknown[]) => {
+      const url = String(args[0]);
+      if (url.includes("upscale-cache-stats")) return jsonResponse(200, STATS);
+      if (url.includes("poe-verification")) return jsonResponse(503, {
+        error: "upstream provider secret should not be shown",
+      });
+      return jsonResponse(200, {});
+    });
+
+    render(<AdminPanel />);
+
+    expect(await screen.findByTestId("poe-verification-unavailable")).toHaveTextContent(
+      "Verification diagnostics are temporarily unavailable.",
+    );
+    expect(screen.queryByText(/upstream provider secret/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId("poe-verification-retry")).toBeInTheDocument();
   });
 });
 

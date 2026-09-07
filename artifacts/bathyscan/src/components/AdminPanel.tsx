@@ -34,6 +34,23 @@ interface UpscaleCacheStats {
   generatedAt: string;
 }
 
+type PoeDiagnosticRoute = "classify" | "help" | "models" | "query" | "unknown" | "upscale";
+type PoeVerificationFailureCode = "model_registry_unavailable" | "model_unavailable";
+
+interface PoeVerificationDiagnostic {
+  route: PoeDiagnosticRoute;
+  code: PoeVerificationFailureCode;
+  count: number;
+  lastOccurredAt: string;
+}
+
+interface PoeVerificationDiagnostics {
+  windowMs: number;
+  generatedAt: string;
+  count: number;
+  rows: PoeVerificationDiagnostic[];
+}
+
 interface PendingUser {
   clerkUserId: string;
   email: string | null;
@@ -55,6 +72,65 @@ function isUpscaleCacheStats(value: unknown): value is UpscaleCacheStats {
     typeof value.creditsPerCall === "number" &&
     typeof value.generatedAt === "string"
   );
+}
+
+const POE_DIAGNOSTIC_ROUTES: readonly PoeDiagnosticRoute[] = [
+  "classify",
+  "help",
+  "models",
+  "query",
+  "unknown",
+  "upscale",
+];
+
+const POE_VERIFICATION_FAILURE_CODES: readonly PoeVerificationFailureCode[] = [
+  "model_registry_unavailable",
+  "model_unavailable",
+];
+
+function isPoeVerificationDiagnostics(value: unknown): value is PoeVerificationDiagnostics {
+  if (!isRecord(value)) return false;
+  if (
+    typeof value.windowMs !== "number" ||
+    !Number.isFinite(value.windowMs) ||
+    value.windowMs <= 0 ||
+    typeof value.generatedAt !== "string" ||
+    typeof value.count !== "number" ||
+    !Number.isInteger(value.count) ||
+    value.count < 0 ||
+    !Array.isArray(value.rows) ||
+    value.count !== value.rows.length
+  ) {
+    return false;
+  }
+
+  return value.rows.every((row): row is PoeVerificationDiagnostic => {
+    if (!isRecord(row)) return false;
+    return (
+      typeof row.route === "string" &&
+      POE_DIAGNOSTIC_ROUTES.includes(row.route as PoeDiagnosticRoute) &&
+      typeof row.code === "string" &&
+      POE_VERIFICATION_FAILURE_CODES.includes(row.code as PoeVerificationFailureCode) &&
+      typeof row.count === "number" &&
+      Number.isInteger(row.count) &&
+      row.count > 0 &&
+      typeof row.lastOccurredAt === "string"
+    );
+  });
+}
+
+function formatDiagnosticWindow(windowMs: number): string {
+  const minutes = windowMs / 60_000;
+  if (Number.isInteger(minutes)) {
+    return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+  }
+  const seconds = windowMs / 1_000;
+  return `${seconds} second${seconds === 1 ? "" : "s"}`;
+}
+
+function formatDiagnosticTimestamp(value: string): string {
+  const timestamp = new Date(value);
+  return Number.isNaN(timestamp.getTime()) ? "Unavailable" : timestamp.toLocaleString();
 }
 
 const S = {
@@ -194,6 +270,133 @@ function OperationalCard({
       >
         REFRESH
       </button>
+    </div>
+  );
+}
+
+function PoeVerificationCard() {
+  const [state, setState] = useState<"loading" | "ok" | "empty" | "error">("loading");
+  const [diagnostics, setDiagnostics] = useState<PoeVerificationDiagnostics | null>(null);
+
+  const load = useCallback(async () => {
+    setState("loading");
+    setDiagnostics(null);
+    try {
+      const res = await authorizedFetch(`${basePath}/api/admin/poe-verification`);
+      if (!res.ok) {
+        setState("error");
+        return;
+      }
+
+      const data: unknown = await res.json();
+      if (!isPoeVerificationDiagnostics(data)) {
+        setState("error");
+        return;
+      }
+
+      setDiagnostics(data);
+      setState(data.rows.length === 0 ? "empty" : "ok");
+    } catch {
+      // Keep upstream/provider details out of the operator surface.
+      setState("error");
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  return (
+    <div style={{ ...S.card, marginTop: 12 }} data-testid="poe-verification-card">
+      <div style={S.cardTitle}>Poe Verification Health</div>
+
+      {state === "loading" && <div style={{ ...S.skeleton, width: "65%" }} />}
+
+      {state === "empty" && diagnostics && (
+        <>
+          <div data-testid="poe-verification-empty" style={S.note}>
+            No verification failures recorded in the active diagnostic window.
+          </div>
+          <div style={S.note}>
+            Counters expire after {formatDiagnosticWindow(diagnostics.windowMs)}.
+          </div>
+        </>
+      )}
+
+      {state === "ok" && diagnostics && (
+        <>
+          <div data-testid="poe-verification-window" style={S.note}>
+            {diagnostics.count} active diagnostic{diagnostics.count === 1 ? "" : "s"} ·{" "}
+            {formatDiagnosticWindow(diagnostics.windowMs)} window
+          </div>
+          <div style={{ overflowX: "auto", marginTop: 10 }}>
+            <table
+              aria-label="Poe verification diagnostics"
+              style={{ borderCollapse: "collapse", width: "100%", minWidth: 500 }}
+            >
+              <thead>
+                <tr>
+                  {["Route", "Failure code", "Count", "Last occurrence"].map((label) => (
+                    <th
+                      key={label}
+                      scope="col"
+                      style={{
+                        ...S.label,
+                        textAlign: "left",
+                        padding: "0 10px 7px 0",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {diagnostics.rows.map((row) => (
+                  <tr key={`${row.route}:${row.code}`}>
+                    <td style={{ ...S.value, padding: "5px 10px 5px 0" }}>{row.route}</td>
+                    <td style={{ ...S.value, padding: "5px 10px 10px 0", color: "#fbbf24" }}>
+                      {row.code}
+                    </td>
+                    <td style={{ ...S.value, ...S.accent, padding: "5px 10px 5px 0" }}>
+                      {row.count.toLocaleString()}
+                    </td>
+                    <td style={{ ...S.value, padding: "5px 0", whiteSpace: "nowrap" }}>
+                      {formatDiagnosticTimestamp(row.lastOccurredAt)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {state === "error" && (
+        <>
+          <ErrorMessage
+            data-testid="poe-verification-unavailable"
+            message="Verification diagnostics are temporarily unavailable."
+            style={S.error}
+          />
+          <button
+            data-testid="poe-verification-retry"
+            onClick={() => void load()}
+            style={{
+              ...S.cardTitle,
+              background: "none",
+              border: "1px solid rgba(0,229,255,0.25)",
+              borderRadius: 3,
+              padding: "5px 10px",
+              marginTop: 10,
+              cursor: "pointer",
+            }}
+          >
+            RETRY
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -707,6 +910,7 @@ export function AdminPanel() {
             <EmailDeliveryCard />
           </ErrorBoundary>
           <ErrorBoundary fallback={<div style={{ ...S.card, marginTop: 12 }}><ErrorMessage message="Operational stats could not be loaded." style={S.error} /></div>}>
+            <PoeVerificationCard />
             <OperationalCard
               title="Dataset Bucket Status"
               endpoint="/api/admin/bucket-monitor"
