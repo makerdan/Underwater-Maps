@@ -4411,18 +4411,20 @@ export const OverviewMap: React.FC = () => {
           if (!v) continue;
           const og = v.datasetId === primaryDatasetIdRef.current ? overviewGrid : v.overviewGrid;
           if (!og) continue;
-          const [tbx0, tby0] = lonLatToCanvas(og.minLon, og.maxLat, ctxWorldGrid, t);
-          const [tbx1, tby1] = lonLatToCanvas(og.maxLon, og.minLat, ctxWorldGrid, t);
-          const tcxc = (tbx0 + tbx1) / 2;
-          const tcyc = (tby0 + tby1) / 2;
-          const pxf = puzzleTransformsRef.current.get(v.datasetId);
-          const aRad = ((pxf?.angleDeg ?? 0) * Math.PI) / 180;
-          const pdx = mx - (tcxc + (pxf?.tx ?? 0));
-          const pdy = my - (tcyc + (pxf?.ty ?? 0));
-          // Inverse-rotate the pointer into the tile's local frame.
-          const lx = tcxc + pdx * Math.cos(-aRad) - pdy * Math.sin(-aRad);
-          const ly = tcyc + pdx * Math.sin(-aRad) + pdy * Math.cos(-aRad);
-          if (lx >= tbx0 && lx <= tbx1 && ly >= tby0 && ly <= tby1) {
+          const point = invertPuzzleTilePoint(
+            mx,
+            my,
+            {
+              minLon: og.minLon,
+              maxLon: og.maxLon,
+              minLat: og.minLat,
+              maxLat: og.maxLat,
+            },
+            puzzleTransformsRef.current.get(v.datasetId),
+            ctxWorldGrid,
+            t,
+          );
+          if (point) {
             tileHitId = v.datasetId;
             break;
           }
@@ -4598,19 +4600,20 @@ export const OverviewMap: React.FC = () => {
               ? overviewGrid
               : v.overviewGrid;
           if (!og) continue;
-          const [bx0, by0] = lonLatToCanvas(og.minLon, og.maxLat, worldGrid, t);
-          const [bx1, by1] = lonLatToCanvas(og.maxLon, og.minLat, worldGrid, t);
-          const tcx = (bx0 + bx1) / 2;
-          const tcy = (by0 + by1) / 2;
-          const pxform = puzzleTransformsRef.current.get(v.datasetId);
-          const ptx = pxform?.tx ?? 0;
-          const pty = pxform?.ty ?? 0;
-          const pAngleRad = ((pxform?.angleDeg ?? 0) * Math.PI) / 180;
-          const pdx = mx - (tcx + ptx);
-          const pdy = my - (tcy + pty);
-          const localX = tcx + pdx * Math.cos(-pAngleRad) - pdy * Math.sin(-pAngleRad);
-          const localY = tcy + pdx * Math.sin(-pAngleRad) + pdy * Math.cos(-pAngleRad);
-          if (localX >= bx0 && localX <= bx1 && localY >= by0 && localY <= by1) {
+          const point = invertPuzzleTilePoint(
+            mx,
+            my,
+            {
+              minLon: og.minLon,
+              maxLon: og.maxLon,
+              minLat: og.minLat,
+              maxLat: og.maxLat,
+            },
+            puzzleTransformsRef.current.get(v.datasetId),
+            worldGrid,
+            t,
+          );
+          if (point) {
             puzzleHitId = v.datasetId;
             break;
           }
