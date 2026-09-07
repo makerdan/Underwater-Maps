@@ -11,7 +11,7 @@
  * shimmed: `ClerkProvider`, `Show`, `SignIn`, `SignUp`, `useUser`,
  * `useClerk`, `useAuth`.
  */
-import React from "react";
+import React, { useMemo, useSyncExternalStore } from "react";
 import {
   ClerkProvider as RealClerkProvider,
   SignIn as RealSignIn,
@@ -21,7 +21,14 @@ import {
   useClerk as realUseClerk,
   useAuth as realUseAuth,
 } from "@clerk/react";
-import { DEV_AUTH_BYPASS, FAKE_DEV_USER, FAKE_DEV_USER_ID } from "./devAuth";
+import {
+  DEV_AUTH_BYPASS,
+  FAKE_DEV_USER,
+  FAKE_DEV_USER_ID,
+  getBypassUserId,
+  setBypassUserId,
+  subscribeToBypassAuth,
+} from "./devAuth";
 
 /**
  * Dev/test-only: when set to `true` via `setBypassSimulateSignedOut`, the
@@ -32,11 +39,12 @@ import { DEV_AUTH_BYPASS, FAKE_DEV_USER, FAKE_DEV_USER_ID } from "./devAuth";
  * Only ever mutated in DEV_AUTH_BYPASS mode; Vite DCE removes the whole block
  * in production builds (DEV_AUTH_BYPASS is a literal `false` there).
  */
-let _bypassSimulateSignedOut = false;
+// The current bypass user is stored in devAuth so fetch headers and Clerk
+// compatibility hooks observe the same account transition.
 
 /** Toggle the dev-bypass auth simulation.  No-op in production builds. */
 export function setBypassSimulateSignedOut(v: boolean): void {
-  if (DEV_AUTH_BYPASS) _bypassSimulateSignedOut = v;
+  if (DEV_AUTH_BYPASS) setBypassUserId(v ? null : FAKE_DEV_USER_ID);
 }
 
 type ClerkProviderProps = React.ComponentProps<typeof RealClerkProvider>;
@@ -51,48 +59,71 @@ type ShowProps = {
 };
 
 const BypassShow: React.FC<ShowProps> = ({ when, children }) => {
-  if (_bypassSimulateSignedOut) {
+  const userId = useBypassUserId();
+  if (!userId) {
     return when === "signed-out" ? <>{children}</> : null;
   }
   return when === "signed-in" ? <>{children}</> : null;
 };
 
-const bypassUseUser = () =>
-  ({
-    user: _bypassSimulateSignedOut ? null : FAKE_DEV_USER,
-    isLoaded: true,
-    isSignedIn: !_bypassSimulateSignedOut,
-  }) as unknown as ReturnType<typeof realUseUser>;
+function useBypassUserId(): string | null {
+  return useSyncExternalStore(subscribeToBypassAuth, getBypassUserId, getBypassUserId);
+}
 
-const bypassUseClerk = () =>
-  ({
-    user: FAKE_DEV_USER,
-    session: { id: "dev-session", user: FAKE_DEV_USER, getToken: async () => null },
+function bypassUserForId(userId: string | null) {
+  return userId ? { ...FAKE_DEV_USER, id: userId } : null;
+}
+
+const useBypassUser = () => {
+  const userId = useBypassUserId();
+  return {
+    user: bypassUserForId(userId),
+    isLoaded: true,
+    isSignedIn: userId !== null,
+  } as unknown as ReturnType<typeof realUseUser>;
+};
+
+const useBypassClerk = () => {
+  const userId = useBypassUserId();
+  const user = useMemo(() => bypassUserForId(userId), [userId]);
+  const session = useMemo(
+    () =>
+      user
+        ? { id: `dev-session-${user.id}`, user, getToken: async () => null }
+        : null,
+    [user],
+  );
+  return {
+    user,
+    session,
     signOut: async () => {
-      console.warn("[bathyscan dev-bypass] signOut() is a no-op while the bypass is on.");
+      setBypassUserId(null);
     },
     openSignIn: () => {
       console.warn("[bathyscan dev-bypass] openSignIn() is a no-op while the bypass is on.");
     },
-    addListener: (cb: (evt: { user: typeof FAKE_DEV_USER }) => void) => {
+    addListener: (cb: (evt: { user: typeof FAKE_DEV_USER | null }) => void) => {
       try {
-        cb({ user: FAKE_DEV_USER });
+        cb({ user });
       } catch {
         /* ignore */
       }
-      return () => {};
+      return subscribeToBypassAuth(() => cb({ user: bypassUserForId(getBypassUserId()) }));
     },
-  }) as unknown as ReturnType<typeof realUseClerk>;
+  } as unknown as ReturnType<typeof realUseClerk>;
+};
 
-const bypassUseAuth = () =>
-  ({
-    isSignedIn: !_bypassSimulateSignedOut,
+const useBypassAuth = () => {
+  const userId = useBypassUserId();
+  return {
+    isSignedIn: userId !== null,
     isLoaded: true,
-    userId: _bypassSimulateSignedOut ? null : FAKE_DEV_USER_ID,
-    sessionId: _bypassSimulateSignedOut ? null : "dev-session",
+    userId,
+    sessionId: userId ? `dev-session-${userId}` : null,
     orgId: null,
     getToken: async () => null,
-  }) as unknown as ReturnType<typeof realUseAuth>;
+  } as unknown as ReturnType<typeof realUseAuth>;
+};
 
 export const ClerkProvider = (
   DEV_AUTH_BYPASS ? BypassClerkProvider : RealClerkProvider
@@ -103,6 +134,6 @@ export const Show = (DEV_AUTH_BYPASS ? BypassShow : RealShow) as typeof RealShow
 export const SignIn = RealSignIn;
 export const SignUp = RealSignUp;
 
-export const useUser = (DEV_AUTH_BYPASS ? bypassUseUser : realUseUser) as typeof realUseUser;
-export const useClerk = (DEV_AUTH_BYPASS ? bypassUseClerk : realUseClerk) as typeof realUseClerk;
-export const useAuth = (DEV_AUTH_BYPASS ? bypassUseAuth : realUseAuth) as typeof realUseAuth;
+export const useUser = (DEV_AUTH_BYPASS ? useBypassUser : realUseUser) as typeof realUseUser;
+export const useClerk = (DEV_AUTH_BYPASS ? useBypassClerk : realUseClerk) as typeof realUseClerk;
+export const useAuth = (DEV_AUTH_BYPASS ? useBypassAuth : realUseAuth) as typeof realUseAuth;

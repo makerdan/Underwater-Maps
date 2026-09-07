@@ -31,6 +31,31 @@ export const FAKE_DEV_USER_ID: string =
   (import.meta.env.DEV && (import.meta.env.VITE_E2E_USER_ID as string | undefined)) ||
   "dev-user-bypass";
 
+let _bypassUserId: string | null = FAKE_DEV_USER_ID;
+const _bypassAuthListeners = new Set<() => void>();
+
+/** Current user identity used by the dev-only auth bypass. */
+export function getBypassUserId(): string | null {
+  return _bypassUserId;
+}
+
+/**
+ * Change the user identity used by the dev-only bypass without reloading the
+ * page. This is intentionally a test-only seam for exercising account
+ * lifecycle behavior such as React Query cache isolation.
+ */
+export function setBypassUserId(userId: string | null): void {
+  if (!DEV_AUTH_BYPASS || _bypassUserId === userId) return;
+  _bypassUserId = userId;
+  _bypassAuthListeners.forEach((listener) => listener());
+}
+
+/** Subscribe to dev-bypass identity changes. */
+export function subscribeToBypassAuth(listener: () => void): () => void {
+  _bypassAuthListeners.add(listener);
+  return () => _bypassAuthListeners.delete(listener);
+}
+
 export const FAKE_DEV_USER = {
   id: FAKE_DEV_USER_ID,
   username: "dev-user",
@@ -89,8 +114,9 @@ export function installDevAuthFetchPatch(): void {
           ? input.headers
           : undefined),
     );
-    if (!headers.has("x-e2e-user-id")) {
-      headers.set("x-e2e-user-id", FAKE_DEV_USER_ID);
+    const userId = getBypassUserId();
+    if (userId && !headers.has("x-e2e-user-id")) {
+      headers.set("x-e2e-user-id", userId);
     }
     // Secondary bypass guard: the API server requires this header to match
     // E2E_BYPASS_SECRET when that env var is set.

@@ -70,6 +70,7 @@ import { processFlyWheel } from "./flyWheel";
 import { useZoneOverlayStore, ZONE_DEFAULT_COLORS } from "./zoneOverlayStore";
 import { openCrosshairContextMenu } from "./terrainContextMenu";
 import { setBypassSimulateSignedOut } from "./clerkCompat";
+import { setBypassUserId } from "./devAuth";
 import * as THREE from "three";
 
 /** Small synthetic terrain grid used by e2e tests when no real dataset is
@@ -647,6 +648,8 @@ export interface BathyTestApi {
    * rely on being signed in are unaffected.
    */
   setSimulateSignedOut: (v: boolean) => void;
+  /** Switch the dev-only bypass identity without reloading the page. */
+  setAuthUserId: (userId: string | null) => void;
   /**
    * Zone-colour isolation helpers.
    *
@@ -1630,6 +1633,9 @@ export function installTestHelpers(): void {
     },
     setSimulateSignedOut: (v) => {
       setBypassSimulateSignedOut(v);
+    },
+    setAuthUserId: (userId) => {
+      setBypassUserId(userId);
     },
     getZoneSlotColor: (waterType, slot) => {
       const state = useZoneOverlayStore.getState();
