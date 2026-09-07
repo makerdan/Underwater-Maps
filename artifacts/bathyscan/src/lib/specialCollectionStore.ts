@@ -188,6 +188,17 @@ export const useSpecialCollectionStore = create<SpecialCollectionStore>((set, ge
 
   activateForPuzzle: async (collection, unresolvedMemberNames = []) => {
     const gen = ++activationGen;
+    // Do not keep drawing the previous collection while the new collection's
+    // authenticated reference image is loading. Terrain scope switches before
+    // this await completes, so leaving `active` populated here would briefly
+    // pair collection B's geography with collection A's image and anchors.
+    closeImageBitmap(get().active?.bgImage ?? null);
+    set({
+      active: null,
+      pendingRestore: null,
+      geoLayout: null,
+      unresolvedMemberNames: [],
+    });
     const meta = collection.specialMeta;
     const loaded = meta?.bgImageKey ? await loadBgImage(collection.id) : null;
     // Stale continuation: a sign-out, deactivate, or newer activation happened

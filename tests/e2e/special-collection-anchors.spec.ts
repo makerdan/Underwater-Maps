@@ -164,6 +164,7 @@ async function createSpecialCollectionWithMember(
   page: import("@playwright/test").Page,
   request: import("@playwright/test").APIRequestContext,
   collectionName: string,
+  minLon = -0.8,
 ): Promise<{ collectionId: string; datasetId: string }> {
   const uploaded = await request.post(apiUrl("/api/datasets/upload"), {
     headers: AUTH_HEADERS,
@@ -171,7 +172,7 @@ async function createSpecialCollectionWithMember(
       file: {
         name: `reference-zoom-${Date.now()}.csv`,
         mimeType: "text/csv",
-        buffer: makeCsv(-0.8),
+        buffer: makeCsv(minLon),
       },
       resolution: "32",
     },
@@ -206,12 +207,25 @@ async function createReadyAnchoredSpecialCollection(
   page: import("@playwright/test").Page,
   request: import("@playwright/test").APIRequestContext,
   collectionName: string,
+  options: {
+    minLon?: number;
+    anchors?: {
+      a: { lon: string; lat: string };
+      b: { lon: string; lat: string };
+    };
+    activate?: boolean;
+  } = {},
 ): Promise<{ collectionId: string; datasetId: string }> {
   const { collectionId, datasetId } = await createSpecialCollectionWithMember(
     page,
     request,
     collectionName,
+    options.minLon ?? -0.8,
   );
+  const anchors = options.anchors ?? {
+    a: { lon: "-0.8", lat: "0.8" },
+    b: { lon: "0.8", lat: "-0.8" },
+  };
 
   await page.getByTestId(`input-collection-bg-file-${collectionId}`).setInputFiles({
     name: "reference.png",
@@ -228,10 +242,10 @@ async function createReadyAnchoredSpecialCollection(
   await preview.click({ position: { x: 20, y: 20 } });
   await page.getByTestId(`btn-pin-anchor-b-${collectionId}`).click();
   await preview.click({ position: { x: 280, y: 280 } });
-  await page.getByTestId(`input-anchor-a-lon-${collectionId}`).fill("-0.8");
-  await page.getByTestId(`input-anchor-a-lat-${collectionId}`).fill("0.8");
-  await page.getByTestId(`input-anchor-b-lon-${collectionId}`).fill("0.8");
-  await page.getByTestId(`input-anchor-b-lat-${collectionId}`).fill("-0.8");
+  await page.getByTestId(`input-anchor-a-lon-${collectionId}`).fill(anchors.a.lon);
+  await page.getByTestId(`input-anchor-a-lat-${collectionId}`).fill(anchors.a.lat);
+  await page.getByTestId(`input-anchor-b-lon-${collectionId}`).fill(anchors.b.lon);
+  await page.getByTestId(`input-anchor-b-lat-${collectionId}`).fill(anchors.b.lat);
   await expect(page.getByTestId(`btn-save-anchors-${collectionId}`)).toBeEnabled();
   await page.getByTestId(`btn-save-anchors-${collectionId}`).click();
   await expect(page.getByTestId(`anchor-save-status-${collectionId}`)).toContainText(
@@ -239,6 +253,8 @@ async function createReadyAnchoredSpecialCollection(
   );
 
   await page.getByTestId(`btn-close-collection-settings-${collectionId}`).click();
+  if (options.activate === false) return { collectionId, datasetId };
+
   // The image upload is persisted asynchronously; reload so activation consumes
   // the confirmed server record and not the local draft.
   await page.reload();
@@ -264,6 +280,153 @@ async function createReadyAnchoredSpecialCollection(
 }
 
 test.describe("Special collection reference-image anchors", () => {
+  test("replaces the reference image and geographic transform when switching collections", async ({
+    page,
+    request,
+  }) => {
+    const suffix = Date.now();
+    const collectionA = `Anchor switch A ${suffix}`;
+    const collectionB = `Anchor switch B ${suffix}`;
+    let collectionAId: string | null = null;
+    let collectionADatasetId: string | null = null;
+    let collectionBId: string | null = null;
+    let collectionBDatasetId: string | null = null;
+
+    try {
+      const seededA = await createReadyAnchoredSpecialCollection(page, request, collectionA, {
+        activate: false,
+        minLon: -0.8,
+      });
+      collectionAId = seededA.collectionId;
+      collectionADatasetId = seededA.datasetId;
+
+      const seededB = await createReadyAnchoredSpecialCollection(page, request, collectionB, {
+        activate: false,
+        minLon: 3.2,
+        anchors: {
+          a: { lon: "3.2", lat: "0.8" },
+          b: { lon: "4.2", lat: "-0.8" },
+        },
+      });
+      collectionBId = seededB.collectionId;
+      collectionBDatasetId = seededB.datasetId;
+
+      await page.goto("/");
+      await expect(page.getByTestId("collections-section")).toBeVisible({ timeout: 12_000 });
+      await page.getByTestId(`btn-activate-collection-${collectionAId}`).click();
+      await expect(page.locator(".overview-map-header")).toBeVisible({ timeout: 12_000 });
+      await page.waitForFunction(
+        ({ collectionId, datasetId }) => {
+          const overlay = window.__bathyTest?.getActiveSpecialCollectionOverlay?.();
+          const scope = window.__bathyTest?.getCollectionScope?.();
+          return Boolean(
+            overlay?.imageReady &&
+              overlay.collectionId === collectionId &&
+              scope?.collectionId === collectionId &&
+              scope.datasetIds?.includes(datasetId) &&
+              scope.loadedDatasetIds.includes(datasetId),
+          );
+        },
+        { collectionId: collectionAId, datasetId: collectionADatasetId },
+        { timeout: 20_000 },
+      );
+
+      const overlayA = await readLiveOverlay(page);
+      expect(overlayA).not.toBeNull();
+      expect(overlayA!.collectionId).toBe(collectionAId);
+      expect(overlayA!.anchors).toEqual([
+        { imgX: 0, imgY: 0, lon: -0.8, lat: 0.8 },
+        { imgX: 1, imgY: 1, lon: 0.8, lat: -0.8 },
+      ]);
+      assertAnchorsAlignAtLiveView(overlayA!);
+
+      // Hold B's authenticated image response long enough to inspect the
+      // handoff state. The terrain scope changes immediately, but the old
+      // overlay must already be gone while B's image is still loading.
+      await page.route(
+        `**/api/user/collections/${collectionBId}/background`,
+        async (route) => {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          await route.continue();
+        },
+      );
+      await page.getByTestId(`btn-activate-collection-${collectionBId}`).click();
+      await page.waitForFunction(
+        ({ collectionId }) => {
+          const overlay = window.__bathyTest?.getActiveSpecialCollectionOverlay?.();
+          const scope = window.__bathyTest?.getCollectionScope?.();
+          return scope?.collectionId === collectionId && overlay === null;
+        },
+        { collectionId: collectionBId },
+        { timeout: 5_000 },
+      );
+      await page.unroute(`**/api/user/collections/${collectionBId}/background`);
+
+      await page.waitForFunction(
+        ({ collectionId, datasetId }) => {
+          const overlay = window.__bathyTest?.getActiveSpecialCollectionOverlay?.();
+          const scope = window.__bathyTest?.getCollectionScope?.();
+          return Boolean(
+            overlay?.imageReady &&
+              overlay.collectionId === collectionId &&
+              scope?.collectionId === collectionId &&
+              scope.datasetIds?.includes(datasetId) &&
+              scope.loadedDatasetIds.includes(datasetId),
+          );
+        },
+        { collectionId: collectionBId, datasetId: collectionBDatasetId },
+        { timeout: 20_000 },
+      );
+
+      const overlayB = await readLiveOverlay(page);
+      expect(overlayB).not.toBeNull();
+      expect(overlayB!.collectionId).toBe(collectionBId);
+      expect(overlayB!.anchors).toEqual([
+        { imgX: 0, imgY: 0, lon: 3.2, lat: 0.8 },
+        { imgX: 1, imgY: 1, lon: 4.2, lat: -0.8 },
+      ]);
+      expect(overlayB!.anchors).not.toEqual(overlayA!.anchors);
+      expect(overlayB!.grid.minLon).toBeCloseTo(3.2, 5);
+      expect(overlayB!.grid.maxLon).toBeCloseTo(4.2, 5);
+      assertAnchorsAlignAtLiveView(overlayB!);
+
+      await page.getByTestId("overview-zoom-in").click();
+      await page.waitForFunction(
+        (previousScale) => {
+          const overlay = window.__bathyTest?.getActiveSpecialCollectionOverlay?.();
+          return Boolean(overlay && overlay.transform.scale > previousScale);
+        },
+        overlayB!.transform.scale,
+        { timeout: 5_000 },
+      );
+      const zoomedB = await readLiveOverlay(page);
+      expect(zoomedB).not.toBeNull();
+      expect(zoomedB!.collectionId).toBe(collectionBId);
+      assertAnchorsAlignAtLiveView(zoomedB!);
+    } finally {
+      if (collectionAId) {
+        await request
+          .delete(apiUrl(`/api/user/collections/${collectionAId}`), { headers: AUTH_HEADERS })
+          .catch(() => {});
+      }
+      if (collectionBId) {
+        await request
+          .delete(apiUrl(`/api/user/collections/${collectionBId}`), { headers: AUTH_HEADERS })
+          .catch(() => {});
+      }
+      if (collectionADatasetId) {
+        await request
+          .delete(apiUrl(`/api/user/datasets/${collectionADatasetId}`), { headers: AUTH_HEADERS })
+          .catch(() => {});
+      }
+      if (collectionBDatasetId) {
+        await request
+          .delete(apiUrl(`/api/user/datasets/${collectionBDatasetId}`), { headers: AUTH_HEADERS })
+          .catch(() => {});
+      }
+    }
+  });
+
   test("server-confirmed anchors survive reload and remain registered while panning and zooming", async ({
     page,
     request,

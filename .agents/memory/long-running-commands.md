@@ -6,4 +6,4 @@ Background/detached processes started from the shell (`nohup`, `setsid ... & dis
 
 **Why:** The platform tears down the whole process group per shell invocation; tried both nohup and setsid, both died silently mid-suite.
 
-**How to apply:** For anything longer than ~2 min (full vitest suites, Playwright runs), register a temporary validation command (`setValidationCommand` + `startValidationRun`) and clear it afterwards, or use an existing workflow (e.g. `test-unit`) and poll its log under /tmp/logs. Note `test-unit` runs api-server and bathyscan in parallel and aborts the survivor when one fails.
+**How to apply:** For anything longer than ~2 min (full vitest suites, Playwright runs), register a temporary validation command (`setValidationCommand` + `startValidationRun`) and clear it afterwards, use an existing workflow (e.g. `test-unit`) and poll its log under /tmp/logs, or use the managed shell background-task mode and poll its retained log. Note `test-unit` runs api-server and bathyscan in parallel and aborts the survivor when one fails.
