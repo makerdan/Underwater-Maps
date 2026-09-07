@@ -150,3 +150,4 @@
 - [Dev workflow environment markers](dev-workflow-environment-markers.md) — Replit dev workflows may report REPLIT_ENVIRONMENT=production; use REPLIT_DEV_DOMAIN to distinguish interactive development.
 - [Validated .replit line endings](replit-config-line-endings.md) — normalize temp replacement candidates to LF before validated replacement or Git reports every line as trailing whitespace.
 - [Validation upserts reorder .replit](validation-upsert-reorders-dot-replit.md) — restoring an unchanged validation command can reorder metadata blocks; remove incidental drift through validated replacement.
+- [Skill projection boundaries](skill-projection-boundaries.md) — reject canonical source/projection overlap and use identity-aware snapshots to catch change-and-revert races.

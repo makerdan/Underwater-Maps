@@ -5,8 +5,9 @@
  * platform-owned runtime mirror.  This module deliberately never writes .local.
  */
 import {
-  closeSync, copyFileSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync,
-  readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync,
+  closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync,
+  readFileSync, readdirSync, renameSync, rmSync, writeFileSync,
+  realpathSync,
 } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { basename, dirname, join, parse, relative, resolve, sep } from "node:path";
@@ -45,6 +46,29 @@ function hasExactKeys(value, keys) {
 function contained(root, candidate) {
   const rel = relative(root, candidate);
   return rel === "" || (!rel.startsWith(`..${sep}`) && rel !== ".." && !rel.includes(`..${sep}`));
+}
+function canonicalPath(path) {
+  let candidate = resolve(path);
+  const missing = [];
+  while (true) {
+    try {
+      lstatSync(candidate);
+      return join(realpathSync(candidate), ...missing);
+    } catch (error) {
+      if (error?.code !== "ENOENT") fail("workspace skill source and projection paths are invalid");
+      const parent = dirname(candidate);
+      if (parent === candidate) fail("workspace skill source and projection paths are invalid");
+      missing.unshift(basename(candidate));
+      candidate = parent;
+    }
+  }
+}
+function assertNonOverlappingPaths(source, projection) {
+  const canonicalSource = canonicalPath(source);
+  const canonicalProjection = canonicalPath(projection);
+  if (contained(canonicalSource, canonicalProjection) || contained(canonicalProjection, canonicalSource)) {
+    fail("workspace skill source and projection paths overlap");
+  }
 }
 function fail(message) { throw new Error(message); }
 function syncDirectory(path) {
@@ -181,19 +205,63 @@ function sameSetIdentity(left, right) {
 function isOwnedProjection(path) {
   try { return projectionMarker(path); } catch { return null; }
 }
-function copyTree(source, dest) {
-  for (const entry of readdirSync(source, { withFileTypes: true })) {
-    const from = join(source, entry.name), to = join(dest, entry.name);
-    const info = lstatSync(from);
-    if (info.isSymbolicLink() || (!info.isDirectory() && !info.isFile())) fail("workspace skill source contains an unsafe entry");
-    if (info.isDirectory()) {
-      mkdirSync(to);
-      syncDirectory(dest);
-      copyTree(from, to);
-    } else {
-      regular(from, "workspace skill source");
-      copyFileSync(from, to);
-      syncFile(to);
+function fileState(path, label) {
+  const info = lstatSync(path);
+  if (!info.isFile() || info.isSymbolicLink()) fail(`${label} contains an unsafe entry`);
+  return [
+    info.dev, info.ino, info.size, info.mode,
+    info.mtimeNs?.toString() ?? String(info.mtimeMs),
+    info.ctimeNs?.toString() ?? String(info.ctimeMs),
+  ].join(":");
+}
+function readStableFile(path, label) {
+  const before = fileState(path, label);
+  const bytes = readFileSync(path);
+  const after = fileState(path, label);
+  if (before !== after) fail("workspace skill source changed during refresh");
+  return { bytes, state: after };
+}
+function captureSourceSnapshot(source, manifest) {
+  const revision = readStableFile(join(source, REVISION_FILE), "workspace skill source revision");
+  if (revision.bytes.toString("utf8").trim() !== manifest.revision) {
+    fail("workspace skill source changed during refresh");
+  }
+  const files = new Map();
+  for (const entry of manifest.files) {
+    const snapshot = readStableFile(join(source, entry.path), "workspace skill source");
+    if (digest(snapshot.bytes) !== entry.sha256) fail("workspace skill source changed during refresh");
+    files.set(entry.path, { ...snapshot, sha256: entry.sha256 });
+  }
+  return { revisionState: revision.state, files };
+}
+function verifySourceSnapshotCurrent(source, manifest, snapshot) {
+  const revisionPath = join(source, REVISION_FILE);
+  if (fileState(revisionPath, "workspace skill source revision") !== snapshot.revisionState) {
+    fail("workspace skill source changed during refresh");
+  }
+  for (const entry of manifest.files) {
+    const current = join(source, entry.path);
+    if (fileState(current, "workspace skill source") !== snapshot.files.get(entry.path)?.state) {
+      fail("workspace skill source changed during refresh");
+    }
+  }
+}
+function copyTree(source, dest, skill, manifest, snapshot, beforeCopy) {
+  for (const entry of skillFiles(manifest, skill)) {
+    const relativePath = entry.path;
+    const sourcePath = join(source, skill, relativePath);
+    const targetPath = join(dest, relativePath);
+    const captured = snapshot.files.get(`${skill}/${relativePath}`);
+    if (!captured) fail("workspace skill source snapshot is incomplete");
+    beforeCopy?.(entry.path);
+    if (fileState(sourcePath, "workspace skill source") !== captured.state) {
+      fail("workspace skill source changed during refresh");
+    }
+    mkdirSync(dirname(targetPath), { recursive: true });
+    writeFileSync(targetPath, captured.bytes);
+    syncFile(targetPath);
+    if (fileState(sourcePath, "workspace skill source") !== captured.state) {
+      fail("workspace skill source changed during refresh");
     }
   }
   syncDirectory(dest);
@@ -376,7 +444,9 @@ function acquireLock(parent, options) {
 export function refreshWorkspaceSkillProjection(options = {}) {
   const source = options.sourceDir ?? resolveWorkspaceSkillsSource(options);
   const projectionRoot = resolve(options.projectionDir ?? join(ROOT, ".agents", "skills"));
+  assertNonOverlappingPaths(source, projectionRoot);
   const before = buildSourceManifest(source);
+  const snapshot = captureSourceSnapshot(source, before);
   mkdirSync(projectionRoot, { recursive: true });
   const lock = acquireLock(projectionRoot, options);
   const stage = join(projectionRoot, `${STAGE_PREFIX}${lock.token}`);
@@ -388,7 +458,8 @@ export function refreshWorkspaceSkillProjection(options = {}) {
     for (const skill of before.skills) {
       const target = join(projectionRoot, skill);
       if (existsSync(target) && !isOwnedProjection(target)) fail(`refusing to replace project-authored skill "${skill}"`);
-      const staged = join(stage, skill); mkdirSync(staged); copyTree(join(source, skill), staged);
+      const staged = join(stage, skill); mkdirSync(staged);
+      copyTree(source, staged, skill, before, snapshot, options.beforeCopy);
       writeDurable(join(staged, MARKER), JSON.stringify({ version: 1, skill, sourceRevision: before.revision, sourceFingerprint: before.fingerprint, files: skillFiles(before, skill) }));
       validateProjectionSkill(staged, before, skill);
     }
@@ -397,6 +468,7 @@ export function refreshWorkspaceSkillProjection(options = {}) {
     options.beforeInstall?.();
     const after = buildSourceManifest(source);
     if (after.revision !== before.revision || after.fingerprint !== before.fingerprint) fail("workspace skill source changed during refresh");
+    verifySourceSnapshotCurrent(source, after, snapshot);
     const previousSet = readCurrentSetIdentity(projectionRoot);
     const nextSet = { version: 1, sourceRevision: before.revision, sourceFingerprint: before.fingerprint, skills: before.skills };
     const existing = readdirSync(projectionRoot, { withFileTypes: true })

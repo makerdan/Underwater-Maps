@@ -91,6 +91,44 @@ describe("workspace skill projection", () => {
       assert.equal(existsSync(join(f.projection, "alpha")), false);
     } finally { done(f); }
   });
+  it("rejects identical, nested, and symlink-aliased source/projection paths before mutation", () => {
+    const f = fixture();
+    const alias = join(f.root, "source-alias");
+    try {
+      symlinkSync(f.source, alias, "dir");
+      for (const projection of [f.source, join(f.source, "nested-projection"), join(f.root, "projection-parent")]) {
+        const source = projection === join(f.root, "projection-parent") ? join(projection, "source") : f.source;
+        if (source !== f.source) mkdirSync(source, { recursive: true });
+        assert.throws(() => refreshWorkspaceSkillProjection({ sourceDir: source, projectionDir: projection }), /paths overlap/);
+        assert.equal(existsSync(join(projection, ".workspace-skills-refresh.lock")), false);
+      }
+      assert.throws(() => refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: alias }), /paths overlap/);
+      assert.equal(readFileSync(join(f.source, "alpha", "SKILL.md"), "utf8"), "alpha\n");
+      assert.equal(existsSync(join(f.projection, "alpha")), false);
+    } finally { done(f); }
+  });
+  it("rejects a mid-copy change-and-revert without replacing the committed projection", () => {
+    const f = fixture();
+    try {
+      refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+      const committed = readFileSync(join(f.projection, "alpha", "SKILL.md"), "utf8");
+      let changed = false;
+      assert.throws(() => refreshWorkspaceSkillProjection({
+        sourceDir: f.source,
+        projectionDir: f.projection,
+        beforeCopy: (path) => {
+          if (changed || path !== "SKILL.md") return;
+          changed = true;
+          const sourcePath = join(f.source, "alpha", "SKILL.md");
+          writeFileSync(sourcePath, "transient source bytes\n");
+          writeFileSync(sourcePath, "alpha\n");
+        },
+      }), /changed during refresh/);
+      assert.equal(readFileSync(join(f.source, "alpha", "SKILL.md"), "utf8"), "alpha\n");
+      assert.equal(readFileSync(join(f.projection, "alpha", "SKILL.md"), "utf8"), committed);
+      assert.deepEqual(setIdentity(f.projection), manifestSet(f.source));
+    } finally { done(f); }
+  });
   it("only recovers a provably abandoned same-host lock", () => {
     const f = fixture();
     try {

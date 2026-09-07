@@ -127,14 +127,18 @@ The helper must:
 
 1. Resolve the explicit source and build a complete revision plus SHA-256
    inventory before taking installation action.
-2. Atomically create the projection-root lock directory. Write owner version
+2. Resolve canonical filesystem identities for the source and projection roots,
+   following existing symlinks and missing descendants, and reject identical,
+   ancestor, descendant, or symlink-aliased trees before creating any helper
+   directory or lock.
+3. Atomically create the projection-root lock directory. Write owner version
    `1`, a fresh unpredictable RFC 4122 UUID token, a positive safe-integer PID,
    and a host matching `[A-Za-z0-9._-]{1,255}`. Validate the token before using
    it in any staging, backup, journal, or cleanup path.
-3. Treat a lock as abandoned only when its owner metadata is valid, it belongs
+4. Treat a lock as abandoned only when its owner metadata is valid, it belongs
    to the same host, and the recorded PID is proven dead. Foreign-host,
    malformed, unknown, or live locks remain blocking.
-4. Recover interrupted work only from a version-`1` helper journal whose
+5. Recover interrupted work only from a version-`1` helper journal whose
    `previousSet`, `nextSet`, skill IDs, backup basenames, contained paths, and
    ownership token all agree with the valid abandoned owner. Compare the current
    root commit marker before touching a target:
@@ -146,25 +150,29 @@ The helper must:
      helper ownership and restore the backup; or
    - if it matches neither state, is malformed, or cannot prove explicit
      previous absence, block recovery without deleting anything.
-5. Copy the entire source snapshot into helper-owned staging, write per-skill
-   SHA-256 projection manifests, and validate staged contents.
-6. Refuse any target collision with an unmarked project-authored skill.
-7. Re-read the complete source revision and fingerprint immediately before
-   installation. Abort if either changed.
-8. Build the replacement set from every current source skill plus every
+6. Capture the exact bytes and filesystem identities of the complete source
+   snapshot, copy those captured bytes into helper-owned staging, write
+   per-skill SHA-256 projection manifests, and validate staged contents. Abort
+   when any captured source file changes while staging, including a
+   change-and-revert race.
+7. Refuse any target collision with an unmarked project-authored skill.
+8. Re-read the complete source revision and fingerprint immediately before
+   installation, and verify every source file still has the captured identity.
+   Abort if either content or identity changed.
+9. Build the replacement set from every current source skill plus every
    formerly generated skill absent from the new source. Never add an unmarked
    project-authored directory to the replacement or removal set.
-9. Install targets through guarded renames recorded in the rollback journal.
+10. Install targets through guarded renames recorded in the rollback journal.
    Formerly generated skills absent from the source are removed only through
    this backup-and-commit transaction.
-10. Write a complete projection-set manifest to a token-bound temporary file,
+11. Write a complete projection-set manifest to a token-bound temporary file,
     validate it, and atomically rename it over the root commit marker only after
     every skill target is installed.
-11. Before that root commit, any failure restores every completed move in
+12. Before that root commit, any failure restores every completed move in
     reverse order and leaves the old committed set authoritative. After the
     root commit, the new set is authoritative: a cleanup failure must be
     reported but must not roll targets back beneath the new commit marker.
-12. Clean only lock, stage, backup, journal, and temporary-manifest state proven
+13. Clean only lock, stage, backup, journal, and temporary-manifest state proven
     to belong to the current token. Never clean by age, prefix alone, or broad
     directory sweep.
 
@@ -284,6 +292,8 @@ and that no path copies project content into `.local/custom_skills/`.
 - Do not invent `WORKSPACE_SKILLS_SOURCE`, `.workspace-revision`, projection
   markers, runtime sidecar metadata, or a successful parity result.
 - Do not follow symlinks or accept special files.
+- Do not refresh when canonical source and projection trees overlap, even when
+  one path is a symlink alias or an as-yet-uncreated descendant.
 - Do not replace an unmarked project-authored skill.
 - Do not recover a lock based only on age, PID reuse assumptions, or a foreign
   host.
@@ -292,6 +302,8 @@ and that no path copies project content into `.local/custom_skills/`.
 - Do not rollback installed targets after the root projection-set commit.
 - Do not ignore stale helper-owned projections or validate only the requested
   skill while extra generated state exists.
+- Do not stage directly from a mutable source path; stage only the captured
+  snapshot bytes after checking source identities.
 - Do not expose a partially installed or mixed-revision projection.
 - Do not commit private workspace source contents as ordinary project-authored
   skills.
