@@ -157,11 +157,13 @@ import { MobileChartView } from "@/components/mobile/MobileChartView";
 import { MobileChartShell } from "@/components/mobile/MobileChartShell";
 import { MobileAnalyzeTab } from "@/components/mobile/MobileAnalyzeTab";
 import {
+  buildHeatmapBitmap,
   renderIntertidalBand,
   renderHabitatOverlay,
   renderEfhOverlay,
   renderSubstrateOverlay,
 } from "@/lib/overviewRenderer";
+import { buildHeatmapBitmap as buildRealHeatmapBitmap } from "@/lib/overviewRenderer/terrainImagery";
 import { RemoteData } from "@workspace/shared-types";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useUiStore } from "@/lib/uiStore";
@@ -182,10 +184,21 @@ function makeGrid(): TerrainData {
   } as unknown as TerrainData;
 }
 
+let capturedImageData: Uint8ClampedArray[] = [];
+
 /** Minimal 2D-context stub — jsdom returns null from getContext otherwise. */
 function stubCanvas2d() {
   const ctx = new Proxy(
-    {},
+    {
+      createImageData: vi.fn((width: number, height: number) => ({
+        data: new Uint8ClampedArray(width * height * 4),
+        width,
+        height,
+      })),
+      putImageData: vi.fn((imageData: { data: Uint8ClampedArray }) => {
+        capturedImageData.push(new Uint8ClampedArray(imageData.data));
+      }),
+    } as Record<string, unknown>,
     {
       get(target: Record<string, unknown>, prop: string | symbol) {
         if (typeof prop === "symbol") return undefined;
@@ -212,6 +225,7 @@ const overlaySpies = [
 
 beforeEach(() => {
   vi.clearAllMocks();
+  capturedImageData = [];
   stubCanvas2d();
   useSettingsStore.getState().resetAll();
   useTerrainStore.setState({ overviewGrid: makeGrid(), primaryDatasetId: "guard-ds" });
@@ -234,6 +248,39 @@ afterEach(() => {
 });
 
 describe("mobile Analyze overlays render on the 2D chart (no 3D scene mounted)", () => {
+  it("renders mobile survey gaps with the configured Settings nodata color", async () => {
+    const configuredNodataColor = "#123456";
+    const grid = {
+      ...makeGrid(),
+      width: 2,
+      height: 2,
+      // Data row 1 is the northern row and contains a survey gap. The
+      // heatmap bitmap flips it to canvas row 0, matching the visible chart.
+      depths: [10, 20, null, 40],
+      minDepth: 10,
+      maxDepth: 40,
+    } as unknown as TerrainData;
+    useTerrainStore.setState({ overviewGrid: grid });
+    useSettingsStore.setState({ nodataColor: configuredNodataColor });
+
+    // Keep MobileChartView's existing renderer mock for the other tests, but
+    // run this call through the real bitmap implementation so the assertion
+    // protects the actual canvas bytes, not only the argument plumbing.
+    vi.mocked(buildHeatmapBitmap).mockImplementation((...args) =>
+      buildRealHeatmapBitmap(...args),
+    );
+
+    render(<MobileChartView onOpenPicker={() => {}} />);
+
+    await waitFor(() => expect(buildHeatmapBitmap).toHaveBeenCalled());
+    const bitmapCall = vi.mocked(buildHeatmapBitmap).mock.calls.at(-1)!;
+    expect(bitmapCall[4]).toBe(configuredNodataColor);
+
+    await waitFor(() => expect(capturedImageData).toHaveLength(1));
+    const northernGap = capturedImageData[0]!.slice(0, 4);
+    expect(Array.from(northernGap)).toEqual([0x12, 0x34, 0x56, 255]);
+  });
+
   it("draws NO overlay layers while every overlay setting is off", async () => {
     render(<MobileChartView onOpenPicker={() => {}} />);
     // Let the rAF loop complete at least one frame.
