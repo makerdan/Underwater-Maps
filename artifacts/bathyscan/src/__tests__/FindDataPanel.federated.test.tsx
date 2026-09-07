@@ -104,6 +104,22 @@ const MNDNR_ITEM = {
   importKind: "arcgis-rest",
 };
 
+const USGS_3DEP_ITEM = {
+  id: "usgs-3dep:coverage",
+  sourceId: "usgs-3dep",
+  sourceLabel: "USGS 3DEP",
+  name: "USGS 3DEP Topobathy DEM (this area)",
+  description: "Seamless elevation with topobathymetric coverage for many CONUS lakes.",
+  url: "https://www.usgs.gov/3d-elevation-program",
+  endpointUrl: "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer",
+  coverageBbox: { minLon: -98.2, minLat: 31, maxLon: -97.8, maxLat: 31.4 },
+  resolutionMMin: 10,
+  resolutionMMax: 30,
+  importable: true,
+  importKind: "usgs-3dep",
+  syntheticCoverage: true,
+};
+
 const GITHUB_ITEM = {
   id: "github-allowlist:noaa-ocs-hydrography/nbs-data",
   sourceId: "github-allowlist",
@@ -291,6 +307,26 @@ describe("FindDataPanel — External sources (federated search)", () => {
     // GitHub result — link-only badge and outbound link
     expect(screen.getByText("noaa-ocs-hydrography/nbs-data")).toBeInTheDocument();
     expect(screen.getByTestId("badge-link-only")).toBeInTheDocument();
+  });
+
+  it("warns before importing a result with unverified synthetic coverage", async () => {
+    const previous = PER_SOURCE_RESPONSES["usgs-3dep"];
+    PER_SOURCE_RESPONSES["usgs-3dep"] = {
+      results: [USGS_3DEP_ITEM],
+      sources: [okStatus("usgs-3dep", "USGS 3DEP", 1)],
+    };
+
+    try {
+      renderPanel();
+      await typeQuery("3dep");
+
+      expect(screen.getByTestId("federated-synthetic-coverage-notice")).toHaveTextContent(
+        "This exact area may have no 3DEP data",
+      );
+    } finally {
+      if (previous === undefined) delete PER_SOURCE_RESPONSES["usgs-3dep"];
+      else PER_SOURCE_RESPONSES["usgs-3dep"] = previous;
+    }
   });
 
   it("excludes local-catalog from the per-source fan-out", async () => {

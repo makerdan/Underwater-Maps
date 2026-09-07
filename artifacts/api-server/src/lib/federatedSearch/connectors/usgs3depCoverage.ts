@@ -3,12 +3,19 @@
  *
  * 3DEP is not a searchable catalog — it is a single CONUS-wide topobathy
  * ImageServer (exportImage REST). This connector therefore answers the
- * question "does 3DEP cover the area I'm looking at?":
+ * question "could 3DEP serve the area I'm looking at?":
  *
- *  - viewport bbox centred inside CONUS  → one importable synthetic result
+ *  - viewport bbox centred inside CONUS  → one importable, unverified result
  *  - no bbox but an elevation-flavoured query ("dem", "lidar", "3dep",
- *    "elevation", "topobathy") → one CONUS-wide importable result
+ *    "elevation", "topobathy") → one CONUS-wide, unverified result
  *  - otherwise → no results (status still "ok" — checked, nothing relevant)
+ *
+ * This is a discovery hint, not a 3DEP footprint query: 3DEP exposes a
+ * service-wide ImageServer rather than a searchable coverage index, so the
+ * coarse CONUS test cannot prove that a specific lake or bbox has data. The
+ * result is marked `syntheticCoverage` to make that uncertainty visible before
+ * a user starts materialization; the fetcher remains responsible for rejecting
+ * all-nodata and near-flat responses.
  *
  * The endpoint URL is the shared USGS_3DEP_URL constant, which
  * deriveCatalogFetchStrategy maps to the `usgs-3dep` fetcher.
@@ -49,6 +56,7 @@ function makeResult(coverageBbox: FederatedBbox, areaLabel: string): FederatedRe
     resolutionMMax: 30,
     importable,
     importKind,
+    syntheticCoverage: true,
   };
 }
 

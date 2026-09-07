@@ -43,6 +43,12 @@ export interface FederatedResultItem {
   importable: boolean;
   /** FetchStrategy kind when importable (e.g. "ncei-wcs"), else null. */
   importKind: string | null;
+  /**
+   * True when the result comes from a coarse coverage heuristic rather than
+   * a verified upstream footprint. Consumers must disclose that materializing
+   * the result may still find no data.
+   */
+  syntheticCoverage?: boolean;
 }
 
 export type FederatedSourceState = "ok" | "error" | "timeout";

@@ -126,8 +126,8 @@ describe("scienceBaseConnector", () => {
 // ---------------------------------------------------------------------------
 
 describe("usgs3depCoverageConnector", () => {
-  it("returns one importable result when bbox center is in CONUS", async () => {
-    // Central Texas — inside CONUS but outside every bundled-terrain footprint.
+  it("marks coarse CONUS matches as unverified coverage", async () => {
+    // Central Texas — inside the coarse CONUS guard but not proof of lake data.
     const out = await usgs3depCoverageConnector.search(
       "",
       { minLon: -98.2, minLat: 31.0, maxLon: -97.8, maxLat: 31.4 },
@@ -138,10 +138,11 @@ describe("usgs3depCoverageConnector", () => {
       sourceId: "usgs-3dep",
       importable: true,
       importKind: "usgs-3dep",
+      syntheticCoverage: true,
     });
   });
 
-  it("returns nothing for a bbox outside CONUS", async () => {
+  it("returns nothing when the coarse coverage check is empty", async () => {
     const out = await usgs3depCoverageConnector.search(
       "",
       { minLon: 5, minLat: 45, maxLon: 6, maxLat: 46 },
@@ -154,6 +155,7 @@ describe("usgs3depCoverageConnector", () => {
     const out = await usgs3depCoverageConnector.search("lidar coverage", null, signal);
     expect(out).toHaveLength(1);
     expect(out[0]!.importable).toBe(true);
+    expect(out[0]!.syntheticCoverage).toBe(true);
   });
 
   it("returns nothing for unrelated queries without bbox", async () => {

@@ -8981,6 +8981,13 @@ components:
           type: string
           nullable: true
           description: Fetch-strategy kind when importable (e.g. "ncei-wcs")
+        syntheticCoverage:
+          type: boolean
+          description: |
+            True when coverage is inferred from a coarse service-area heuristic
+            rather than verified against an upstream data footprint. The
+            result may still fail to materialize if the requested area has no
+            3DEP data.
     FederatedSourceStatus:
       type: object
       required: [sourceId, label, status, resultCount, tookMs, error]

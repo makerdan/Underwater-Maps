@@ -896,6 +896,20 @@ const FederatedResultCard: React.FC<{
           — may not match your {userWaterType === "freshwater" ? "Fresh Water" : "Salt Water"} mode.
         </div>
       )}
+      {item.syntheticCoverage && (
+        <div
+          data-testid="federated-synthetic-coverage-notice"
+          style={{
+            fontSize: "calc(11px * var(--bs-font-scale, 1))",
+            color: "#fbbf24",
+            marginTop: 5,
+            letterSpacing: "0.04em",
+          }}
+        >
+          ⚠ Coverage is estimated from the USGS service area. This exact area may
+          have no 3DEP data, so import can fail.
+        </div>
+      )}
       <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#e2e8f0", marginTop: 5, fontWeight: 600 }}>
         {item.name}
       </div>

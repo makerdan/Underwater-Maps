@@ -2816,6 +2816,12 @@ export interface FederatedSearchResult {
   importable: boolean;
   /** Fetch-strategy kind when importable (e.g. "ncei-wcs") */
   importKind: string | null;
+  /** True when coverage is inferred from a coarse service-area heuristic
+  rather than verified against an upstream data footprint. The
+  result may still fail to materialize if the requested area has no
+  3DEP data.
+   */
+  syntheticCoverage?: boolean;
 }
 
 export type FederatedSourceStatusStatus = typeof FederatedSourceStatusStatus[keyof typeof FederatedSourceStatusStatus];
@@ -5574,4 +5580,3 @@ export type GetTerrainBundlesPresetId202 = {
   ageMs?: number;
   message?: string;
 };
-
