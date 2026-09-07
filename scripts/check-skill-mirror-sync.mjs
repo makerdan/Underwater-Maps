@@ -294,7 +294,9 @@ export function loadWorkspaceSkill(skill, options = {}) {
       JSON.stringify(managed) !== JSON.stringify(manifest.skills)) {
     fail("projection set does not match physical helper-owned projections");
   }
-  validateProjectionSkill(join(root, skill), manifest, skill);
+  for (const managedSkill of managed) {
+    validateProjectionSkill(join(root, managedSkill), manifest, managedSkill);
+  }
   return readFileSync(join(root, skill, "SKILL.md"), "utf8");
 }
 

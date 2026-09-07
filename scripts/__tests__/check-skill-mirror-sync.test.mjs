@@ -18,6 +18,11 @@ function fixture() {
   return { root, source, projection, runtime };
 }
 function done(f) { rmSync(f.root, { recursive: true, force: true }); }
+function addSecondSkill(f) {
+  mkdirSync(join(f.source, "beta", "nested"), { recursive: true });
+  writeFileSync(join(f.source, "beta", "SKILL.md"), "beta\n");
+  writeFileSync(join(f.source, "beta", "nested", "guide.txt"), "beta nested\n");
+}
 
 describe("workspace skill projection", () => {
   it("projects a deterministic recursive SHA-256 snapshot", () => {
@@ -154,6 +159,33 @@ describe("workspace skill projection", () => {
         version: 1, skill: "stale", sourceRevision: m.revision, sourceFingerprint: m.fingerprint, files: [],
       }));
       assert.throws(() => loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), /physical helper-owned/);
+    } finally { done(f); }
+  });
+  it("fails a healthy skill load when another generated member is corrupted, extra, or incomplete", () => {
+    const f = fixture();
+    try {
+      addSecondSkill(f);
+      refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+
+      writeFileSync(join(f.projection, "beta", "SKILL.md"), "tampered beta\n");
+      assert.throws(() => loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), /content/);
+
+      refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+      writeFileSync(join(f.projection, "beta", "unexpected.txt"), "extra\n");
+      assert.throws(() => loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), /content/);
+
+      refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+      rmSync(join(f.projection, "beta", "nested", "guide.txt"));
+      assert.throws(() => loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), /content/);
+    } finally { done(f); }
+  });
+  it("allows unmarked project-authored skills beside a coherent generated set", () => {
+    const f = fixture();
+    try {
+      refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+      mkdirSync(join(f.projection, "authored"));
+      writeFileSync(join(f.projection, "authored", "SKILL.md"), "authored\n");
+      assert.equal(loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), "alpha\n");
     } finally { done(f); }
   });
   it("keeps the committed snapshot when post-commit cleanup fails", () => {
