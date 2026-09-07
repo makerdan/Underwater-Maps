@@ -1,5 +1,4 @@
 import { test, expect, apiUrl, E2E_USER_ID, type APIRequestContext, type Page, type Route } from "./fixtures";
-import { E2E_USER_ID, test, expect, type Page, type Route } from "./fixtures";
 
 type MemberKind = "dataset" | "catalogSave";
 
@@ -213,12 +212,14 @@ async function installCollectionRoutes(
   page: Page,
   collections = createCollectionFixtures(),
   collectionsByUser: Record<string, CollectionFixture[]> = {},
+  requestedUserIds?: string[],
 ): Promise<CollectionFixture[]> {
   await page.route("**/api/user/collections", async (route) => {
     const request = route.request();
     const pathname = new URL(request.url()).pathname;
     if (request.method() === "GET" && pathname.endsWith("/api/user/collections")) {
       const userId = await request.headerValue("x-e2e-user-id");
+      requestedUserIds?.push(userId ?? "");
       await route.fulfill({
         status: 200,
         json: collectionsByUser[userId ?? ""] ?? collections,
@@ -486,15 +487,20 @@ test.describe("collection default member reload persistence", () => {
         2,
       );
 
-      const createResponse = await request.post(apiUrl("/api/user/collections"), {
-        headers: { ...AUTH_HEADERS, "content-type": "application/json" },
-        data: { name: `Live catalog default reload ${Date.now()}` },
-      });
+      const createResponse = await request.post(
+        apiUrl("/api/user/collections"),
+        {
+          headers: { ...AUTH_HEADERS, "content-type": "application/json" },
+          data: { name: `Live default reload ${Date.now()}` },
+        },
+      );
       expect(
         createResponse.ok(),
-        `catalog collection creation failed with ${createResponse.status()}`,
+        `collection creation failed with ${createResponse.status()}`,
       ).toBeTruthy();
-      const createdCollection = (await createResponse.json()) as { id?: string };
+      const createdCollection = (await createResponse.json()) as {
+        id?: string;
+      };
       expect(createdCollection.id).toBeTruthy();
       collectionId = createdCollection.id!;
 
@@ -515,8 +521,8 @@ test.describe("collection default member reload persistence", () => {
         return body.id!;
       };
 
-      const firstMemberId = await addCatalogSave(firstSave.id);
-      const secondMemberId = await addCatalogSave(secondSave.id);
+      const firstMemberId = await addMember(firstDatasetId);
+      const secondMemberId = await addMember(secondDatasetId);
 
       await page.goto("/", { waitUntil: "domcontentloaded" });
       await expect(page.getByTestId("collections-section")).toBeVisible({
@@ -529,6 +535,10 @@ test.describe("collection default member reload persistence", () => {
       await chooseDefault(page, collectionId, secondMemberId);
       const selected = await getLiveCollection(request, collectionId);
       expect(selected.defaultMemberId).toBe(secondMemberId);
+      expect(selected.members.map((member) => member.id)).toEqual([
+        firstMemberId,
+        secondMemberId,
+      ]);
 
       await page.getByTestId(`btn-expand-collection-${collectionId}`).click();
       const deleteResponsePromise = page.waitForResponse(
@@ -549,7 +559,9 @@ test.describe("collection default member reload persistence", () => {
 
       const removed = await getLiveCollection(request, collectionId);
       expect(removed.defaultMemberId).toBeNull();
-      expect(removed.members.map((member) => member.refId)).toEqual([firstSave.id]);
+      expect(removed.members.map((member) => member.id)).toEqual([
+        firstMemberId,
+      ]);
 
       await page.reload({ waitUntil: "domcontentloaded" });
       await expect(page.getByTestId("collections-section")).toBeVisible({
@@ -739,14 +751,80 @@ test.describe("collection default member reload persistence", () => {
         const raw = localStorage.getItem("bathyscan:settings");
         const parsed: { state?: Record<string, unknown>; version?: number } =
           raw ? JSON.parse(raw) : {};
-
-    const accountACollections = createCollectionFixtures();
-      requestUserIds.push(userId);
-      await route.fulfill({
-        status: 200,
-        json: userId === "collections-account-b" ? accountBCollections : accountACollections,
-      });
+        parsed.state = { ...(parsed.state ?? {}), hasSeenOnboarding: true };
+        localStorage.setItem("bathyscan:settings", JSON.stringify(parsed));
+      } catch {
+        localStorage.setItem(
+          "bathyscan:settings",
+          JSON.stringify({ state: { hasSeenOnboarding: true }, version: 0 }),
+        );
+      }
     });
+    await installCollectionRoutes(secondPage, collections);
+
+    try {
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+      await secondPage.goto("/", { waitUntil: "domcontentloaded" });
+      await expect(page.getByTestId("collections-section")).toBeVisible({ timeout: 12_000 });
+      await expect(secondPage.getByTestId("collections-section")).toBeVisible({ timeout: 12_000 });
+
+      await chooseDefault(page, SPECIAL_COLLECTION_ID, "catalog-member-second");
+      await secondPage.getByTestId(`btn-collection-settings-${SPECIAL_COLLECTION_ID}`).click();
+      await expect(
+        secondPage.getByTestId(`select-collection-default-${SPECIAL_COLLECTION_ID}`),
+      ).toHaveValue("catalog-member-second");
+
+      await removeMember(page, SPECIAL_COLLECTION_ID, "catalog-member-second");
+
+      // The row and its already-open settings sheet must update from polling,
+      // not from a reload or a writer-side cache update.
+      await expect(secondPage.getByTestId(`collection-row-${SPECIAL_COLLECTION_ID}`)).toContainText(
+        "(1)",
+      );
+      await expect(
+        secondPage.getByTestId(`select-collection-default-${SPECIAL_COLLECTION_ID}`),
+      ).toHaveValue("");
+      await expect(
+        secondPage.getByTestId(`collection-member-catalog-member-second`),
+      ).toBeHidden();
+
+      await secondPage
+        .getByTestId(`btn-close-collection-settings-${SPECIAL_COLLECTION_ID}`)
+        .click({ force: true });
+      await secondPage
+        .getByTestId(`btn-activate-collection-${SPECIAL_COLLECTION_ID}`)
+        .click();
+      await expect(secondPage.locator(".overview-map-header")).toBeVisible({ timeout: 10_000 });
+      await expectPuzzleMode(secondPage);
+      await expectPrimaryDataset(secondPage, CATALOG_DATASET_IDS[0]);
+    } finally {
+      await secondContext.close();
+    }
+  });
+
+  test("does not reuse collections after switching dev-auth accounts", async ({ page }) => {
+    const accountACollections = createCollectionFixtures();
+    const accountBCollections = accountACollections.map((collection) => ({
+      ...collection,
+      id: `${collection.id}-account-b`,
+      name: `Account B ${collection.name}`,
+      members: collection.members.map((member) => ({
+        ...member,
+        id: `${member.id}-account-b`,
+        name: `Account B ${member.name}`,
+      })),
+    }));
+
+    const requestUserIds: string[] = [];
+    await installCollectionRoutes(
+      page,
+      accountACollections,
+      {
+        [E2E_USER_ID]: accountACollections,
+        "collections-account-b": accountBCollections,
+      },
+      requestUserIds,
+    );
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("collections-section")).toBeVisible({ timeout: 12_000 });
@@ -761,29 +839,17 @@ test.describe("collection default member reload persistence", () => {
     await expect(page.getByTestId("collections-section")).toBeVisible({ timeout: 12_000 });
     await expect(page.getByText("Account B Uploaded defaults")).toBeVisible();
     await expect(page.getByTestId("collection-row-collection-upload-defaults")).toBeHidden();
-    await expect(page.getByTestId("collection-row-collection-upload-defaults-account-b")).toBeVisible();
+    await expect(
+      page.getByTestId("collection-row-collection-upload-defaults-account-b"),
+    ).toBeVisible();
 
     await expect
-      .poll(() => requestUserIds.at(-1), { timeout: 8_000, intervals: [2_500, 2_500, 2_500] })
+      .poll(() => requestUserIds.at(-1), {
+        timeout: 8_000,
+        intervals: [2_500, 2_500, 2_500],
+      })
       .toBe("collections-account-b");
     expect(requestUserIds).toContain(E2E_USER_ID);
     expect(requestUserIds.at(-1)).toBe("collections-account-b");
   });
 });
-
-      const request = route.request();
-
-    const accountBCollections = accountACollections.map((collection) => ({
-      ...collection,
-      id: `${collection.id}-account-b`,
-      name: `Account B ${collection.name}`,
-      members: collection.members.map((member) => ({
-        ...member,
-        id: `${member.id}-account-b`,
-        name: `Account B ${member.name}`,
-      })),
-    }));
-
-    const requestUserIds: string[] = [];
-
-      const userId = (await request.headerValue("x-e2e-user-id")) ?? "";
