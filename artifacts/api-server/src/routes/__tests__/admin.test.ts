@@ -104,6 +104,13 @@ vi.mock("node:fs", async (importOriginal) => {
 
 import platformGovernanceRouter from "../../domains/platform/governance-router.js";
 import tidalRouter from "../tidal.js";
+import {
+  __resetPoeVerificationDiagnosticsForTests,
+  getPoeVerificationDiagnostics,
+  PoeModelRegistryError,
+  PoeModelUnavailableError,
+  recordPoeVerificationFailure,
+} from "@workspace/poe";
 
 const E2E_USER = "user_e2e_admin_test";
 
@@ -418,6 +425,12 @@ describe("Admin 403 responses — ADMIN_USER_IDS not leaked in body", () => {
     expect(JSON.stringify(res.body)).not.toContain(SENTINEL);
   });
 
+  it("GET /admin/poe-verification — sentinel absent from 403 body", async () => {
+    const res = await adminGet("/admin/poe-verification");
+    expect(res.status).toBe(403);
+    expect(JSON.stringify(res.body)).not.toContain(SENTINEL);
+  });
+
   it("GET /admin/skill/failure-gate — sentinel absent from 403 body", async () => {
     const res = await adminGet("/admin/skill/failure-gate");
     expect(res.status).toBe(403);
@@ -431,5 +444,37 @@ describe("Admin 403 responses — ADMIN_USER_IDS not leaked in body", () => {
       .set("x-e2e-user-id", NON_ADMIN);
     expect(res.status).toBe(403);
     expect(JSON.stringify(res.body)).not.toContain(SENTINEL);
+  });
+});
+
+describe("GET /admin/poe-verification", () => {
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+    vi.stubEnv("E2E_AUTH_BYPASS", "1");
+    vi.stubEnv("BUCKET_MONITOR_ADMIN", "1");
+    __resetPoeVerificationDiagnosticsForTests();
+  });
+
+  it("returns redacted, bounded failure aggregates to admins", async () => {
+    recordPoeVerificationFailure(
+      "query",
+      new PoeModelRegistryError("prompt secret Bearer sk-secret"),
+    );
+    recordPoeVerificationFailure("help", new PoeModelUnavailableError("retired model"));
+
+    const res = await request(makeApp())
+      .get("/admin/poe-verification")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", E2E_USER);
+
+    expect(res.status).toBe(200);
+    expect(res.body.windowMs).toBe(15 * 60 * 1000);
+    expect(res.body.count).toBe(2);
+    expect(res.body.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ route: "query", code: "model_registry_unavailable", count: 1 }),
+      expect.objectContaining({ route: "help", code: "model_unavailable", count: 1 }),
+    ]));
+    expect(JSON.stringify(res.body)).not.toMatch(/secret|Bearer|prompt|retired/);
+    expect(getPoeVerificationDiagnostics().count).toBe(2);
   });
 });

@@ -76,6 +76,9 @@ const UNDOCUMENTED_ALLOWLIST = new Set([
   // and pre-registers the session.  Called before the first chunk is sent.
   // Not part of the public OpenAPI surface.
   "POST /datasets/upload/start",
+  // Internal admin endpoint: returns bounded, redacted Poe verification
+  // failure counters. Not part of the public API surface; admin-only.
+  "GET /admin/poe-verification",
   // Internal admin endpoint: returns per-route upscale credit-savings stats.
   // Not part of the public API surface; only callable by admin user IDs.
   "GET /admin/upscale-cache-stats",

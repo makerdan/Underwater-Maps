@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import {
   PoeCapabilityError,
   PoeCreditsError,
@@ -10,6 +10,9 @@ import {
   ZoneParseError,
   mapHttpStatusToError,
   normalizePoeError,
+  __resetPoeVerificationDiagnosticsForTests,
+  getPoeVerificationDiagnostics,
+  recordPoeVerificationFailure,
 } from "../errors.js";
 
 describe("PoeCreditsError", () => {
@@ -98,5 +101,72 @@ describe("normalizePoeError", () => {
       code: "poe_error",
       message: "AI service error",
     });
+  });
+});
+
+describe("Poe verification diagnostics", () => {
+  beforeEach(() => {
+    __resetPoeVerificationDiagnosticsForTests();
+  });
+
+  it("counts repeated registry failures without retaining sensitive details", () => {
+    recordPoeVerificationFailure(
+      "query",
+      new PoeModelRegistryError("prompt=secret Bearer sk-secret"),
+      1_000,
+    );
+    recordPoeVerificationFailure(
+      "query",
+      new PoeModelRegistryError("provider response with tokens"),
+      2_000,
+    );
+
+    expect(getPoeVerificationDiagnostics(2_000)).toEqual({
+      windowMs: 15 * 60 * 1000,
+      generatedAt: "1970-01-01T00:00:02.000Z",
+      count: 1,
+      rows: [{
+        route: "query",
+        code: "model_registry_unavailable",
+        count: 2,
+        lastOccurredAt: "1970-01-01T00:00:02.000Z",
+      }],
+    });
+    expect(JSON.stringify(getPoeVerificationDiagnostics(2_000))).not.toMatch(
+      /secret|Bearer|prompt|tokens/,
+    );
+  });
+
+  it("keeps cardinality bounded and collapses unknown routes", () => {
+    for (let index = 0; index < 100; index += 1) {
+      recordPoeVerificationFailure(
+        `untrusted-route-${index}`,
+        new PoeModelUnavailableError(`retired-model-${index}`),
+        index + 1,
+      );
+    }
+
+    const diagnostics = getPoeVerificationDiagnostics(100);
+    expect(diagnostics.count).toBe(1);
+    expect(diagnostics.rows[0]).toMatchObject({
+      route: "unknown",
+      code: "model_unavailable",
+      count: 100,
+    });
+  });
+
+  it("expires old entries and supports a clean reset", () => {
+    recordPoeVerificationFailure("help", new PoeModelUnavailableError(), 1_000);
+    expect(getPoeVerificationDiagnostics(1_000).count).toBe(1);
+    expect(getPoeVerificationDiagnostics(1_000 + 15 * 60 * 1000).count).toBe(0);
+
+    recordPoeVerificationFailure("help", new PoeModelUnavailableError(), 2_000);
+    __resetPoeVerificationDiagnosticsForTests();
+    expect(getPoeVerificationDiagnostics(2_000).count).toBe(0);
+  });
+
+  it("ignores unrelated Poe failures", () => {
+    recordPoeVerificationFailure("query", new PoeCapabilityError("unsupported"), 1_000);
+    expect(getPoeVerificationDiagnostics(1_000).count).toBe(0);
   });
 });

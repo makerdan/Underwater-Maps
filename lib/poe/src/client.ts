@@ -7,7 +7,11 @@ import {
   type PoeEndpoint,
   type PoeRouteKey,
 } from "./models.js";
-import { PoeCapabilityError, PoeModelUnavailableError } from "./errors.js";
+import {
+  PoeCapabilityError,
+  PoeModelUnavailableError,
+  recordPoeVerificationFailure,
+} from "./errors.js";
 
 const POE_BASE_URL = "https://api.poe.com/v1";
 const POE_MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -64,21 +68,27 @@ function inferRoute(endpoint: PoeEndpoint, modelId: string, body: Record<string,
 async function validatePoeRequest(endpoint: PoeEndpoint, body: Record<string, unknown>): Promise<void> {
   const modelId = body["model"];
   if (typeof modelId !== "string") throw new PoeCapabilityError("Poe request model must be a string");
-  const route = inferRoute(endpoint, modelId, body);
-  const entry = validatePoeRouteRequest({
-    route,
-    endpoint,
-    modelId,
-    parameters: Object.keys(body),
-    requiredCapabilities: [
-      ...(body["tools"] !== undefined ? ["tools" as const] : []),
-      ...(body["output_format"] !== undefined ? ["structuredOutput" as const] : []),
-      ...(Array.isArray(body["input"]) && body["input"].some((item) => typeof item === "object" && item !== null && (item as { type?: unknown }).type === "input_image") ? ["vision" as const] : []),
-    ],
-  });
-  const liveIds = await getLiveModelIds();
-  selectPoeRoute(route, liveIds);
-  void entry;
+  let route: PoeRouteKey | "unknown" = "unknown";
+  try {
+    route = inferRoute(endpoint, modelId, body);
+    const entry = validatePoeRouteRequest({
+      route,
+      endpoint,
+      modelId,
+      parameters: Object.keys(body),
+      requiredCapabilities: [
+        ...(body["tools"] !== undefined ? ["tools" as const] : []),
+        ...(body["output_format"] !== undefined ? ["structuredOutput" as const] : []),
+        ...(Array.isArray(body["input"]) && body["input"].some((item) => typeof item === "object" && item !== null && (item as { type?: unknown }).type === "input_image") ? ["vision" as const] : []),
+      ],
+    });
+    const liveIds = await getLiveModelIds();
+    selectPoeRoute(route, liveIds);
+    void entry;
+  } catch (error) {
+    recordPoeVerificationFailure(route, error);
+    throw error;
+  }
 }
 
 function createPoeClient(): OpenAI {

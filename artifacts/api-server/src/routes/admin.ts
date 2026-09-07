@@ -16,6 +16,7 @@ import {
 import { queryRateLimitUsage } from "../middlewares/rateLimit.js";
 import { AdminRateLimitUsageQuerySchema } from "./schemas.js";
 import { getUpscaleCacheStats, UPSCALE_CREDITS_PER_CALL } from "./poe.js";
+import { getPoeVerificationDiagnostics } from "@workspace/poe";
 import {
   AdminBucketMonitorResponse,
   AdminLargeDatasetsDiffResponse,
@@ -170,6 +171,45 @@ const AdminUpscaleCacheStatsResponseSchema = z.object({
   creditsPerCall: z.number(),
   generatedAt: z.string(),
 });
+
+const AdminPoeVerificationDiagnosticsResponseSchema = z.object({
+  windowMs: z.number(),
+  generatedAt: z.string(),
+  count: z.number(),
+  rows: z.array(z.object({
+    route: z.enum(["classify", "help", "models", "query", "unknown", "upscale"]),
+    code: z.enum(["model_registry_unavailable", "model_unavailable"]),
+    count: z.number(),
+    lastOccurredAt: z.string(),
+  })),
+});
+
+/**
+ * GET /admin/poe-verification
+ *
+ * Returns bounded, short-lived counters for Poe model-catalogue and
+ * model-availability failures. The provider error details are intentionally
+ * not retained or returned.
+ *
+ * Access: auth-required; restricted to admin users.
+ */
+router.get(
+  "/admin/poe-verification",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const userId = (req as AuthenticatedRequest).clerkUserId;
+    if (!isAdmin(userId)) {
+      res.status(403).json({ error: "forbidden", details: "Admin access required" });
+      return;
+    }
+
+    res.json(validateResponse(
+      AdminPoeVerificationDiagnosticsResponseSchema,
+      getPoeVerificationDiagnostics(),
+      "GET /api/admin/poe-verification",
+    ));
+  }),
+);
 
 /**
  * GET /admin/upscale-cache-stats

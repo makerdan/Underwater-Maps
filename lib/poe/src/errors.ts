@@ -73,6 +73,135 @@ export class ZoneParseError extends Error {
   }
 }
 
+export const POE_VERIFICATION_DIAGNOSTIC_TTL_MS = 15 * 60 * 1000;
+export const POE_VERIFICATION_DIAGNOSTIC_MAX_ENTRIES = 12;
+
+const POE_DIAGNOSTIC_ROUTES = [
+  "classify",
+  "help",
+  "models",
+  "query",
+  "unknown",
+  "upscale",
+] as const;
+
+export type PoeDiagnosticRoute = (typeof POE_DIAGNOSTIC_ROUTES)[number];
+export type PoeVerificationFailureCode =
+  | "model_registry_unavailable"
+  | "model_unavailable";
+
+export interface PoeVerificationDiagnostic {
+  route: PoeDiagnosticRoute;
+  code: PoeVerificationFailureCode;
+  count: number;
+  lastOccurredAt: string;
+}
+
+export interface PoeVerificationDiagnostics {
+  windowMs: number;
+  generatedAt: string;
+  count: number;
+  rows: PoeVerificationDiagnostic[];
+}
+
+interface PoeVerificationDiagnosticState {
+  route: PoeDiagnosticRoute;
+  code: PoeVerificationFailureCode;
+  count: number;
+  lastOccurredAt: number;
+}
+
+const poeVerificationDiagnostics = new Map<string, PoeVerificationDiagnosticState>();
+
+function isPoeDiagnosticRoute(route: string): route is PoeDiagnosticRoute {
+  return (POE_DIAGNOSTIC_ROUTES as readonly string[]).includes(route);
+}
+
+function pruneExpiredPoeVerificationDiagnostics(now: number): void {
+  for (const [key, entry] of poeVerificationDiagnostics) {
+    if (now - entry.lastOccurredAt >= POE_VERIFICATION_DIAGNOSTIC_TTL_MS) {
+      poeVerificationDiagnostics.delete(key);
+    }
+  }
+}
+
+/**
+ * Record only model verification failures in a bounded, short-lived counter.
+ *
+ * The original error is normalized only to select the stable failure code.
+ * No provider message, prompt, token count, model identifier, or credential is
+ * retained. Routes outside the known internal set collapse to "unknown".
+ */
+export function recordPoeVerificationFailure(
+  route: string,
+  error: unknown,
+  now = Date.now(),
+): void {
+  const normalized = normalizePoeError(error);
+  if (
+    normalized.code !== "model_registry_unavailable" &&
+    normalized.code !== "model_unavailable"
+  ) {
+    return;
+  }
+
+  pruneExpiredPoeVerificationDiagnostics(now);
+  const safeRoute: PoeDiagnosticRoute = isPoeDiagnosticRoute(route) ? route : "unknown";
+  const code = normalized.code as PoeVerificationFailureCode;
+  const key = `${safeRoute}:${code}`;
+  const existing = poeVerificationDiagnostics.get(key);
+
+  if (existing) {
+    existing.count += 1;
+    existing.lastOccurredAt = now;
+    return;
+  }
+
+  if (poeVerificationDiagnostics.size >= POE_VERIFICATION_DIAGNOSTIC_MAX_ENTRIES) {
+    const oldest = [...poeVerificationDiagnostics.entries()]
+      .sort(([, left], [, right]) => left.lastOccurredAt - right.lastOccurredAt)[0];
+    if (oldest) poeVerificationDiagnostics.delete(oldest[0]);
+  }
+
+  poeVerificationDiagnostics.set(key, {
+    route: safeRoute,
+    code,
+    count: 1,
+    lastOccurredAt: now,
+  });
+}
+
+export function getPoeVerificationDiagnostics(
+  now = Date.now(),
+): PoeVerificationDiagnostics {
+  pruneExpiredPoeVerificationDiagnostics(now);
+  const rows = [...poeVerificationDiagnostics.values()]
+    .sort((left, right) => {
+      if (right.lastOccurredAt !== left.lastOccurredAt) {
+        return right.lastOccurredAt - left.lastOccurredAt;
+      }
+      return `${left.route}:${left.code}`.localeCompare(`${right.route}:${right.code}`);
+    })
+    .map((entry) => ({
+      route: entry.route,
+      code: entry.code,
+      count: entry.count,
+      lastOccurredAt: new Date(entry.lastOccurredAt).toISOString(),
+    }));
+
+  return {
+    windowMs: POE_VERIFICATION_DIAGNOSTIC_TTL_MS,
+    generatedAt: new Date(now).toISOString(),
+    count: rows.length,
+    rows,
+  };
+}
+
+/** Test-only reset; production code should allow the TTL to expire naturally. */
+export function __resetPoeVerificationDiagnosticsForTests(): void {
+  poeVerificationDiagnostics.clear();
+}
+
 export interface NormalizedPoeError {
   status: number;
   code: string;

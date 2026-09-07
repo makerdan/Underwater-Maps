@@ -30,6 +30,7 @@ import {
   buildVisionInput,
   POE_MODELS,
   PoeCircuitBreaker,
+  recordPoeVerificationFailure,
   type PoeToolSchema,
 } from "@workspace/poe";
 import { logger } from "../lib/logger.js";
@@ -340,14 +341,21 @@ router.get("/models", asyncHandler(async (_req, res) => {
       // would block the worker indefinitely.
       signal: AbortSignal.timeout(POE_MODELS_TIMEOUT_MS),
     });
+    if (response.ok === false) {
+      recordPoeVerificationFailure("models", new PoeModelRegistryError("Poe models catalogue request failed"));
+      res.status(502).json({ error: "models_unavailable", details: "Could not fetch Poe models list" });
+      return;
+    }
     data = await response.json();
   } catch {
+    recordPoeVerificationFailure("models", new PoeModelRegistryError("Could not fetch Poe models list"));
     res.status(502).json({ error: "models_unavailable", details: "Could not fetch Poe models list" });
     return;
   }
 
   const parsed = PoeModelsLenientResponse.safeParse(data);
   if (!parsed.success) {
+    recordPoeVerificationFailure("models", new PoeModelRegistryError("Poe models response had an unexpected shape"));
     logger.error({ err: parsed.error }, "GET /api/poe/models — upstream response missing consumed fields");
     res.status(502).json({ error: "models_unavailable", details: "Poe models response had an unexpected shape" });
     return;
