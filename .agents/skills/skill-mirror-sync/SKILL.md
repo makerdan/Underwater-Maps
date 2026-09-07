@@ -196,6 +196,11 @@ generated skill, or any metadata/content mismatch. This all-skill exact-set
 check prevents a mixed or partially tampered transaction from becoming readable
 before or after the root commit.
 
+Capture `SKILL.md` once and hash that exact byte buffer before decoding or
+returning it. If the path was replaced after the all-skill validation pass, the
+captured bytes must fail their expected hash; never validate one read and return
+a second read.
+
 If source, set manifest, skill marker, or projected content is unavailable,
 malformed, stale, extra, or missing, return no skill content and surface an
 error. Never continue with the last readable copy.
@@ -212,6 +217,12 @@ Status reads the authoritative source identity and platform-provided
 `.workspace-skill-mirror.json` metadata. It does not read parity from an old
 MD5 `.fingerprint`, copy files, repair metadata, create a mirror, or write
 anywhere under `.local/`.
+
+Walk every component of the configured runtime path with `lstat`, rejecting
+symlinked roots, skill directories, metadata leaves, non-directory
+intermediate components, and metadata paths that are not contained by the
+runtime root. A missing component reports a missing mirror; an unsafe
+component reports a mismatch.
 
 Exit codes are stable:
 

@@ -9,7 +9,7 @@ import {
   readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync,
 } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, parse, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { hostname } from "node:os";
 
@@ -72,6 +72,13 @@ function removeDurable(path, options) {
 function readJson(path, label) {
   try { return JSON.parse(readFileSync(path, "utf8")); }
   catch { fail(`${label} is malformed`); }
+}
+function lstatOrMissing(path) {
+  try { return lstatSync(path); }
+  catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
 }
 function regular(path, label) {
   const s = lstatSync(path);
@@ -137,7 +144,9 @@ export function resolveWorkspaceSkillsSource({ env = process.env, root = ROOT } 
 
 function projectionMarker(path) {
   const marker = join(path, MARKER);
-  if (!existsSync(marker)) return null;
+  const markerStat = lstatOrMissing(marker);
+  if (!markerStat) return null;
+  if (!markerStat.isFile() || markerStat.isSymbolicLink()) fail("projection marker contains an unsafe entry");
   const value = readJson(marker, "projection manifest");
   if (value?.version !== 1 || !safeId(value.skill) || !validRevision(value.sourceRevision) || !/^[a-f0-9]{64}$/.test(value.sourceFingerprint) ||
       !Array.isArray(value.files) || !value.files.every((f) => safeRelativePath(f.path) && /^[a-f0-9]{64}$/.test(f.sha256))) {
@@ -146,6 +155,7 @@ function projectionMarker(path) {
   return value;
 }
 function setMarker(root) {
+  regular(join(root, SET_MARKER), "projection set manifest");
   const value = readJson(join(root, SET_MARKER), "projection set manifest");
   if (!validSetIdentity(value)) fail("projection set manifest is malformed");
   return value;
@@ -213,6 +223,75 @@ function buildSourceManifestForOne(dir) {
     }
   }
   visit(dir); return result;
+}
+
+function projectionHelperKind(name) {
+  if (name === LOCK) return "directory";
+  if (name.startsWith(STAGE_PREFIX)) {
+    return validToken(name.slice(STAGE_PREFIX.length)) ? "directory" : "invalid";
+  }
+  if (name.startsWith(BACKUP_PREFIX)) {
+    const token = name.slice(BACKUP_PREFIX.length, BACKUP_PREFIX.length + 36);
+    const skill = name.slice(BACKUP_PREFIX.length + 37);
+    return validToken(token) && safeId(skill) && name[BACKUP_PREFIX.length + 36] === "-" ? "directory" : "invalid";
+  }
+  const setTempPrefix = `.${SET_MARKER}.`;
+  if (name.startsWith(setTempPrefix)) {
+    const token = name.slice(setTempPrefix.length, -4);
+    return name.endsWith(".tmp") && validToken(token) ? "file" : "invalid";
+  }
+  return null;
+}
+
+function validateProjectionRootEntry(root, entry) {
+  const path = join(root, entry.name);
+  if (entry.name === SET_MARKER) {
+    regular(path, "projection set manifest");
+    return "helper";
+  }
+  const helperKind = projectionHelperKind(entry.name);
+  if (helperKind === "invalid") fail("projection contains malformed helper state");
+  if (helperKind) {
+    const info = lstatSync(path);
+    if (info.isSymbolicLink() || (helperKind === "directory" && !info.isDirectory()) ||
+        (helperKind === "file" && !info.isFile())) {
+      fail("projection contains an unsafe helper entry");
+    }
+    return "helper";
+  }
+  if (!safeId(entry.name)) fail("projection has an unexpected top-level entry");
+  const info = lstatSync(path);
+  if (info.isSymbolicLink() || !info.isDirectory()) fail("projection has an unsafe top-level entry");
+  return projectionMarker(path) ? "managed" : "authored";
+}
+
+function readValidatedSkillContent(dir, manifest, skill) {
+  const expected = skillFiles(manifest, skill).find((file) => file.path === "SKILL.md");
+  if (!expected) fail("projection is missing SKILL.md");
+  // Capture and hash the exact bytes that will be returned. A replacement
+  // between the all-skill validation pass and this read is rejected rather
+  // than allowing an unvalidated copy to escape.
+  const content = readFileSync(join(dir, "SKILL.md"));
+  if (digest(content) !== expected.sha256) fail("projection content changed during load");
+  return content.toString("utf8");
+}
+
+/** Return the final lstat without following symlinks, or null for a missing path. */
+function lstatPathWithoutSymlinks(path) {
+  const absolute = resolve(path);
+  const parsed = parse(absolute);
+  let current = parsed.root;
+  const parts = absolute.slice(parsed.root.length).split(sep).filter(Boolean);
+  if (!parts.length) return lstatSync(current);
+  for (const part of parts) {
+    current = join(current, part);
+    const info = lstatOrMissing(current);
+    if (!info) return null;
+    if (info.isSymbolicLink()) fail("runtime mirror path contains a symlink");
+    if (current !== absolute && !info.isDirectory()) fail("runtime mirror path is not contained");
+    if (current === absolute) return info;
+  }
+  return null;
 }
 
 function recoverAbandonedLock(parent, lock, owner) {
@@ -380,12 +459,8 @@ export function loadWorkspaceSkill(skill, options = {}) {
   }
   const managed = [];
   for (const entry of readdirSync(root, { withFileTypes: true })) {
-    if (entry.name.startsWith(".") || !entry.isDirectory()) continue;
-    const dir = join(root, entry.name);
-    if (existsSync(join(dir, MARKER))) {
-      projectionMarker(dir);
-      managed.push(entry.name);
-    }
+    const kind = validateProjectionRootEntry(root, entry);
+    if (kind === "managed") managed.push(entry.name);
   }
   managed.sort();
   if (JSON.stringify(managed) !== JSON.stringify(set.skills) ||
@@ -395,7 +470,8 @@ export function loadWorkspaceSkill(skill, options = {}) {
   for (const managedSkill of managed) {
     validateProjectionSkill(join(root, managedSkill), manifest, managedSkill);
   }
-  return readFileSync(join(root, skill, "SKILL.md"), "utf8");
+  options.beforeReturn?.();
+  return readValidatedSkillContent(join(root, skill), manifest, skill);
 }
 
 /** Read-only platform mirror comparison. Metadata must identify the same source revision and skill inventory. */
@@ -407,9 +483,17 @@ export function getSkillMirrorStatus(skill, options = {}) {
   if (!manifest.skills.includes(skill)) return STATUS.UNAVAILABLE_SOURCE;
   const runtime = resolve(options.runtimeDir ?? join(ROOT, ".local", "custom_skills"));
   const metadataPath = join(runtime, skill, MIRROR_METADATA);
-  if (!existsSync(metadataPath)) return STATUS.MISSING_MIRROR;
   try {
-    if (lstatSync(metadataPath).isSymbolicLink() || !lstatSync(metadataPath).isFile()) return STATUS.MISMATCH;
+    if (!contained(runtime, metadataPath)) return STATUS.MISMATCH;
+    const runtimeStat = lstatPathWithoutSymlinks(runtime);
+    if (!runtimeStat) return STATUS.MISSING_MIRROR;
+    if (!runtimeStat.isDirectory()) return STATUS.MISMATCH;
+    const skillStat = lstatPathWithoutSymlinks(join(runtime, skill));
+    if (!skillStat) return STATUS.MISSING_MIRROR;
+    if (!skillStat.isDirectory()) return STATUS.MISMATCH;
+    const metadataStat = lstatPathWithoutSymlinks(metadataPath);
+    if (!metadataStat) return STATUS.MISSING_MIRROR;
+    if (!metadataStat.isFile()) return STATUS.MISMATCH;
     const metadata = readJson(metadataPath, "runtime mirror metadata");
     const expected = skillFiles(manifest, skill);
     return metadata?.version === 1 && metadata.skill === skill && metadata.sourceRevision === manifest.revision &&

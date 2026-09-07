@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -265,10 +265,36 @@ describe("workspace skill projection", () => {
       assert.throws(() => loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), /content/);
     } finally { done(f); }
   });
+  it("rejects a projected skill replaced between validation and return", () => {
+    const f = fixture();
+    try {
+      refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+      assert.throws(() => loadWorkspaceSkill("alpha", {
+        sourceDir: f.source,
+        projectionDir: f.projection,
+        beforeReturn: () => writeFileSync(join(f.projection, "alpha", "SKILL.md"), "replaced\n"),
+      }), /content changed/);
+    } finally { done(f); }
+  });
   it("allows unmarked project-authored skills beside a coherent generated set", () => {
     const f = fixture();
     try {
       refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+      mkdirSync(join(f.projection, "authored"));
+      writeFileSync(join(f.projection, "authored", "SKILL.md"), "authored\n");
+      assert.equal(loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), "alpha\n");
+    } finally { done(f); }
+  });
+  it("rejects unexpected physical projection entries but keeps authored directories valid", () => {
+    const f = fixture();
+    try {
+      refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+      writeFileSync(join(f.projection, "unexpected.txt"), "unexpected\n");
+      assert.throws(() => loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), /top-level/);
+      rmSync(join(f.projection, "unexpected.txt"));
+      symlinkSync(join(f.projection, "alpha"), join(f.projection, "unexpected-link"), "dir");
+      assert.throws(() => loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), /top-level/);
+      unlinkSync(join(f.projection, "unexpected-link"));
       mkdirSync(join(f.projection, "authored"));
       writeFileSync(join(f.projection, "authored", "SKILL.md"), "authored\n");
       assert.equal(loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), "alpha\n");
@@ -359,6 +385,31 @@ describe("workspace skill projection", () => {
       assert.equal(getSkillMirrorStatus("alpha", { sourceDir: f.source, runtimeDir: f.runtime }), STATUS.MISMATCH);
       metadata.sourceRevision = m.revision; metadata.sourceFingerprint = "0".repeat(64);
       writeFileSync(join(f.runtime, "alpha", ".workspace-skill-mirror.json"), JSON.stringify(metadata));
+      assert.equal(getSkillMirrorStatus("alpha", { sourceDir: f.source, runtimeDir: f.runtime }), STATUS.MISMATCH);
+    } finally { done(f); }
+  });
+  it("rejects symlinked runtime roots, skill directories, and metadata leaves", () => {
+    const f = fixture();
+    try {
+      const m = buildSourceManifest(f.source);
+      const files = m.files.filter((x) => x.path.startsWith("alpha/")).map((x) => ({ path: x.path.slice(6), sha256: x.sha256 }));
+      const metadata = { version: 1, skill: "alpha", sourceRevision: m.revision, sourceFingerprint: m.fingerprint, files };
+      const actualRuntime = join(f.root, "runtime-actual");
+      mkdirSync(join(actualRuntime, "alpha"), { recursive: true });
+      writeFileSync(join(actualRuntime, "alpha", ".workspace-skill-mirror.json"), JSON.stringify(metadata));
+      mkdirSync(join(f.root, ".local"), { recursive: true });
+
+      symlinkSync(actualRuntime, f.runtime, "dir");
+      assert.equal(getSkillMirrorStatus("alpha", { sourceDir: f.source, runtimeDir: f.runtime }), STATUS.MISMATCH);
+      unlinkSync(f.runtime);
+
+      mkdirSync(f.runtime, { recursive: true });
+      symlinkSync(join(actualRuntime, "alpha"), join(f.runtime, "alpha"), "dir");
+      assert.equal(getSkillMirrorStatus("alpha", { sourceDir: f.source, runtimeDir: f.runtime }), STATUS.MISMATCH);
+      unlinkSync(join(f.runtime, "alpha"));
+
+      mkdirSync(join(f.runtime, "alpha"), { recursive: true });
+      symlinkSync(join(actualRuntime, "alpha", ".workspace-skill-mirror.json"), join(f.runtime, "alpha", ".workspace-skill-mirror.json"));
       assert.equal(getSkillMirrorStatus("alpha", { sourceDir: f.source, runtimeDir: f.runtime }), STATUS.MISMATCH);
     } finally { done(f); }
   });
