@@ -96,3 +96,10 @@ frontend timeline change.
 **How to apply:** When a task touches unrelated BathyScan UI, auth test setup,
 offline status, or settings backup code, do not fix these as part of the task;
 verify the affected file on the pre-change tree before classifying the tier red.
+
+## 2026-09-06 — dependency-audit signature changed
+The full validation tier reproduced `check:audit` failing with the same 18 high/critical advisory signature in three isolated runs. The task diff contained only new dataset-audit source and tests; package manifests, lockfile, audit script, and exception list were byte-identical to `HEAD`.
+
+**Why:** The older active baseline covers a different raw `pnpm audit` signature and explicitly does not authorize ignoring new audit signatures. This evidence supports unrelated ownership for this task, but not a global suppression.
+
+**How to apply:** Keep dependency-audit remediation separate from dataset-audit changes. When this signature is encountered, verify the audit inputs are unchanged and reproduce it in isolation before classifying it as a baseline.

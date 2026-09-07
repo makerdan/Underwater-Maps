@@ -102,6 +102,7 @@
 - [Upload finalize durable handoff](upload-finalize-durable-handoff.md) — never expose a polling jobId until the full queued state is durable; in-flight finalize replies must omit jobId.
 - [cacheRegistry lint for new lib caches](cache-registry-lint.md) — any api-server lib module-level Map cache must call registerCache(() => cache.clear()) or cacheRegistry-lint.test.ts fails.
 - [Tier-gate baseline triage rules](unit-tier-baseline-route-guard.md) — gate policies that must not regress (tier-lock hard-fail, task-agnostic validation commands) + rules for pre-existing-vs-new failure triage.
+- [Current dependency-audit baseline](unit-tier-baseline-2026-08.md) — check:audit can fail on an 18-advisory signature distinct from the older raw-audit baseline; require fresh isolated evidence.
 - [Task-locked scripts suite interaction](task-locked-scripts-suite-interaction.md) — check-failure-gate is green in isolation but can fail inside the full scripts unit aggregation when TASK_PLAN_FILE is inherited.
 - [Tier-lock TASK_PLAN_FILE requirement](tier-lock-plan-file.md) — tier runs hard-fail without TASK_PLAN_FILE + compliant ## Validation/## Regression Guard sections; fix-stub then hand-fill, run via upserted validation command.
 - [Orval "Failed to resolve input" root cause](orval-failed-resolve-input.md) — malformed OpenAPI YAML (duplicate key or bad indentation) is silently swallowed as an input-resolution error.
