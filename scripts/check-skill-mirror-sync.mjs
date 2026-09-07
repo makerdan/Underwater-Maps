@@ -5,8 +5,8 @@
  * platform-owned runtime mirror.  This module deliberately never writes .local.
  */
 import {
-  copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync,
-  renameSync, rmSync, statSync, writeFileSync,
+  closeSync, copyFileSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync,
+  readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync,
 } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
@@ -38,11 +38,37 @@ function safeRelativePath(path) {
     path.split("/").every((part) => part && part !== "." && part !== "..");
 }
 function validRevision(value) { return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/.test(value); }
+function hasExactKeys(value, keys) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) &&
+    JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort());
+}
 function contained(root, candidate) {
   const rel = relative(root, candidate);
   return rel === "" || (!rel.startsWith(`..${sep}`) && rel !== ".." && !rel.includes(`..${sep}`));
 }
 function fail(message) { throw new Error(message); }
+function syncDirectory(path) {
+  const fd = openSync(path, "r");
+  try { fsyncSync(fd); } finally { closeSync(fd); }
+}
+function syncFile(path) {
+  const fd = openSync(path, "r");
+  try { fsyncSync(fd); } finally { closeSync(fd); }
+}
+function writeDurable(path, value) {
+  writeFileSync(path, value);
+  syncFile(path);
+  syncDirectory(dirname(path));
+}
+function renameDurable(from, to) {
+  renameSync(from, to);
+  syncDirectory(dirname(from));
+  if (dirname(to) !== dirname(from)) syncDirectory(dirname(to));
+}
+function removeDurable(path, options) {
+  rmSync(path, options);
+  syncDirectory(dirname(path));
+}
 function readJson(path, label) {
   try { return JSON.parse(readFileSync(path, "utf8")); }
   catch { fail(`${label} is malformed`); }
@@ -121,9 +147,26 @@ function projectionMarker(path) {
 }
 function setMarker(root) {
   const value = readJson(join(root, SET_MARKER), "projection set manifest");
-  if (value?.version !== 1 || !validRevision(value.sourceRevision) || !/^[a-f0-9]{64}$/.test(value.sourceFingerprint) ||
-      !Array.isArray(value.skills) || !value.skills.every(safeId)) fail("projection set manifest is malformed");
+  if (!validSetIdentity(value)) fail("projection set manifest is malformed");
   return value;
+}
+function validSetIdentity(value, { allowAbsent = false } = {}) {
+  if (allowAbsent && value === null) return true;
+  return hasExactKeys(value, ["version", "sourceRevision", "sourceFingerprint", "skills"]) &&
+    value.version === 1 && validRevision(value.sourceRevision) &&
+    /^[a-f0-9]{64}$/.test(value.sourceFingerprint) && Array.isArray(value.skills) &&
+    value.skills.every(safeId) &&
+    JSON.stringify(value.skills) === JSON.stringify([...new Set(value.skills)].sort());
+}
+function readCurrentSetIdentity(root) {
+  const path = join(root, SET_MARKER);
+  if (!existsSync(path)) return null;
+  const value = readJson(path, "projection set manifest");
+  if (!validSetIdentity(value)) fail("projection set manifest is malformed");
+  return value;
+}
+function sameSetIdentity(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 function isOwnedProjection(path) {
   try { return projectionMarker(path); } catch { return null; }
@@ -133,9 +176,17 @@ function copyTree(source, dest) {
     const from = join(source, entry.name), to = join(dest, entry.name);
     const info = lstatSync(from);
     if (info.isSymbolicLink() || (!info.isDirectory() && !info.isFile())) fail("workspace skill source contains an unsafe entry");
-    if (info.isDirectory()) { mkdirSync(to); copyTree(from, to); }
-    else { regular(from, "workspace skill source"); copyFileSync(from, to); }
+    if (info.isDirectory()) {
+      mkdirSync(to);
+      syncDirectory(dest);
+      copyTree(from, to);
+    } else {
+      regular(from, "workspace skill source");
+      copyFileSync(from, to);
+      syncFile(to);
+    }
   }
+  syncDirectory(dest);
 }
 function skillFiles(manifest, skill) {
   return manifest.files.filter((f) => f.path.startsWith(`${skill}/`))
@@ -168,21 +219,55 @@ function recoverAbandonedLock(parent, lock, owner) {
   const journalPath = join(lock, "journal.json");
   let journal;
   try { journal = readJson(journalPath, "refresh journal"); } catch { fail("workspace skill refresh lock has no recoverable journal"); }
-  if (!Array.isArray(journal.moves) || !journal.moves.every((m) => safeId(m.skill) && typeof m.backup === "string" &&
-      basename(m.backup) === `${BACKUP_PREFIX}${owner.token}-${m.skill}` && contained(parent, m.backup))) fail("refresh journal is malformed");
+  const journalSkills = new Set([
+    ...(journal?.previousSet?.skills ?? []),
+    ...(journal?.nextSet?.skills ?? []),
+  ]);
+  if (!hasExactKeys(journal, ["version", "previousSet", "nextSet", "moves"]) ||
+      journal.version !== 1 || !validSetIdentity(journal.previousSet, { allowAbsent: true }) ||
+      !validSetIdentity(journal.nextSet) || !Array.isArray(journal.moves) ||
+      !journal.moves.every((m) => hasExactKeys(m, ["skill", "backup", "hadTarget"]) &&
+      safeId(m.skill) && typeof m.backup === "string" && typeof m.hadTarget === "boolean" &&
+      journalSkills.has(m.skill) && basename(m.backup) === `${BACKUP_PREFIX}${owner.token}-${m.skill}` &&
+      contained(parent, m.backup)) ||
+      new Set(journal.moves.map((move) => move.skill)).size !== journal.moves.length) fail("refresh journal is malformed");
+  const currentSet = readCurrentSetIdentity(parent);
+  const stage = join(parent, `${STAGE_PREFIX}${owner.token}`);
+  const setTemp = join(parent, `.${SET_MARKER}.${owner.token}.tmp`);
+  if (sameSetIdentity(currentSet, journal.nextSet)) {
+    for (const move of journal.moves) {
+      if (existsSync(move.backup)) removeDurable(move.backup, { recursive: true, force: true });
+    }
+    if (existsSync(stage)) removeDurable(stage, { recursive: true, force: true });
+    if (existsSync(setTemp)) removeDurable(setTemp, { force: true });
+    return;
+  }
+  if (!sameSetIdentity(currentSet, journal.previousSet)) {
+    fail("abandoned refresh state does not match its journal");
+  }
   for (const move of [...journal.moves].reverse()) {
     const target = join(parent, move.skill);
     // The journal entry is written before the rename. If the backup does not
     // exist, the move never happened and the current target must be preserved.
-    if (!existsSync(move.backup)) continue;
-    if (existsSync(target)) {
-      if (!isOwnedProjection(target)) fail("abandoned refresh cannot replace project-authored state");
-      rmSync(target, { recursive: true, force: true });
+    if (move.hadTarget) {
+      if (!existsSync(move.backup)) continue;
+      if (existsSync(target)) {
+        if (!isOwnedProjection(target)) fail("abandoned refresh cannot replace project-authored state");
+        removeDurable(target, { recursive: true, force: true });
+      }
+      renameDurable(move.backup, target);
+    } else if (existsSync(target)) {
+      const marker = isOwnedProjection(target);
+      if (!marker || marker.skill !== move.skill ||
+          marker.sourceRevision !== journal.nextSet.sourceRevision ||
+          marker.sourceFingerprint !== journal.nextSet.sourceFingerprint) {
+        fail("abandoned refresh cannot remove unproven target state");
+      }
+      removeDurable(target, { recursive: true, force: true });
     }
-    renameSync(move.backup, target);
   }
-  const stage = join(parent, `${STAGE_PREFIX}${owner.token}`);
-  if (existsSync(stage)) rmSync(stage, { recursive: true, force: true });
+  if (existsSync(stage)) removeDurable(stage, { recursive: true, force: true });
+  if (existsSync(setTemp)) removeDurable(setTemp, { force: true });
 }
 function acquireLock(parent, options) {
   const lock = join(parent, LOCK), token = options.token ?? randomUUID();
@@ -204,7 +289,7 @@ function acquireLock(parent, options) {
     rmSync(lock, { recursive: true, force: true });
     fail("workspace skill refresh owner is invalid");
   }
-  writeFileSync(join(lock, "owner.json"), JSON.stringify(newOwner));
+  writeDurable(join(lock, "owner.json"), JSON.stringify(newOwner));
   return { lock, token };
 }
 
@@ -217,7 +302,7 @@ export function refreshWorkspaceSkillProjection(options = {}) {
   const lock = acquireLock(projectionRoot, options);
   const stage = join(projectionRoot, `${STAGE_PREFIX}${lock.token}`);
   const setTemp = join(projectionRoot, `.${SET_MARKER}.${lock.token}.tmp`);
-  const backups = [];
+  const moves = [];
   let committed = false;
   try {
     mkdirSync(stage);
@@ -225,7 +310,7 @@ export function refreshWorkspaceSkillProjection(options = {}) {
       const target = join(projectionRoot, skill);
       if (existsSync(target) && !isOwnedProjection(target)) fail(`refusing to replace project-authored skill "${skill}"`);
       const staged = join(stage, skill); mkdirSync(staged); copyTree(join(source, skill), staged);
-      writeFileSync(join(staged, MARKER), JSON.stringify({ version: 1, skill, sourceRevision: before.revision, sourceFingerprint: before.fingerprint, files: skillFiles(before, skill) }));
+      writeDurable(join(staged, MARKER), JSON.stringify({ version: 1, skill, sourceRevision: before.revision, sourceFingerprint: before.fingerprint, files: skillFiles(before, skill) }));
       validateProjectionSkill(staged, before, skill);
     }
     // Test/embedding hook: lets callers model a workspace changing between
@@ -233,30 +318,43 @@ export function refreshWorkspaceSkillProjection(options = {}) {
     options.beforeInstall?.();
     const after = buildSourceManifest(source);
     if (after.revision !== before.revision || after.fingerprint !== before.fingerprint) fail("workspace skill source changed during refresh");
+    const previousSet = readCurrentSetIdentity(projectionRoot);
+    const nextSet = { version: 1, sourceRevision: before.revision, sourceFingerprint: before.fingerprint, skills: before.skills };
     const existing = readdirSync(projectionRoot, { withFileTypes: true })
       .filter((e) => e.isDirectory() && !e.name.startsWith(".")).map((e) => e.name);
     const replace = [...new Set([...before.skills, ...existing.filter((id) => isOwnedProjection(join(projectionRoot, id)) && !before.skills.includes(id))])];
+    const writeJournal = () => writeDurable(join(lock.lock, "journal.json"), JSON.stringify({
+      version: 1,
+      previousSet,
+      nextSet,
+      moves: moves.map(({ target, backup, hadTarget }) => ({ skill: basename(target), backup, hadTarget })),
+    }));
+    writeJournal();
     for (const skill of replace) {
       const target = join(projectionRoot, skill), backup = join(projectionRoot, `${BACKUP_PREFIX}${lock.token}-${skill}`);
-      if (existsSync(target)) {
-        backups.push([target, backup]);
-        writeFileSync(join(lock.lock, "journal.json"), JSON.stringify({ version: 1, moves: backups.map(([oldTarget, oldBackup]) => ({ skill: basename(oldTarget), backup: oldBackup })) }));
-        renameSync(target, backup);
+      const hadTarget = existsSync(target);
+      moves.push({ target, backup, hadTarget });
+      writeJournal();
+      if (hadTarget) {
+        renameDurable(target, backup);
       }
-      if (before.skills.includes(skill)) renameSync(join(stage, skill), target);
+      if (before.skills.includes(skill)) renameDurable(join(stage, skill), target);
     }
-    writeFileSync(setTemp, JSON.stringify({ version: 1, sourceRevision: before.revision, sourceFingerprint: before.fingerprint, skills: before.skills }));
-    renameSync(setTemp, join(projectionRoot, SET_MARKER));
+    options.beforeCommit?.();
+    writeDurable(setTemp, JSON.stringify(nextSet));
+    renameDurable(setTemp, join(projectionRoot, SET_MARKER));
     committed = true;
     options.afterCommit?.();
-    for (const [, backup] of backups) rmSync(backup, { recursive: true, force: true });
+    for (const { backup, hadTarget } of moves) {
+      if (hadTarget) removeDurable(backup, { recursive: true, force: true });
+    }
     return { revision: before.revision, fingerprint: before.fingerprint, skills: before.skills };
   } catch (error) {
     // Restore only names this invocation moved; never clean unknown work.
     if (!committed) {
-      for (const [target, backup] of backups.reverse()) {
-        if (existsSync(target)) rmSync(target, { recursive: true, force: true });
-        if (existsSync(backup)) renameSync(backup, target);
+      for (const { target, backup, hadTarget } of moves.reverse()) {
+        if (existsSync(target)) removeDurable(target, { recursive: true, force: true });
+        if (hadTarget && existsSync(backup)) renameDurable(backup, target);
       }
     }
     throw error;

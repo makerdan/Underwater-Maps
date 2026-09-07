@@ -23,6 +23,18 @@ function addSecondSkill(f) {
   writeFileSync(join(f.source, "beta", "SKILL.md"), "beta\n");
   writeFileSync(join(f.source, "beta", "nested", "guide.txt"), "beta nested\n");
 }
+function setIdentity(projection) {
+  return JSON.parse(readFileSync(join(projection, ".workspace-skills-projection-set.json"), "utf8"));
+}
+function manifestSet(source) {
+  const manifest = buildSourceManifest(source);
+  return {
+    version: 1,
+    sourceRevision: manifest.revision,
+    sourceFingerprint: manifest.fingerprint,
+    skills: manifest.skills,
+  };
+}
 
 describe("workspace skill projection", () => {
   it("projects a deterministic recursive SHA-256 snapshot", () => {
@@ -84,7 +96,12 @@ describe("workspace skill projection", () => {
     try {
       mkdirSync(join(f.projection, ".workspace-skills-refresh.lock"), { recursive: true });
       writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "owner.json"), JSON.stringify({ version: 1, token: "11111111-1111-4111-8111-111111111111", pid: 7, host: "test" }));
-      writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "journal.json"), JSON.stringify({ version: 1, moves: [] }));
+      writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "journal.json"), JSON.stringify({
+        version: 1,
+        previousSet: null,
+        nextSet: manifestSet(f.source),
+        moves: [],
+      }));
       refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection, host: "test", isProcessAlive: () => false });
       assert.equal(loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), "alpha\n");
     } finally { done(f); }
@@ -114,16 +131,82 @@ describe("workspace skill projection", () => {
     const f = fixture(), token = "33333333-3333-4333-8333-333333333333";
     try {
       refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+      const previousSet = setIdentity(f.projection);
       const target = join(f.projection, "alpha");
       const backup = join(f.projection, `.workspace-skills-backup-${token}-alpha`);
       renameSync(target, backup);
       mkdirSync(join(f.projection, ".workspace-skills-refresh.lock"));
       writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "owner.json"), JSON.stringify({ version: 1, token, pid: 9, host: "test" }));
-      writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "journal.json"), JSON.stringify({ version: 1, moves: [{ skill: "alpha", backup }] }));
+      writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "journal.json"), JSON.stringify({
+        version: 1,
+        previousSet,
+        nextSet: { ...previousSet, sourceRevision: "workspace-r2" },
+        moves: [{ skill: "alpha", backup, hadTarget: true }],
+      }));
       writeFileSync(join(f.source, ".workspace-revision"), "workspace-r2\n");
       refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection, host: "test", isProcessAlive: () => false });
       assert.equal(loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), "alpha\n");
       assert.equal(existsSync(backup), false);
+    } finally { done(f); }
+  });
+  it("preserves committed targets and cleans token-owned residue after a post-commit crash", () => {
+    const f = fixture(), token = "55555555-5555-4555-8555-555555555555";
+    try {
+      refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+      const previousSet = setIdentity(f.projection);
+      const target = join(f.projection, "alpha");
+      const backup = join(f.projection, `.workspace-skills-backup-${token}-alpha`);
+      renameSync(target, backup);
+      writeFileSync(join(f.source, "alpha", "SKILL.md"), "committed alpha\n");
+      writeFileSync(join(f.source, ".workspace-revision"), "workspace-r2\n");
+      refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+      const nextSet = setIdentity(f.projection);
+      mkdirSync(join(f.projection, ".workspace-skills-refresh.lock"));
+      writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "owner.json"), JSON.stringify({ version: 1, token, pid: 9, host: "test" }));
+      writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "journal.json"), JSON.stringify({
+        version: 1,
+        previousSet,
+        nextSet,
+        moves: [{ skill: "alpha", backup, hadTarget: true }],
+      }));
+      mkdirSync(join(f.projection, `.workspace-skills-stage-${token}`));
+      writeFileSync(join(f.projection, `..workspace-skills-projection-set.json.${token}.tmp`), "residue");
+
+      assert.throws(() => refreshWorkspaceSkillProjection({
+        sourceDir: f.source,
+        projectionDir: f.projection,
+        host: "test",
+        isProcessAlive: () => false,
+        beforeInstall: () => { throw new Error("stop after recovery"); },
+      }), /stop after recovery/);
+      assert.equal(readFileSync(join(target, "SKILL.md"), "utf8"), "committed alpha\n");
+      assert.equal(existsSync(backup), false);
+      assert.equal(existsSync(join(f.projection, `.workspace-skills-stage-${token}`)), false);
+      assert.equal(existsSync(join(f.projection, `..workspace-skills-projection-set.json.${token}.tmp`)), false);
+    } finally { done(f); }
+  });
+  it("blocks neither-state recovery without deleting targets or token-owned residue", () => {
+    const f = fixture(), token = "66666666-6666-4666-8666-666666666666";
+    try {
+      refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+      const currentSet = setIdentity(f.projection);
+      const backup = join(f.projection, `.workspace-skills-backup-${token}-alpha`);
+      mkdirSync(backup);
+      writeFileSync(join(backup, "proof"), "keep");
+      mkdirSync(join(f.projection, ".workspace-skills-refresh.lock"));
+      writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "owner.json"), JSON.stringify({ version: 1, token, pid: 9, host: "test" }));
+      writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "journal.json"), JSON.stringify({
+        version: 1,
+        previousSet: { ...currentSet, sourceRevision: "workspace-before" },
+        nextSet: { ...currentSet, sourceRevision: "workspace-after" },
+        moves: [{ skill: "alpha", backup, hadTarget: true }],
+      }));
+      assert.throws(() => refreshWorkspaceSkillProjection({
+        sourceDir: f.source, projectionDir: f.projection, host: "test", isProcessAlive: () => false,
+      }), /does not match/);
+      assert.equal(readFileSync(join(f.projection, "alpha", "SKILL.md"), "utf8"), "alpha\n");
+      assert.equal(readFileSync(join(backup, "proof"), "utf8"), "keep");
+      assert.equal(existsSync(join(f.projection, ".workspace-skills-refresh.lock")), true);
     } finally { done(f); }
   });
   it("preserves the current target when a dead journal move never reached backup", () => {
@@ -134,7 +217,10 @@ describe("workspace skill projection", () => {
       mkdirSync(join(f.projection, ".workspace-skills-refresh.lock"));
       writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "owner.json"), JSON.stringify({ version: 1, token, pid: 9, host: "test" }));
       writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "journal.json"), JSON.stringify({
-        version: 1, moves: [{ skill: "alpha", backup: join(f.projection, `.workspace-skills-backup-${token}-alpha`) }],
+        version: 1,
+        previousSet: null,
+        nextSet: manifestSet(f.source),
+        moves: [{ skill: "alpha", backup: join(f.projection, `.workspace-skills-backup-${token}-alpha`), hadTarget: true }],
       }));
       assert.throws(() => refreshWorkspaceSkillProjection({
         sourceDir: f.source, projectionDir: f.projection, host: "test", isProcessAlive: () => false,
@@ -198,6 +284,35 @@ describe("workspace skill projection", () => {
         sourceDir: f.source, projectionDir: f.projection, afterCommit: () => { throw new Error("cleanup boundary"); },
       }), /cleanup boundary/);
       assert.equal(loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), "new alpha\n");
+    } finally { done(f); }
+  });
+  it("removes a newly installed target when an initial refresh is abandoned immediately before commit", () => {
+    const f = fixture(), token = "77777777-7777-4777-8777-777777777777";
+    try {
+      refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+      const nextSet = setIdentity(f.projection);
+      rmSync(join(f.projection, ".workspace-skills-projection-set.json"));
+      mkdirSync(join(f.projection, ".workspace-skills-refresh.lock"));
+      writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "owner.json"), JSON.stringify({ version: 1, token, pid: 9, host: "test" }));
+      writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "journal.json"), JSON.stringify({
+        version: 1,
+        previousSet: null,
+        nextSet,
+        moves: [{
+          skill: "alpha",
+          backup: join(f.projection, `.workspace-skills-backup-${token}-alpha`),
+          hadTarget: false,
+        }],
+      }));
+      assert.throws(() => refreshWorkspaceSkillProjection({
+        sourceDir: f.source,
+        projectionDir: f.projection,
+        host: "test",
+        isProcessAlive: () => false,
+        beforeInstall: () => { throw new Error("stop after recovery"); },
+      }), /stop after recovery/);
+      assert.equal(existsSync(join(f.projection, "alpha")), false);
+      assert.equal(existsSync(join(f.projection, ".workspace-skills-projection-set.json")), false);
     } finally { done(f); }
   });
   it("rejects empty top-level source skill directories", () => {
