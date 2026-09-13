@@ -1,0 +1,130 @@
+Use this generalized prompt in any project:
+
+```text
+Use the newly revised Poe Setup skill to audit and amend every previously installed version of that skill in this project.
+
+First, locate:
+- The newly revised Poe Setup skill supplied or available in the current workspace.
+- Every existing installation, canonical source, project copy, and generated/runtime projection of the Poe Setup skill.
+- Any skill-management or skill-synchronization instructions that define which copy is authoritative and how projections must be refreshed.
+
+Apply these rules:
+
+1. Establish the source of truth
+- Treat the newly revised Poe Setup skill as the approved guidance.
+- Identify the canonical editable source for each installed version.
+- Amend canonical sources only.
+- Do not directly edit generated projections, runtime mirrors, caches, injected copies, or ignored disposable files.
+- Refresh those copies using the project’s supported skill synchronization or projection process.
+- If source ownership is unclear, stop and report the candidate sources rather than guessing.
+
+2. Preserve scope and structure
+- Preserve the installed skill’s frontmatter, section structure, intended use cases, and unrelated requirements.
+- Make targeted corrections instead of broadly reorganizing, compressing, or modernizing the skill.
+- Retain materially equivalent guidance for model selection, capability verification, tools, vision, structured output, streaming, privacy, retries, cost controls, context reconstruction, error normalization, and testing.
+- Preserve newer safe guidance already present in an installed version. Do not overwrite a newer correction with older wording.
+
+3. Standardize secret handling
+- Use `POE_API_KEY2` consistently.
+- Remove references to the obsolete `POE_API_KEY` name.
+- Keep the secret server-side.
+- Never place the secret in browser code, source-controlled examples, URLs, client-visible errors, or logs.
+- Do not ask users to paste secrets into chat.
+
+4. Require import-safe lazy initialization
+- Poe client construction must be lazy and memoized.
+- Importing a Poe-related module must not:
+  - Read or validate optional Poe configuration.
+  - Throw because the Poe secret is missing.
+  - Construct an OpenAI or Poe client.
+  - Perform a health check.
+  - Fetch the model catalogue.
+  - Send a model-completion request.
+- Missing configuration must produce a clear error when a Poe operation is requested.
+- If Poe is mandatory for an application, startup may fail only through an explicit application-level preflight that intentionally invokes the provider initialization or configuration check.
+- Clearly distinguish that explicit preflight from module-import side effects.
+- Optional Poe configuration must never crash unrelated imports or ordinary server startup.
+
+5. Distinguish Poe’s two protocols
+- Use Poe’s OpenAI-compatible caller API at:
+  `https://api.poe.com/v1`
+- The OpenAI SDK must use that `/v1` base URL.
+- Never configure the OpenAI SDK with `https://api.poe.com/bot/`.
+- Never append OpenAI SDK routes such as `/chat/completions` to `/bot/`.
+- Explain that legacy `/bot/` paths use Poe’s bot-server protocol and SSE envelopes. They are for implementing a bot server that Poe calls, not for calling Poe models through the OpenAI SDK.
+
+6. Separate model discovery from live verification
+- Catalogue discovery and live inference verification are separate operations.
+- Ordinary application startup, deployment startup, readiness checks, health checks, and catalogue refreshes must send zero model-completion requests.
+- Catalogue availability is not proof that inference or an optional capability works.
+- Do not automatically probe every model returned by the catalogue.
+- Expand capability evidence lazily for models that become real routing candidates.
+- Keep unverified capabilities marked `unknown`.
+
+7. Bound explicit model verification
+- Live inference verification must require an explicit, protected administrator or operator action.
+- A single-model verification must have a fixed timeout and bounded retry policy.
+- If bulk verification is retained, restrict it to models actively used by application routing.
+- Enforce fixed ceilings for:
+  - Number of models.
+  - Concurrency.
+  - Attempts per model.
+  - Per-request timeout.
+  - Aggregate request count.
+  - Aggregate operation deadline.
+- Return safe partial or budget-limited results when a ceiling is reached.
+- Never scale probing directly with the size of the provider catalogue.
+
+8. Preserve safe operational behavior
+- Preserve capability filtering and fail closed when required capabilities are unavailable.
+- Keep provider calls server-side and behind the project’s existing provider abstraction when one exists.
+- Preserve authentication, authorization, tenant isolation, cancellation, bounded retries, rate limits, normalized errors, privacy controls, and safe telemetry.
+- Do not silently substitute a different model unless an explicitly verified fallback permits it.
+- Do not allow model-generated tool calls to bypass argument validation or application authorization.
+
+9. Add regression protection
+Create or strengthen a focused static contract test for every amended canonical skill.
+
+The test must reject:
+- `POE_API_KEY`.
+- An OpenAI SDK base URL using `/bot/`.
+- Any module-scope `new OpenAI(...)`, regardless of variable or export name.
+- Module-scope Poe secret lookup or missing-secret validation.
+- Import-triggered health checks.
+- Import-triggered catalogue requests.
+- Import-triggered model-completion probes.
+- Missing guidance about import safety, operation-time configuration failure, and explicit startup preflight boundaries.
+
+Add mutation fixtures proving rejection of at least:
+- A plainly named eager client.
+- A differently named eager client.
+- Module-scope secret lookup followed by a missing-secret throw.
+- An import-triggered health check.
+- An import-triggered catalogue request.
+- An import-triggered completion request.
+
+Also prove that the approved lazy memoized client getter is accepted.
+
+10. Synchronize and validate
+- Run the project’s supported skill synchronization or projection workflow.
+- Verify canonical source and generated projection parity.
+- Confirm no generated or runtime-mirror file was edited directly.
+- Confirm no obsolete secret name remains.
+- Confirm no OpenAI SDK client uses `/bot/`.
+- Confirm imports remain safe when `POE_API_KEY2` is absent.
+- Confirm ordinary startup and catalogue refresh send zero completions.
+- Run the focused contract and the project’s appropriate validation command.
+- Do not run live provider probes during portable validation.
+- Report pre-existing validation failures separately instead of changing unrelated code.
+
+Do not change application integration code unless I explicitly request it. This request is limited to amending previously installed Poe Setup skill guidance and safely refreshing its managed projections.
+
+At completion, report:
+- Every canonical skill source amended.
+- Every projection refreshed through the supported workflow.
+- Any installation intentionally left unchanged and why.
+- The targeted secret, initialization, protocol, and probing corrections.
+- The regression tests added or strengthened.
+- The exact validation commands and results.
+- Any conflicts that require manual review.
+```
