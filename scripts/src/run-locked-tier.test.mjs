@@ -1,10 +1,11 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { launchTaskValidation } from "../lib/task-validation-launch.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const script = resolve(here, "..", "run-locked-tier.mjs");
@@ -110,6 +111,13 @@ test("--dry-run: test-fast tier resolves to the fast command", () => {
   assert.match(stdout, /tierFast/);
 });
 
+test("accepts pnpm's conventional -- argument separator", () => {
+  const planFile = writePlan(planWithCommand("test-fast"));
+  const { code, stdout } = run(["--", "--dry-run", planFile]);
+  assert.equal(code, 0);
+  assert.match(stdout, /test-fast/);
+});
+
 test("--dry-run: test-heavy tier resolves to the heavy command", () => {
   const planFile = writePlan(planWithCommand("test-heavy"));
   const { code, stdout } = run(["--dry-run", planFile]);
@@ -177,4 +185,40 @@ test("--dry-run does not launch the actual validation command", () => {
   const elapsed = Date.now() - start;
   assert.equal(code, 0);
   assert.ok(elapsed < 5_000, `dry-run should be fast; took ${elapsed}ms`);
+});
+
+test("task validation scopes the exact plan without mutating .replit", () => {
+  const dotReplitPath = resolve(here, "..", "..", ".replit");
+  const before = readFileSync(dotReplitPath);
+  const planFile = writePlan(planWithCommand("test-fast"));
+  let observed;
+
+  const result = launchTaskValidation(
+    "node scripts/run-with-timeout.mjs tierFast -- node scripts/run-tier.mjs fast",
+    planFile,
+    {
+      env: { EXISTING_VALUE: "preserved" },
+      spawn(command, options) {
+        observed = { command, options };
+        return { status: 0 };
+      },
+    },
+  );
+
+  assert.equal(result.status, 0);
+  assert.equal(
+    observed.command,
+    "node scripts/run-with-timeout.mjs tierFast -- node scripts/run-tier.mjs fast",
+  );
+  assert.equal(observed.options.shell, true);
+  assert.equal(observed.options.stdio, "inherit");
+  assert.deepEqual(observed.options.env, {
+    EXISTING_VALUE: "preserved",
+    TASK_PLAN_FILE: planFile,
+  });
+  assert.deepEqual(
+    readFileSync(dotReplitPath),
+    before,
+    "launching task validation must not rewrite workflow registration",
+  );
 });

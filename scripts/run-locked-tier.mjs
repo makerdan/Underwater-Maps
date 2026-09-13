@@ -26,15 +26,15 @@
  */
 
 import { readFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
 import { VALIDATION_COMMANDS } from "./register-validation-commands.mjs";
+import { launchTaskValidation } from "./lib/task-validation-launch.mjs";
 
 // ---------------------------------------------------------------------------
 // Parse CLI args
 // ---------------------------------------------------------------------------
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
-const positional = args.filter((a) => a !== "--dry-run");
+const positional = args.filter((a) => a !== "--dry-run" && a !== "--");
 
 if (positional.length === 0) {
   console.error(
@@ -145,9 +145,5 @@ if (dryRun) {
 // Run the command
 // ---------------------------------------------------------------------------
 console.log(`run-locked-tier: running tier "${tierName}"\n  ${entry.command}`);
-const result = spawnSync(entry.command, {
-  shell: true,
-  stdio: "inherit",
-  env: { ...process.env, TASK_PLAN_FILE: planFile },
-});
+const result = launchTaskValidation(entry.command, planFile);
 process.exit(result.status ?? 1);

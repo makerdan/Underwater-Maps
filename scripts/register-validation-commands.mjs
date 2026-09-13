@@ -11,8 +11,15 @@
  *
  * Post-merge re-registration: after a fresh clone/merge, an agent session
  * should call setValidationCommand() for each entry below using the
- * code_execution sandbox.  The commands are idempotent — re-registering
- * an already-registered command is safe.
+ * code_execution sandbox. Register the complete canonical set only when
+ * registration is actually required. Do not temporarily upsert one command to
+ * inject TASK_PLAN_FILE: platform registration may rewrite the Project run
+ * button. Assigned tasks must instead run:
+ *
+ *   pnpm task:validate -- <plan-file>
+ *
+ * That launcher resolves the plan-selected canonical command and scopes
+ * TASK_PLAN_FILE directly to its child process without editing `.replit`.
  *
  * Per-step named resource locking is now handled INSIDE run-tier.mjs, so
  * the outer validation-lock.mjs wrapper has been removed. Only steps that
