@@ -39,6 +39,7 @@
     "check:runner-step-sync": "node scripts/check-runner-step-sync.mjs",
     "check:ci-validation-parity-skill": "node scripts/check-ci-validation-parity-skill.mjs",
     "check:skill-compression-contract": "node scripts/check-skill-compression-contract.mjs",
+    "check:poe-setup-contract": "node --test scripts/__tests__/check-poe-setup-contract.test.mjs && node scripts/check-poe-setup-contract.mjs",
     "check:validation-baseline": "node scripts/check-validation-baseline.mjs",
     "maintain:validation-baseline": "node scripts/check-validation-baseline.mjs --maintenance",
     "check:failure-gate": "node scripts/check-failure-gate.mjs",

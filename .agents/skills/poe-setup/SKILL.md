@@ -124,8 +124,8 @@ inference, vision, tools, structured output, or streaming works for that model.
 ## 4. Store the API key as a Replit Secret
 
 1. Open the **Secrets** panel in the Replit workspace.
-2. Add a secret named **`POE_API_KEY`** and paste the key as its value.
-3. Read it only in server-side code as `process.env.POE_API_KEY`.
+2. Add a secret named **`POE_API_KEY2`** and paste the key as its value.
+3. Read it only in server-side code as `process.env.POE_API_KEY2`.
 
 Never hard-code the key, commit it, include it in a client bundle, put it in
 browser local storage, or return it in an error/log response. Do not ask a user
@@ -142,27 +142,46 @@ the app's package manager:
 pnpm add openai
 ```
 
-Instantiate it once in a server-only module. Fail clearly when the secret is
-missing rather than silently constructing a client that will fail much later.
+Construct it lazily and memoize it in a server-only module. Importing the module
+must not read or validate optional Poe configuration, construct a client, or
+throw because Poe is not configured. Fail with a clear configuration error at
+the operation boundary when Poe is first used. If Poe is required for the whole
+service, an explicit startup preflight may call the same getter and fail startup;
+that preflight is an application decision, not a module-import side effect.
 
 ```ts
 import OpenAI from "openai";
 
-const apiKey = process.env.POE_API_KEY;
-if (!apiKey) {
-  throw new Error("POE_API_KEY is not configured on the server");
-}
+let poeClient: OpenAI | undefined;
 
-export const poe = new OpenAI({
-  apiKey,
-  baseURL: "https://api.poe.com/v1",
-  timeout: 30_000,
-});
+export function getPoeClient(): OpenAI {
+  if (poeClient) return poeClient;
+
+  const apiKey = process.env.POE_API_KEY2;
+  if (!apiKey) {
+    throw new Error("POE_API_KEY2 is not configured on the server");
+  }
+
+  poeClient = new OpenAI({
+    apiKey,
+    baseURL: "https://api.poe.com/v1",
+    timeout: 30_000,
+  });
+  return poeClient;
+}
 ```
 
 Keep client construction, timeout defaults, and provider-specific error
 classification in one module. Routes should call the provider boundary, not
-reconstruct clients or read secrets themselves.
+reconstruct clients or read secrets themselves. The memoized getter makes
+unrelated imports and server startup safe when Poe is optional while preserving
+one client per process after the first Poe operation.
+
+The OpenAI SDK in this guide is a caller for Poe's OpenAI-compatible `/v1`
+surface. Do not set its `baseURL` to `https://api.poe.com/bot/` or append
+OpenAI routes to `/bot/`. The legacy `/bot/` paths use Poe's bot-server protocol
+and SSE envelopes; they are for implementing a bot server that Poe calls, not
+for calling Poe models through the OpenAI SDK.
 
 ## 6. Discover live model IDs and capabilities
 
@@ -172,11 +191,48 @@ model-picker workflows and refresh it with a short server-side cache when
 appropriate. Use the response as an availability input, not as proof of every
 inference capability.
 
+### Bound discovery and capability probing
+
+Make exactly one catalogue request per setup or refresh operation. `GET
+/v1/models` returns the available catalogue; do not repeat that request once for
+each returned model. Cache a successful catalogue response briefly when several
+setup steps or model-picker requests would otherwise fetch the same data.
+
+Do not capability-probe every model in the catalogue. After the single catalogue
+lookup:
+
+1. Filter models using the route's required input, output, privacy, cost, and
+   operational constraints.
+2. Select one primary model and only the explicitly configured fallback models.
+3. Run the smallest safe capability probe only for those selected models when
+   current validated catalogue metadata and documentation are insufficient.
+4. Record untested capabilities and unselected models as `unknown`; `unknown`
+   is valid registry state and is not a reason to issue another provider call.
+
+Ordinary application startup, deployment startup, readiness checks, health
+checks, and catalogue refreshes must send zero model-completion requests.
+Catalogue discovery and live inference verification are separate operations.
+Expand capability evidence lazily when a model becomes a real routing candidate.
+
+Live inference verification requires an explicit, authenticated and authorized
+administrator or operator action. A single-model verification must have a fixed
+timeout and bounded retry policy. If bulk verification is retained, restrict it
+to models actively used by application routing and enforce fixed ceilings for
+model count, concurrency, attempts per model, per-request timeout, aggregate
+request count, and aggregate operation deadline. Return safe partial or
+budget-limited results when a ceiling is reached. Never scale probing directly
+with the size of the provider catalogue.
+
+An installation or health check must not fan out into one request per available
+model. Do not infer that the capability registry must be fully populated during
+installation. If probing is necessary, bound its model count, concurrency,
+timeout, retry policy, and cost before issuing any inference request.
+
 ```ts
 const response = await fetch("https://api.poe.com/v1/models", {
   method: "GET",
   headers: {
-    Authorization: `Bearer ${process.env.POE_API_KEY}`,
+    Authorization: `Bearer ${process.env.POE_API_KEY2}`,
     Accept: "application/json",
   },
   signal,
@@ -195,7 +251,7 @@ const models = parseModelsResponse(body).map((model) => ({
 The standard OpenAI SDK equivalent is:
 
 ```ts
-const modelsPage = await poe.models.list();
+const modelsPage = await getPoeClient().models.list();
 const models = modelsPage.data.map((model) => ({ id: model.id }));
 ```
 
@@ -203,9 +259,12 @@ Validate the response shape before using it. Send every returned `id` verbatim:
 do not normalize case, infer aliases, add a provider prefix, or assume that an
 ID from an old example still exists. If the live payload includes extra
 capability fields, parse and validate those fields into the app's registry
-schema. If it does not, consult current Poe documentation and run the smallest
-safe capability probe or configured inference check; an SDK `Model` type and a
-catalogue response do not guarantee provider-specific metadata or inference.
+schema. If it does not, consult current Poe documentation and, only for the
+selected primary or explicitly configured fallback models, run the smallest
+safe capability probe or configured inference check. Do not probe every
+returned model. Leave untested capabilities as `unknown`; an SDK `Model` type
+and a catalogue response do not guarantee provider-specific metadata or
+inference.
 
 Examples must use placeholders such as `<LIVE_MODEL_ID>` and must be labeled
 illustrative. Do not put a named model, price, capability, or availability in
@@ -239,7 +298,7 @@ parameters, and output form:
 const upstream = await fetch("https://api.poe.com/v1/chat/completions", {
   method: "POST",
   headers: {
-    Authorization: `Bearer ${process.env.POE_API_KEY}`,
+    Authorization: `Bearer ${process.env.POE_API_KEY2}`,
     "Content-Type": "application/json",
     Accept: "application/json",
   },
@@ -273,7 +332,7 @@ the Responses endpoint and the requested input, output, tools, or state shape:
 const upstream = await fetch("https://api.poe.com/v1/responses", {
   method: "POST",
   headers: {
-    Authorization: `Bearer ${process.env.POE_API_KEY}`,
+    Authorization: `Bearer ${process.env.POE_API_KEY2}`,
     "Content-Type": "application/json",
     Accept: "application/json",
   },
@@ -304,7 +363,7 @@ schema validator:
 const upstream = await fetch("https://api.poe.com/v1/responses", {
   method: "POST",
   headers: {
-    Authorization: `Bearer ${process.env.POE_API_KEY}`,
+    Authorization: `Bearer ${process.env.POE_API_KEY2}`,
     "Content-Type": "application/json",
     Accept: "application/json",
   },
@@ -455,7 +514,7 @@ app.post("/chat/stream", async (req, res) => {
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${process.env.POE_API_KEY}`,
+          Authorization: `Bearer ${process.env.POE_API_KEY2}`,
           "Content-Type": "application/json",
           Accept: "text/event-stream",
         },
@@ -569,10 +628,13 @@ route:
 
 ## 10. Key health-check
 
-Use a server-only health/setup check to validate configuration. A successful
+Use a server-only health/setup check to validate configuration. Invoke it from
+an explicit setup action or startup preflight, never as a module-import side
+effect. A successful
 `GET /v1/models` proves that the key can access the catalogue at that moment;
 it does not prove that a particular model, capability, quota, or inference
-request will succeed.
+request will succeed. The health check makes one catalogue request regardless
+of how many models are returned and sends zero model-completion requests.
 
 ```ts
 type PoeKeyStatus =
@@ -616,7 +678,7 @@ second client.
 
 | Scenario | Safe handling |
 | --- | --- |
-| Missing secret | Fail at server startup or provider initialization with a configuration error; never send the key or secret value to the client. |
+| Missing secret | Fail at the first Poe operation or an explicit startup preflight with a configuration error. Importing an optional Poe module must remain safe; never send the key or secret value to the client. |
 | 401/403 | Report `unauthorized` and require server configuration repair; do not retry. |
 | 402 or exhausted allowance | Report `quota_exhausted`; do not retry automatically. |
 | 429 | Apply bounded backoff for eligible upstream calls, respect `Retry-After`, and expose a stable rate-limit response. |
@@ -644,6 +706,10 @@ For every route that calls Poe, check all of the following:
       available; no duplicate client or direct provider call was added.
 - [ ] Poe is called only from server-side code; the API key and provider
       details cannot reach client bundles or browser logs.
+- [ ] Optional Poe modules are import-safe: secret validation and memoized client
+      construction happen only when a Poe operation runs.
+- [ ] Any startup failure comes from an explicit application preflight, not an
+      import-time side effect.
 - [ ] Authentication and authorization happen before model work, including
       authorization of each server-side tool operation.
 - [ ] Per-user/tenant and global rate limits, concurrency bounds, and request
@@ -653,6 +719,11 @@ For every route that calls Poe, check all of the following:
       privacy suitability, fallback, verification date, and owner.
 - [ ] `GET /v1/models` availability is not being treated as proof of inference
       or optional capability support.
+- [ ] Startup, readiness, health, and catalogue refreshes send zero completions;
+      live verification requires an explicit protected operator action.
+- [ ] Setup performs one catalogue lookup, filters candidates, and verifies only
+      actively routed models within fixed request and deadline ceilings; all
+      other capabilities remain `unknown`.
 - [ ] Chat Completions versus Responses was selected from current endpoint and
       model support; unsupported optional fields are rejected before sending.
 - [ ] Request and response contracts are documented in the app's existing
@@ -678,11 +749,16 @@ For every route that calls Poe, check all of the following:
 
 - [ ] Completed the intake before selecting a model or endpoint.
 - [ ] Searched for and understood an existing provider/client abstraction.
-- [ ] `POE_API_KEY` is in Replit Secrets or is managed by the existing provider.
+- [ ] `POE_API_KEY2` is in Replit Secrets or is managed by the existing provider.
 - [ ] All provider calls stay server-side and use Bearer authentication.
-- [ ] Raw SDK fallback uses `https://api.poe.com/v1` and a single server client.
+- [ ] Raw SDK fallback lazily memoizes one server client at
+      `https://api.poe.com/v1`; it never composes OpenAI SDK routes with the
+      legacy bot-server `/bot/` protocol.
 - [ ] `GET /v1/models` supplies exact IDs; no stale example is a production
       default, and catalogue access is not treated as inference proof.
+- [ ] Startup and catalogue refresh issue zero model-completion requests.
+- [ ] Live verification is an explicit protected operator action bounded by
+      model, concurrency, attempt, timeout, request, and deadline ceilings.
 - [ ] The selected registry row verifies endpoint, inputs, outputs, capabilities,
       limits, parameters, cost, privacy, validation, fallback, and ownership.
 - [ ] Chat Completions versus Responses is supported by the live/current

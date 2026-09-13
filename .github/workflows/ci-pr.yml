@@ -165,6 +165,9 @@ jobs:
       - name: 'check:skill-compression-contract'
         run: pnpm run check:skill-compression-contract
 
+      - name: 'check:poe-setup-contract'
+        run: pnpm run check:poe-setup-contract
+
       - name: 'check:validation-baseline'
         run: pnpm run check:validation-baseline
 

@@ -13,12 +13,16 @@ runButton = "Project"
 
 [[workflows.workflow]]
 name = "Project"
-mode = "sequential"
+mode = "parallel"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "echo BathyScan environment ready."
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-standard"
 
 [[workflows.workflow]]
 name = "test-fast"
@@ -35,12 +39,12 @@ isValidation = true
 name = "test-standard"
 author = "agent"
 
+[workflows.workflow.metadata]
+isValidation = true
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard"
-
-[workflows.workflow.metadata]
-isValidation = true
 
 [[workflows.workflow]]
 name = "test-standard-plus"

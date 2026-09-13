@@ -103,6 +103,8 @@ export function getValidationSteps(logPrefix) {
     { name: "check:ci-validation-parity-skill", resource: null, cmd: "pnpm run check:ci-validation-parity-skill", tiers: FAST },
     // no resource: semantic contract guard for durable Skill Compression previews, sub-second
     { name: "check:skill-compression-contract", resource: null, cmd: "pnpm run check:skill-compression-contract", tiers: FAST },
+    // no resource: semantic and mutation contract for import-safe Poe Setup guidance, sub-second
+    { name: "check:poe-setup-contract", resource: null, cmd: "pnpm run check:poe-setup-contract", tiers: FAST },
     // no resource: tracked failure-baseline schema and freshness check, sub-second
     { name: "check:validation-baseline", resource: null, cmd: "pnpm run check:validation-baseline", tiers: FAST },
     // no resource: auto-remediates missing stubs before the strict check runs, sub-second file-write only.
