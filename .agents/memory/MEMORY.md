@@ -27,7 +27,7 @@
 - [Deterministic collection E2E fixtures](e2e-collection-fixtures.md) — create ready upload-backed members in tests; never skip from persisted library contents.
 - [Dev workflow environment markers](dev-workflow-environment-markers.md) — REPLIT_DEV_DOMAIN distinguishes interactive development from misleading environment markers.
 - [Validated .replit line endings](replit-config-line-endings.md) — normalize replacement candidates to LF before validated replacement.
-- [Validation upserts reorder .replit](validation-upserts-reorder-dot-replit.md) — remove incidental metadata reorder through validated replacement.
+- [Validation upserts can mutate Project](validation-upsert-reorders-dot-replit.md) — task-specific validation upserts may alter the run button; avoid or restore via validated replacement.
 - [Current dependency-audit baseline](unit-tier-baseline-2026-08.md) — dependency audit signatures need fresh isolated evidence before reassignment.
 - [Skill mirror sync + foreign commits](skill-mirror-sync-check.md) — stale custom-skill mirrors fail tiers; cite foreign merge provenance in drift reasons.
 - [Validation workflow boot storm](validation-workflow-boot-storm.md) — stop extra validation workflows and orphaned boot groups before retrying a locked run.
