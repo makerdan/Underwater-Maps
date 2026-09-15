@@ -31,17 +31,44 @@ function safeId(id) { return typeof id === "string" && /^[A-Za-z0-9][A-Za-z0-9._
 function validToken(token) { return typeof token === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(token); }
 function validHost(host) { return typeof host === "string" && /^[A-Za-z0-9._-]{1,255}$/.test(host); }
 function validOwner(owner) {
-  return owner?.version === 1 && validToken(owner.token) && validHost(owner.host) &&
+  return hasExactKeys(owner, ["version", "token", "pid", "host"]) &&
+    owner.version === 1 && validToken(owner.token) && validHost(owner.host) &&
     Number.isSafeInteger(owner.pid) && owner.pid > 0;
 }
 function safeRelativePath(path) {
   return typeof path === "string" && path.length > 0 && !path.startsWith("/") &&
+    !/^[A-Za-z]:($|\/)/.test(path) && !path.includes("\\") && !path.includes("\0") &&
     path.split("/").every((part) => part && part !== "." && part !== "..");
 }
 function validRevision(value) { return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/.test(value); }
 function hasExactKeys(value, keys) {
   return value !== null && typeof value === "object" && !Array.isArray(value) &&
     JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort());
+}
+function validSha256(value) { return typeof value === "string" && /^[a-f0-9]{64}$/.test(value); }
+function compareStrings(left, right) { return left < right ? -1 : left > right ? 1 : 0; }
+function sortedUniqueStrings(values, validator = () => true) {
+  return Array.isArray(values) && values.every(validator) &&
+    JSON.stringify(values) === JSON.stringify([...new Set(values)].sort(compareStrings));
+}
+function validFileRecords(files) {
+  if (!Array.isArray(files)) return false;
+  if (!files.every((file) =>
+    hasExactKeys(file, ["path", "sha256"]) &&
+    safeRelativePath(file.path) &&
+    validSha256(file.sha256)
+  )) return false;
+  const paths = files.map((file) => file.path);
+  return JSON.stringify(paths) === JSON.stringify([...new Set(paths)].sort(compareStrings));
+}
+function validSkillMetadata(value, expectedSkill = null) {
+  return hasExactKeys(value, ["version", "skill", "sourceRevision", "sourceFingerprint", "files"]) &&
+    value.version === 1 &&
+    safeId(value.skill) &&
+    (expectedSkill === null || value.skill === expectedSkill) &&
+    validRevision(value.sourceRevision) &&
+    validSha256(value.sourceFingerprint) &&
+    validFileRecords(value.files);
 }
 function contained(root, candidate) {
   const rel = relative(root, candidate);
@@ -137,6 +164,7 @@ export function buildSourceManifest(sourceDir) {
       const path = join(directory, entry.name);
       if (!contained(root, path)) fail("workspace skill source has a path escape");
       const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (!safeRelativePath(rel)) fail("workspace skill source has an invalid path");
       const info = lstatSync(path);
       if (info.isSymbolicLink() || (!info.isDirectory() && !info.isFile())) fail("workspace skill source contains an unsafe entry");
       if (info.isDirectory()) visit(path, rel);
@@ -147,13 +175,14 @@ export function buildSourceManifest(sourceDir) {
     }
   }
   visit(root);
-  const ids = topLevelSkills.map((entry) => entry.name).sort();
+  const ids = topLevelSkills.map((entry) => entry.name).sort(compareStrings);
   if (!ids.length || ids.some((id) => !safeId(id))) fail("workspace skill source has no valid skill directories");
   // Every top-level entry must be a skill directory, and a skill must contain SKILL.md.
   for (const id of ids) {
     const dir = join(root, id);
     if (!lstatSync(dir).isDirectory() || !files.some((f) => f.path === `${id}/SKILL.md`)) fail("workspace skill source has an incomplete skill");
   }
+  files.sort((left, right) => compareStrings(left.path, right.path));
   const fingerprint = digest(JSON.stringify(files));
   return { version: 1, revision, fingerprint, sourceFingerprint: fingerprint, files, skills: ids };
 }
@@ -172,8 +201,7 @@ function projectionMarker(path) {
   if (!markerStat) return null;
   if (!markerStat.isFile() || markerStat.isSymbolicLink()) fail("projection marker contains an unsafe entry");
   const value = readJson(marker, "projection manifest");
-  if (value?.version !== 1 || !safeId(value.skill) || !validRevision(value.sourceRevision) || !/^[a-f0-9]{64}$/.test(value.sourceFingerprint) ||
-      !Array.isArray(value.files) || !value.files.every((f) => safeRelativePath(f.path) && /^[a-f0-9]{64}$/.test(f.sha256))) {
+  if (!validSkillMetadata(value, basename(path))) {
     fail("projection manifest is malformed");
   }
   return value;
@@ -188,9 +216,9 @@ function validSetIdentity(value, { allowAbsent = false } = {}) {
   if (allowAbsent && value === null) return true;
   return hasExactKeys(value, ["version", "sourceRevision", "sourceFingerprint", "skills"]) &&
     value.version === 1 && validRevision(value.sourceRevision) &&
-    /^[a-f0-9]{64}$/.test(value.sourceFingerprint) && Array.isArray(value.skills) &&
-    value.skills.every(safeId) &&
-    JSON.stringify(value.skills) === JSON.stringify([...new Set(value.skills)].sort());
+    validSha256(value.sourceFingerprint) &&
+    sortedUniqueStrings(value.skills, safeId) &&
+    value.skills.length > 0;
 }
 function readCurrentSetIdentity(root) {
   const path = join(root, SET_MARKER);
@@ -203,7 +231,13 @@ function sameSetIdentity(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 function isOwnedProjection(path) {
-  try { return projectionMarker(path); } catch { return null; }
+  try {
+    const marker = projectionMarker(path);
+    // Ownership comes from the exact marker schema, not from current content:
+    // content drift is precisely what a refresh is allowed to replace. An
+    // incomplete marker without SKILL.md never proves helper ownership.
+    return marker?.files.some((file) => file.path === "SKILL.md") ? marker : null;
+  } catch { return null; }
 }
 function fileState(path, label) {
   const info = lstatSync(path);
@@ -282,15 +316,19 @@ function validateProjectionSkill(dir, manifest, skill) {
 function buildSourceManifestForOne(dir) {
   const result = [];
   function visit(current, prefix = "") {
-    for (const entry of readdirSync(current, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      if (entry.name === MARKER) continue;
+    for (const entry of readdirSync(current, { withFileTypes: true }).sort((a, b) => compareStrings(a.name, b.name))) {
+      if (entry.name === MARKER && prefix === "") continue;
+      if (entry.name === MARKER) fail("projection contains a reserved helper file");
       const path = join(current, entry.name), rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (!safeRelativePath(rel)) fail("projection contains an invalid path");
       const s = lstatSync(path);
       if (s.isSymbolicLink() || (!s.isDirectory() && !s.isFile())) fail("projection contains an unsafe entry");
       if (s.isDirectory()) visit(path, rel); else result.push({ path: rel, sha256: digest(readFileSync(path)) });
     }
   }
-  visit(dir); return result;
+  visit(dir);
+  result.sort((left, right) => compareStrings(left.path, right.path));
+  return result;
 }
 
 function projectionHelperKind(name) {
@@ -366,18 +404,22 @@ function recoverAbandonedLock(parent, lock, owner) {
   const journalPath = join(lock, "journal.json");
   let journal;
   try { journal = readJson(journalPath, "refresh journal"); } catch { fail("workspace skill refresh lock has no recoverable journal"); }
-  const journalSkills = new Set([
-    ...(journal?.previousSet?.skills ?? []),
-    ...(journal?.nextSet?.skills ?? []),
-  ]);
   if (!hasExactKeys(journal, ["version", "previousSet", "nextSet", "moves"]) ||
       journal.version !== 1 || !validSetIdentity(journal.previousSet, { allowAbsent: true }) ||
       !validSetIdentity(journal.nextSet) || !Array.isArray(journal.moves) ||
       !journal.moves.every((m) => hasExactKeys(m, ["skill", "backup", "hadTarget"]) &&
-      safeId(m.skill) && typeof m.backup === "string" && typeof m.hadTarget === "boolean" &&
-      journalSkills.has(m.skill) && basename(m.backup) === `${BACKUP_PREFIX}${owner.token}-${m.skill}` &&
+      safeId(m.skill) && typeof m.backup === "string" && resolve(m.backup) === m.backup &&
+      dirname(m.backup) === parent && typeof m.hadTarget === "boolean" &&
+      basename(m.backup) === `${BACKUP_PREFIX}${owner.token}-${m.skill}` &&
       contained(parent, m.backup)) ||
       new Set(journal.moves.map((move) => move.skill)).size !== journal.moves.length) fail("refresh journal is malformed");
+  const journalSkills = new Set([
+    ...(journal.previousSet?.skills ?? []),
+    ...journal.nextSet.skills,
+  ]);
+  if (journal.moves.some((move) => !journalSkills.has(move.skill))) {
+    fail("refresh journal is malformed");
+  }
   const currentSet = readCurrentSetIdentity(parent);
   const stage = join(parent, `${STAGE_PREFIX}${owner.token}`);
   const setTemp = join(parent, `.${SET_MARKER}.${owner.token}.tmp`);
@@ -524,6 +566,10 @@ export function loadWorkspaceSkill(skill, options = {}) {
   const manifest = buildSourceManifest(source);
   if (!manifest.skills.includes(skill)) fail("requested skill is unavailable");
   const root = resolve(options.projectionDir ?? join(ROOT, ".agents", "skills"));
+  const rootStat = lstatOrMissing(root);
+  if (!rootStat || rootStat.isSymbolicLink() || !rootStat.isDirectory()) {
+    fail("projection root is unavailable");
+  }
   const set = setMarker(root);
   if (set.sourceRevision !== manifest.revision || set.sourceFingerprint !== manifest.fingerprint ||
       JSON.stringify(set.skills) !== JSON.stringify(manifest.skills) || !set.skills.includes(skill)) {
@@ -534,7 +580,7 @@ export function loadWorkspaceSkill(skill, options = {}) {
     const kind = validateProjectionRootEntry(root, entry);
     if (kind === "managed") managed.push(entry.name);
   }
-  managed.sort();
+  managed.sort(compareStrings);
   if (JSON.stringify(managed) !== JSON.stringify(set.skills) ||
       JSON.stringify(managed) !== JSON.stringify(manifest.skills)) {
     fail("projection set does not match physical helper-owned projections");
@@ -568,7 +614,7 @@ export function getSkillMirrorStatus(skill, options = {}) {
     if (!metadataStat.isFile()) return STATUS.MISMATCH;
     const metadata = readJson(metadataPath, "runtime mirror metadata");
     const expected = skillFiles(manifest, skill);
-    return metadata?.version === 1 && metadata.skill === skill && metadata.sourceRevision === manifest.revision &&
+    return validSkillMetadata(metadata, skill) && metadata.sourceRevision === manifest.revision &&
       metadata.sourceFingerprint === manifest.fingerprint &&
       JSON.stringify(metadata.files) === JSON.stringify(expected) ? STATUS.PASS : STATUS.MISMATCH;
   } catch { return STATUS.MISMATCH; }
@@ -585,6 +631,59 @@ export function runSkillMirrorCheck(options = {}) {
   return manifest.skills.every((id) => getSkillMirrorStatus(id, { ...options, sourceDir: source }) === STATUS.PASS) ? STATUS.PASS : STATUS.MISMATCH;
 }
 
+const STATUS_LABELS = Object.freeze({
+  [STATUS.PASS]: "pass",
+  [STATUS.MISMATCH]: "mismatch",
+  [STATUS.UNAVAILABLE_SOURCE]: "source-unavailable",
+  [STATUS.MISSING_MIRROR]: "mirror-missing",
+});
+
+function publicStatusLabel(status) {
+  return STATUS_LABELS[status] ?? "status-unavailable";
+}
+
+function publicStatusAction(status) {
+  switch (status) {
+    case STATUS.PASS:
+      return "source and platform metadata agree";
+    case STATUS.MISMATCH:
+      return "platform provisioning owner must resolve the metadata mismatch";
+    case STATUS.UNAVAILABLE_SOURCE:
+      return "workspace source owner must repair the authoritative source";
+    case STATUS.MISSING_MIRROR:
+      return "platform provisioning owner must provide the runtime mirror";
+    default:
+      return "inspect the status boundary";
+  }
+}
+
+function refreshFailureCategory(error) {
+  const message = String(error?.message ?? "");
+  if (/source|revision|snapshot|inventory|path escape|incomplete skill|invalid top-level/i.test(message)) {
+    return "source-invalid";
+  }
+  if (/lock|journal|owner|token|active|abandoned/i.test(message)) {
+    return "refresh-blocked";
+  }
+  if (/projection|project-authored|target|content/i.test(message)) {
+    return "projection-invalid";
+  }
+  return "refresh-failed";
+}
+
+function refreshFailureAction(category) {
+  switch (category) {
+    case "source-invalid":
+      return "Repair the authoritative workspace source, then refresh.";
+    case "refresh-blocked":
+      return "Wait for the active refresh owner or resolve the bounded recovery state.";
+    case "projection-invalid":
+      return "Resolve the projection ownership or integrity issue before refreshing.";
+    default:
+      return "Inspect the refresh boundary and retry after the underlying issue is resolved.";
+  }
+}
+
 if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
   const command = process.argv[2] ?? "status";
   const index = process.argv.indexOf("--skill");
@@ -594,11 +693,15 @@ if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
       const result = refreshWorkspaceSkillProjection();
       console.log(`Refreshed ${result.skills.length} workspace skill projection(s).`);
     } catch (error) {
-      console.error(`Workspace skill refresh failed: ${error.message}`);
+      const category = refreshFailureCategory(error);
+      console.error(`Workspace skill refresh failed: ${category}. ${refreshFailureAction(category)}`);
       process.exitCode = 1;
     }
   } else if (command === "status") {
-    process.exitCode = runSkillMirrorCheck({ skill });
+    const status = runSkillMirrorCheck({ skill });
+    const target = safeId(skill) ? ` for ${skill}` : "";
+    console.log(`Workspace skill mirror status${target}: ${publicStatusLabel(status)} (${status}); ${publicStatusAction(status)}.`);
+    process.exitCode = status;
   } else {
     console.error("Usage: check-skill-mirror-sync.mjs <refresh|status> [--skill <skill-id>]");
     process.exitCode = 1;

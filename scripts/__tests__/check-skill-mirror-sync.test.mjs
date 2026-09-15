@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -65,6 +66,22 @@ describe("workspace skill projection", () => {
       writeFileSync(join(f.projection, "alpha", "SKILL.md"), "authored");
       assert.throws(() => refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection }), /project-authored/);
       assert.equal(readFileSync(join(f.projection, "alpha", "SKILL.md"), "utf8"), "authored");
+    } finally { done(f); }
+  });
+  it("does not grant helper ownership to an incomplete projection marker", () => {
+    const f = fixture();
+    try {
+      mkdirSync(join(f.projection, "alpha"), { recursive: true });
+      writeFileSync(join(f.projection, "alpha", ".workspace-skill-projection.json"), JSON.stringify({
+        version: 1,
+        skill: "alpha",
+        sourceRevision: "workspace-old",
+        sourceFingerprint: "0".repeat(64),
+        files: [],
+      }));
+      assert.throws(() => refreshWorkspaceSkillProjection({
+        sourceDir: f.source, projectionDir: f.projection,
+      }), /project-authored/);
     } finally { done(f); }
   });
   it("fails closed after source revision or projected content drift", () => {
@@ -163,6 +180,52 @@ describe("workspace skill projection", () => {
       mkdirSync(lock);
       writeFileSync(join(lock, "owner.json"), JSON.stringify({ version: 2, token, pid: 1, host: "here" }));
       assert.throws(() => refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection, host: "here", isProcessAlive: () => false }), /active/);
+      rmSync(lock, { recursive: true });
+      mkdirSync(lock);
+      writeFileSync(join(lock, "owner.json"), JSON.stringify({ version: 1, token, pid: 1, host: "here", privatePid: 4321 }));
+      assert.throws(() => refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection, host: "here", isProcessAlive: () => false }), /active/);
+    } finally { done(f); }
+  });
+  it("rejects extra fields and unsafe backup identities in abandoned journals", () => {
+    const f = fixture(), token = "88888888-8888-4888-8888-888888888888";
+    try {
+      mkdirSync(join(f.projection, ".workspace-skills-refresh.lock"), { recursive: true });
+      writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "owner.json"), JSON.stringify({
+        version: 1, token, pid: 9, host: "test",
+      }));
+      writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "journal.json"), JSON.stringify({
+        version: 1,
+        previousSet: null,
+        nextSet: manifestSet(f.source),
+        moves: [{
+          skill: "alpha",
+          backup: join(f.projection, `.workspace-skills-backup-${token}-alpha`),
+          hadTarget: false,
+          privateRevision: "do-not-report",
+        }],
+      }));
+      assert.throws(() => refreshWorkspaceSkillProjection({
+        sourceDir: f.source, projectionDir: f.projection, host: "test", isProcessAlive: () => false,
+      }), /journal is malformed/);
+
+      rmSync(join(f.projection, ".workspace-skills-refresh.lock"), { recursive: true });
+      mkdirSync(join(f.projection, ".workspace-skills-refresh.lock"), { recursive: true });
+      writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "owner.json"), JSON.stringify({
+        version: 1, token, pid: 9, host: "test",
+      }));
+      writeFileSync(join(f.projection, ".workspace-skills-refresh.lock", "journal.json"), JSON.stringify({
+        version: 1,
+        previousSet: null,
+        nextSet: manifestSet(f.source),
+        moves: [{
+          skill: "alpha",
+          backup: join(f.projection, `.workspace-skills-backup-${token}-alpha`, "..", "escape"),
+          hadTarget: false,
+        }],
+      }));
+      assert.throws(() => refreshWorkspaceSkillProjection({
+        sourceDir: f.source, projectionDir: f.projection, host: "test", isProcessAlive: () => false,
+      }), /journal is malformed/);
     } finally { done(f); }
   });
   it("recovers an interrupted helper-owned install from its journal", () => {
@@ -314,6 +377,47 @@ describe("workspace skill projection", () => {
       }), /content changed/);
     } finally { done(f); }
   });
+  it("rejects unknown, duplicate, unsorted, and unsafe version-1 projection metadata", () => {
+    const f = fixture();
+    try {
+      refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+      const markerPath = join(f.projection, "alpha", ".workspace-skill-projection.json");
+      const marker = JSON.parse(readFileSync(markerPath, "utf8"));
+
+      writeFileSync(markerPath, JSON.stringify({ ...marker, privateRevision: "do-not-report" }));
+      assert.throws(() => loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), /projection manifest is malformed/);
+
+      writeFileSync(markerPath, JSON.stringify({ ...marker, files: [...marker.files].reverse() }));
+      assert.throws(() => loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), /projection manifest is malformed/);
+
+      writeFileSync(markerPath, JSON.stringify({ ...marker, files: [marker.files[0], marker.files[0]] }));
+      assert.throws(() => loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), /projection manifest is malformed/);
+
+      writeFileSync(markerPath, JSON.stringify({
+        ...marker,
+        files: marker.files.map((file, index) => index === 0 ? { ...file, path: "../escape" } : file),
+      }));
+      assert.throws(() => loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), /projection manifest is malformed/);
+    } finally { done(f); }
+  });
+  it("rejects unknown, duplicate, and unsorted version-1 set metadata", () => {
+    const f = fixture();
+    try {
+      addSecondSkill(f);
+      refreshWorkspaceSkillProjection({ sourceDir: f.source, projectionDir: f.projection });
+      const setPath = join(f.projection, ".workspace-skills-projection-set.json");
+      const set = JSON.parse(readFileSync(setPath, "utf8"));
+
+      writeFileSync(setPath, JSON.stringify({ ...set, privateToken: "do-not-report" }));
+      assert.throws(() => loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), /projection set manifest is malformed/);
+
+      writeFileSync(setPath, JSON.stringify({ ...set, skills: [...set.skills].reverse() }));
+      assert.throws(() => loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), /projection set manifest is malformed/);
+
+      writeFileSync(setPath, JSON.stringify({ ...set, skills: [set.skills[0], set.skills[0]] }));
+      assert.throws(() => loadWorkspaceSkill("alpha", { sourceDir: f.source, projectionDir: f.projection }), /projection set manifest is malformed/);
+    } finally { done(f); }
+  });
   it("allows unmarked project-authored skills beside a coherent generated set", () => {
     const f = fixture();
     try {
@@ -426,6 +530,27 @@ describe("workspace skill projection", () => {
       assert.equal(getSkillMirrorStatus("alpha", { sourceDir: f.source, runtimeDir: f.runtime }), STATUS.MISMATCH);
     } finally { done(f); }
   });
+  it("fails closed for unknown, duplicate, unsorted, unsafe, and inconsistent runtime metadata", () => {
+    const f = fixture();
+    try {
+      const m = buildSourceManifest(f.source);
+      const files = m.files.filter((x) => x.path.startsWith("alpha/")).map((x) => ({ path: x.path.slice(6), sha256: x.sha256 }));
+      const metadataPath = join(f.runtime, "alpha", ".workspace-skill-mirror.json");
+      mkdirSync(join(f.runtime, "alpha"), { recursive: true });
+      const metadata = { version: 1, skill: "alpha", sourceRevision: m.revision, sourceFingerprint: m.fingerprint, files };
+
+      for (const malformed of [
+        { ...metadata, privatePid: 4321 },
+        { ...metadata, files: [...files].reverse() },
+        { ...metadata, files: [files[0], files[0]] },
+        { ...metadata, files: files.map((file, index) => index === 0 ? { ...file, path: "../escape" } : file) },
+        { ...metadata, skill: "beta" },
+      ]) {
+        writeFileSync(metadataPath, JSON.stringify(malformed));
+        assert.equal(getSkillMirrorStatus("alpha", { sourceDir: f.source, runtimeDir: f.runtime }), STATUS.MISMATCH);
+      }
+    } finally { done(f); }
+  });
   it("rejects symlinked runtime roots, skill directories, and metadata leaves", () => {
     const f = fixture();
     try {
@@ -460,6 +585,24 @@ describe("workspace skill projection", () => {
       assert.ok(message);
       assert.equal(message.includes(f.root), false);
       assert.equal(message.includes("workspace-r1"), false);
+    } finally { done(f); }
+  });
+  it("redacts internal values from refresh CLI failures and reports a stable category", () => {
+    const f = fixture();
+    const privateSource = join(f.root, "private-source-revision-9f7e");
+    try {
+      const result = spawnSync(process.execPath, [
+        join(process.cwd(), "scripts", "check-skill-mirror-sync.mjs"),
+        "refresh",
+      ], {
+        env: { ...process.env, WORKSPACE_SKILLS_SOURCE: privateSource },
+        encoding: "utf8",
+      });
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /Workspace skill refresh failed: source-invalid/);
+      assert.equal(result.stderr.includes(privateSource), false);
+      assert.equal(result.stderr.includes("private-source-revision-9f7e"), false);
+      assert.equal(result.stderr.includes("ENOENT"), false);
     } finally { done(f); }
   });
 });
