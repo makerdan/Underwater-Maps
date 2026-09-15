@@ -148,7 +148,17 @@ let _puzzleSetMode: ((on: boolean) => void) | null = null;
 let _puzzleSetSelection: ((ids: string[]) => void) | null = null;
 let _puzzleGetSelection: (() => string | null) | null = null;
 let _puzzleGetTransform:
-  | ((id: string) => { tx: number; ty: number; angleDeg: number } | null)
+  | ((
+      id: string,
+    ) => {
+      tx: number;
+      ty: number;
+      angleDeg: number;
+      flipH?: boolean;
+      flipV?: boolean;
+      locked?: boolean;
+      annotation?: string;
+    } | null)
   | null = null;
 let _puzzleCreateGroup: ((ids: string[]) => string) | null = null;
 let _puzzleGetGroups: (() => Record<string, string[]>) | null = null;
@@ -165,7 +175,17 @@ export function registerPuzzleTestHandlers(
   setMode: (on: boolean) => void,
   setSelection: (ids: string[]) => void,
   getSelection: () => string | null,
-  getTransform: (id: string) => { tx: number; ty: number; angleDeg: number } | null,
+  getTransform: (
+    id: string,
+  ) => {
+    tx: number;
+    ty: number;
+    angleDeg: number;
+    flipH?: boolean;
+    flipV?: boolean;
+    locked?: boolean;
+    annotation?: string;
+  } | null,
   createGroup: (ids: string[]) => string,
   getGroups: () => Record<string, string[]>,
 ): void {
@@ -435,6 +455,19 @@ export interface BathyTestApi {
    */
   setDriftPlannerActive: (v: boolean) => void;
   seedTerrain: (overrides?: Partial<TerrainData>) => boolean;
+  /**
+   * Seed multiple overlapping overview/active grids for browser tests that
+   * need to exercise real puzzle-tile canvas hit testing.
+   */
+  seedPuzzleTiles: (tiles: Array<{
+    datasetId: string;
+    name?: string;
+    minLon: number;
+    maxLon: number;
+    minLat: number;
+    maxLat: number;
+    dataUpdatedAt?: string | null;
+  }>) => boolean;
   /** Snapshot of the React-bound active terrain (datasetId + hasTopography). */
   getTerrainSummary: () =>
     | { datasetId: string | null | undefined; hasTopography: boolean | undefined }
@@ -861,6 +894,10 @@ export interface BathyTestApi {
     tx: number;
     ty: number;
     angleDeg: number;
+    flipH?: boolean;
+    flipV?: boolean;
+    locked?: boolean;
+    annotation?: string;
   } | null;
   /**
    * Create a persistent group from the given tile datasetIds. Returns the
@@ -1696,6 +1733,57 @@ export function installTestHelpers(): void {
           dataUpdatedAt: item.dataUpdatedAt ?? null,
         })),
       });
+    },
+    seedPuzzleTiles: (tiles) => {
+      if (!appSetTerrain || tiles.length === 0) return false;
+      const grids = tiles.map((tile) => {
+        const resolution = 8;
+        const depths = new Array<number>(resolution * resolution).fill(10);
+        return {
+          datasetId: tile.datasetId,
+          name: tile.name ?? `E2E ${tile.datasetId}`,
+          waterType: "saltwater" as const,
+          resolution,
+          width: resolution,
+          height: resolution,
+          depths,
+          minDepth: 0,
+          maxDepth: 20,
+          minLon: tile.minLon,
+          maxLon: tile.maxLon,
+          minLat: tile.minLat,
+          maxLat: tile.maxLat,
+          centerLon: (tile.minLon + tile.maxLon) / 2,
+          centerLat: (tile.minLat + tile.maxLat) / 2,
+        } as TerrainData;
+      });
+      const primary = grids[0]!;
+      const visibleDatasets = grids.map((grid, index) => ({
+        datasetId: grid.datasetId,
+        source: "preset" as const,
+        activeGrid: grid,
+        overviewGrid: grid,
+        dataUpdatedAt: tiles[index]?.dataUpdatedAt ?? null,
+      }));
+      useTerrainStore.setState({
+        visibleDatasets,
+        primaryDatasetIds: grids.map((grid) => grid.datasetId),
+        primaryDatasetId: primary.datasetId,
+        activeGrid: primary,
+        overviewGrid: primary,
+        // Mirror the state produced by a real "Load together" selection.
+        // useActiveDatasetSync runs after appSetDatasetId below; without this
+        // flag it treats the seeded primary as a normal single-dataset switch
+        // and replaces the other synthetic tile.
+        selectedIds: grids.map((grid) => grid.datasetId),
+        selectedSources: Object.fromEntries(
+          grids.map((grid) => [grid.datasetId, "preset" as const]),
+        ),
+        multiDatasetMode: true,
+      });
+      appSetTerrain(primary);
+      appSetDatasetId?.(primary.datasetId);
+      return true;
     },
 
     // ── What's Here card ──────────────────────────────────────────────────

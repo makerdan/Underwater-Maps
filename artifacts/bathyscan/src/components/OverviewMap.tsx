@@ -1850,6 +1850,16 @@ export const OverviewMap: React.FC = () => {
   useEffect(() => {
     if (!openFolder) return;
     const onDown = (e: MouseEvent) => {
+      // ContextMenu is portaled to document.body. Its menu items are outside
+      // headerControlsRef even though they are actions for the open folder;
+      // don't close the Puzzle folder before an action such as "Add note" can
+      // render its inline editor.
+      if (
+        e.target instanceof Element &&
+        e.target.closest('[data-testid="context-menu"]')
+      ) {
+        return;
+      }
       if (headerControlsRef.current && !headerControlsRef.current.contains(e.target as Node)) {
         const folder = openFolder;
         setOpenFolder(null);
