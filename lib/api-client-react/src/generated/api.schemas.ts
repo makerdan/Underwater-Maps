@@ -1473,6 +1473,7 @@ export interface ApiError {
   requestId?: string;
 }
 
+export type DatasetAuditReportStatus = typeof DatasetAuditReportStatus[keyof typeof DatasetAuditReportStatus];
 export type DatasetMetaWaterType = typeof DatasetMetaWaterType[keyof typeof DatasetMetaWaterType];
 
 
@@ -5581,3 +5582,88 @@ export type GetTerrainBundlesPresetId202 = {
   message?: string;
 };
 
+
+export interface DatasetAuditMetrics {
+  expectedCellCount: number | null;
+  depthCellCount: number;
+  depthNoDataCount: number;
+  depthNoDataRatio: number | null;
+  depthInvalidFiniteCount: number;
+  topographyCellCount: number;
+  topographyNoDataCount: number;
+  topographyNoDataRatio: number | null;
+  topographyInvalidFiniteCount: number;
+  antimeridianCrossing: boolean | null;
+}
+
+export const DatasetAuditReportStatus = {
+  pass: 'pass',
+  warning: 'warning',
+  blocked: 'blocked',
+} as const;
+
+export const DatasetAuditFindingReason = {
+  dataset_id_missing: 'dataset_id_missing',
+  grid_dimensions_invalid: 'grid_dimensions_invalid',
+  grid_cardinality_mismatch: 'grid_cardinality_mismatch',
+  grid_values_non_finite: 'grid_values_non_finite',
+  grid_all_nodata: 'grid_all_nodata',
+  nodata_ratio_high: 'nodata_ratio_high',
+  topography_nodata_ratio_high: 'topography_nodata_ratio_high',
+  depth_semantics_invalid: 'depth_semantics_invalid',
+  topography_semantics_invalid: 'topography_semantics_invalid',
+  depth_range_mismatch: 'depth_range_mismatch',
+  bbox_invalid: 'bbox_invalid',
+  bbox_antimeridian: 'bbox_antimeridian',
+  center_invalid: 'center_invalid',
+  center_outside_bbox: 'center_outside_bbox',
+  orientation_unknown: 'orientation_unknown',
+  orientation_not_row_zero_south: 'orientation_not_row_zero_south',
+  orientation_columns_not_west_to_east: 'orientation_columns_not_west_to_east',
+  orientation_source_served_mismatch: 'orientation_source_served_mismatch',
+  provenance_unknown: 'provenance_unknown',
+  crs_unknown: 'crs_unknown',
+  crs_not_wgs84: 'crs_not_wgs84',
+  gps_placement_ready: 'gps_placement_ready',
+  gps_placement_uncertain: 'gps_placement_uncertain',
+  parity_shape_drift: 'parity_shape_drift',
+  parity_bounds_drift: 'parity_bounds_drift',
+  parity_depth_semantics_drift: 'parity_depth_semantics_drift',
+  parity_orientation_drift: 'parity_orientation_drift',
+  parity_provenance_drift: 'parity_provenance_drift',
+  parity_crs_drift: 'parity_crs_drift',
+  parity_dataset_identity_drift: 'parity_dataset_identity_drift',
+} as const;
+
+export interface DatasetAuditFinding {
+  severity: DatasetAuditFindingSeverity;
+  reason: DatasetAuditFindingReason;
+  message: string;
+  evidence?: DatasetAuditFindingEvidence;
+}
+
+/**
+ * Bounded read-only integrity report for one dataset.
+ */
+export interface DatasetAuditReport {
+  /** Audit contract version. */
+  version: number;
+  datasetId: string | null;
+  status: DatasetAuditReportStatus;
+  /** @maxItems 32 */
+  findings: DatasetAuditFinding[];
+  metrics: DatasetAuditMetrics;
+  gpsPlacementReady: boolean;
+}
+
+export type DatasetAuditFindingReason = typeof DatasetAuditFindingReason[keyof typeof DatasetAuditFindingReason];
+
+export const DatasetAuditFindingSeverity = {
+  pass: 'pass',
+  warning: 'warning',
+  blocked: 'blocked',
+} as const;
+
+export type DatasetAuditFindingEvidence = {[key: string]: string | number | boolean | null};
+
+export type DatasetAuditFindingSeverity = typeof DatasetAuditFindingSeverity[keyof typeof DatasetAuditFindingSeverity];

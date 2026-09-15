@@ -1,5 +1,6 @@
 import { Router } from "express";
 import userDatasetsRouter from "../../routes/user-datasets.js";
+import { userDatasetAuditRouter } from "../../routes/dataset-audit.js";
 import foldersRouter from "../../routes/folders.js";
 import collectionsRouter from "../../routes/collections.js";
 import catalogSavesRouter from "../../routes/catalog-saves.js";
@@ -13,6 +14,7 @@ import catalogSavesRouter from "../../routes/catalog-saves.js";
 const router = Router();
 
 router.use(userDatasetsRouter);
+router.use(userDatasetAuditRouter);
 router.use(foldersRouter);
 router.use(collectionsRouter);
 router.use(catalogSavesRouter);

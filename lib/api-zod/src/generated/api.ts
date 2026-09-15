@@ -51,7 +51,6 @@ export const getDatasetsIdTerrainQueryResolutionMin = 32;
 export const getDatasetsIdTerrainQueryResolutionMax = 512;
 
 
-
 export const GetDatasetsIdTerrainQueryParams = zod.object({
   "resolution": zod.coerce.number().min(getDatasetsIdTerrainQueryResolutionMin).max(getDatasetsIdTerrainQueryResolutionMax).default(getDatasetsIdTerrainQueryResolutionDefault)
 })
@@ -108,15 +107,10 @@ export const GetDatasetsIdTerrainResponse = zod.object({
 }).optional().describe('EFH (Essential Fish Habitat) FeatureCollection embedded directly in the terrain\nresponse for user-saved noaa-efh-\* catalog datasets. Present only when the\ndataset carries polygon habitat data (i.e. was saved from a NOAA EFH catalog\nentry). Clients should render these polygons instead of (or in addition to)\nfetching from \/efh when this field is present.\n')
 })
 
-
-/**
- * Lightweight preflight that resolves the upstream `dataSource`
-for the given dataset without transferring the full depth grid.
-The client uses this to surface source attribution before the user
-loads the full grid. Results are cached briefly per dataset to avoid
-double-probing upstream services when the user immediately confirms.
-
- * @summary Probe which upstream source would serve this dataset
+ */
+export const GetDatasetsIdAuditParams = zod.object({
+  "id": zod.coerce.string()
+})
  */
 export const GetDatasetsIdPreviewParams = zod.object({
   "id": zod.coerce.string()
@@ -396,7 +390,6 @@ export const postDatasetsRasterCommitBodyResolutionMin = 32;
 export const postDatasetsRasterCommitBodyResolutionMax = 512;
 
 
-
 export const PostDatasetsRasterCommitBody = zod.object({
   "token": zod.string().describe('Extraction token returned by \/datasets\/raster-extract'),
   "correctedLabels": zod.array(zod.object({
@@ -634,7 +627,10 @@ export const GetUserDatasetsIdTerrainResponse = zod.object({
 }).optional().describe('EFH (Essential Fish Habitat) FeatureCollection embedded directly in the terrain\nresponse for user-saved noaa-efh-\* catalog datasets. Present only when the\ndataset carries polygon habitat data (i.e. was saved from a NOAA EFH catalog\nentry). Clients should render these polygons instead of (or in addition to)\nfetching from \/efh when this field is present.\n')
 })
 
-
+ */
+export const GetUserDatasetsIdAuditParams = zod.object({
+  "id": zod.coerce.string()
+})
 /**
  * @summary Get low-resolution overview grid for a saved user dataset
  */
@@ -754,7 +750,6 @@ export const PostUserDatasetsIdGeorefParams = zod.object({
 
 export const postUserDatasetsIdGeorefBodyControlPointsMin = 2;
 export const postUserDatasetsIdGeorefBodyControlPointsMax = 4;
-
 
 
 export const PostUserDatasetsIdGeorefBody = zod.object({
@@ -989,7 +984,6 @@ export const getUserCollectionsResponseSpecialMetaBgGeoAnchorsMax = 2;
 export const getUserCollectionsResponseSpecialMetaLayoutRevisionsItemPixelDensityExclusiveMin = 0;
 
 
-
 export const GetUserCollectionsResponseItem = zod.object({
   "id": zod.string(),
   "name": zod.string(),
@@ -1075,7 +1069,6 @@ export const patchUserCollectionsIdRenameResponseSpecialMetaBgGeoAnchorsMin = 2;
 export const patchUserCollectionsIdRenameResponseSpecialMetaBgGeoAnchorsMax = 2;
 
 export const patchUserCollectionsIdRenameResponseSpecialMetaLayoutRevisionsItemPixelDensityExclusiveMin = 0;
-
 
 
 export const PatchUserCollectionsIdRenameResponse = zod.object({
@@ -1179,7 +1172,6 @@ export const patchUserCollectionsIdMetaBodyBgGeoAnchorsMin = 2;
 export const patchUserCollectionsIdMetaBodyBgGeoAnchorsMax = 2;
 
 
-
 export const PatchUserCollectionsIdMetaBody = zod.object({
   "defaultMemberId": zod.string().nullish().describe('Membership-row UUID to promote first when loading this collection; null restores automatic first-available selection'),
   "bgOpacity": zod.number().min(patchUserCollectionsIdMetaBodyBgOpacityMin).max(patchUserCollectionsIdMetaBodyBgOpacityMax).optional(),
@@ -1209,7 +1201,6 @@ export const patchUserCollectionsIdMetaResponseSpecialMetaBgGeoAnchorsMin = 2;
 export const patchUserCollectionsIdMetaResponseSpecialMetaBgGeoAnchorsMax = 2;
 
 export const patchUserCollectionsIdMetaResponseSpecialMetaLayoutRevisionsItemPixelDensityExclusiveMin = 0;
-
 
 
 export const PatchUserCollectionsIdMetaResponse = zod.object({
@@ -1269,7 +1260,6 @@ export const PostUserCollectionsIdLayoutParams = zod.object({
 export const postUserCollectionsIdLayoutBodyNameMax = 120;
 
 export const postUserCollectionsIdLayoutBodyPixelDensityExclusiveMin = 0;
-
 
 
 export const PostUserCollectionsIdLayoutBody = zod.object({
@@ -1348,7 +1338,6 @@ export const getMarkersQueryMaxLonMin = -180;
 export const getMarkersQueryMaxLonMax = 180;
 
 
-
 export const GetMarkersQueryParams = zod.object({
   "datasetId": zod.coerce.string().optional().describe('Dataset slug to filter markers by. When omitted, returns unassigned markers (datasetId IS NULL) for the authenticated user within the supplied bounds.'),
   "minLat": zod.coerce.number().min(getMarkersQueryMinLatMin).max(getMarkersQueryMinLatMax).optional().describe('South bound for bounds query (required when datasetId is absent)'),
@@ -1403,7 +1392,6 @@ export const getMarkersResponseGeometryOneFourSummaryDurationSMax = 315576000;
 export const getMarkersResponseGeometryOneFourSummaryMinDepthMin = 0;
 
 export const getMarkersResponseGeometryOneFourSummaryMaxDepthMin = 0;
-
 
 
 export const GetMarkersResponseItem = zod.object({
@@ -1698,7 +1686,6 @@ export const patchMarkersIdBodyGeometryOneFourSummaryMinDepthMin = 0;
 export const patchMarkersIdBodyGeometryOneFourSummaryMaxDepthMin = 0;
 
 
-
 export const PatchMarkersIdBody = zod.object({
   "datasetId": zod.string().nullish().describe('Reassign this marker to a different dataset, or pass null to make it unassigned.'),
   "label": zod.string().min(1).max(patchMarkersIdBodyLabelMax).optional(),
@@ -1800,7 +1787,6 @@ export const patchMarkersIdResponseGeometryOneFourSummaryDurationSMax = 31557600
 export const patchMarkersIdResponseGeometryOneFourSummaryMinDepthMin = 0;
 
 export const patchMarkersIdResponseGeometryOneFourSummaryMaxDepthMin = 0;
-
 
 
 export const PatchMarkersIdResponse = zod.object({
@@ -1951,7 +1937,6 @@ export const postMarkersMarkerIdCatchesBodyPhotosDefault = [];
 export const postMarkersMarkerIdCatchesBodyPhotosMax = 6;
 
 
-
 export const PostMarkersMarkerIdCatchesBody = zod.object({
   "symbol": zod.string().min(1).max(postMarkersMarkerIdCatchesBodySymbolMax),
   "symbolName": zod.string().max(postMarkersMarkerIdCatchesBodySymbolNameMax).default(postMarkersMarkerIdCatchesBodySymbolNameDefault),
@@ -1976,7 +1961,6 @@ export const patchCatchesIdBodyNotesMax = 1000;
 export const patchCatchesIdBodyPhotosItemMax = 512;
 
 export const patchCatchesIdBodyPhotosMax = 6;
-
 
 
 export const PatchCatchesIdBody = zod.object({
@@ -2100,7 +2084,6 @@ export const getTrailsIdPointsQueryPageDefault = 1;
 
 export const getTrailsIdPointsQueryPageSizeDefault = 200;
 export const getTrailsIdPointsQueryPageSizeMax = 1000;
-
 
 
 export const GetTrailsIdPointsQueryParams = zod.object({
@@ -3756,7 +3739,6 @@ export const getTrollingPresetsResponseWaypointsItemLonMin = -180;
 export const getTrollingPresetsResponseWaypointsItemLonMax = 180;
 
 
-
 export const GetTrollingPresetsResponseItem = zod.object({
   "id": zod.string().describe('UUID primary key'),
   "userId": zod.string(),
@@ -3796,7 +3778,6 @@ export const postTrollingPresetsBodyWaypointsItemLonMax = 180;
 export const postTrollingPresetsBodyWaypointsMax = 50;
 
 
-
 export const PostTrollingPresetsBody = zod.object({
   "name": zod.string().min(1).max(postTrollingPresetsBodyNameMax),
   "headingDeg": zod.number().min(postTrollingPresetsBodyHeadingDegMin).max(postTrollingPresetsBodyHeadingDegMax),
@@ -3821,7 +3802,6 @@ export const PatchTrollingPresetsIdParams = zod.object({
 export const patchTrollingPresetsIdBodyNameMax = 80;
 
 
-
 export const PatchTrollingPresetsIdBody = zod.object({
   "name": zod.string().min(1).max(patchTrollingPresetsIdBodyNameMax).optional(),
   "sortOrder": zod.number().optional(),
@@ -3839,7 +3819,6 @@ export const patchTrollingPresetsIdResponseWaypointsItemLatMax = 90;
 
 export const patchTrollingPresetsIdResponseWaypointsItemLonMin = -180;
 export const patchTrollingPresetsIdResponseWaypointsItemLonMax = 180;
-
 
 
 export const PatchTrollingPresetsIdResponse = zod.object({
@@ -3886,7 +3865,6 @@ export const GetTrollingPresetFoldersResponse = zod.array(GetTrollingPresetFolde
 export const postTrollingPresetFoldersBodyNameMax = 80;
 
 
-
 export const PostTrollingPresetFoldersBody = zod.object({
   "name": zod.string().min(1).max(postTrollingPresetFoldersBodyNameMax)
 })
@@ -3900,7 +3878,6 @@ export const PatchTrollingPresetFoldersIdParams = zod.object({
 })
 
 export const patchTrollingPresetFoldersIdBodyNameMax = 80;
-
 
 
 export const PatchTrollingPresetFoldersIdBody = zod.object({
@@ -3949,7 +3926,6 @@ export const poeClassifyBodyWidthFullMax = 512;
 export const poeClassifyBodyHeightFullMax = 512;
 
 
-
 export const PoeClassifyBody = zod.object({
   "gridBase64": zod.string().max(poeClassifyBodyGridBase64Max).regex(poeClassifyBodyGridBase64RegExp).describe('Base64-encoded PNG or JPEG data URL; encoded limit 4,000,000 bytes and decoded payload limit 3,000,000 bytes'),
   "waterType": zod.enum(['saltwater', 'freshwater']).default(poeClassifyBodyWaterTypeDefault),
@@ -3995,7 +3971,6 @@ export const poeQueryBodyHistoryItemContentMax = 2000;
 export const poeQueryBodyHistoryMax = 50;
 
 export const poeQueryBodyPreviousResponseIdMax = 200;
-
 
 
 export const PoeQueryBody = zod.object({
@@ -4075,7 +4050,6 @@ export const getIntertidalSpotsQueryMinScoreMin = 0;
 export const getIntertidalSpotsQueryMinScoreMax = 100;
 
 
-
 export const GetIntertidalSpotsQueryParams = zod.object({
   "type": zod.enum(['tidepool', 'beachcombing', 'both']).default(getIntertidalSpotsQueryTypeDefault).describe('Filter to tidepool spots, beachcombing spots, or both'),
   "minScore": zod.coerce.number().min(getIntertidalSpotsQueryMinScoreMin).max(getIntertidalSpotsQueryMinScoreMax).default(getIntertidalSpotsQueryMinScoreDefault).describe('Minimum score (inclusive) for the returned activity type')
@@ -4086,7 +4060,6 @@ export const getIntertidalSpotsResponseFeaturesItemPropertiesTidepoolScoreMax = 
 
 export const getIntertidalSpotsResponseFeaturesItemPropertiesBeachcombingScoreMin = 0;
 export const getIntertidalSpotsResponseFeaturesItemPropertiesBeachcombingScoreMax = 100;
-
 
 
 export const GetIntertidalSpotsResponse = zod.object({
@@ -4269,7 +4242,6 @@ export const postDatasetsBboxQueryBodyEastMax = 180;
 
 export const postDatasetsBboxQueryBodyWestMin = -180;
 export const postDatasetsBboxQueryBodyWestMax = 180;
-
 
 
 export const PostDatasetsBboxQueryBody = zod.object({
@@ -4474,7 +4446,6 @@ export const postSearchFederatedSaveBodyAreaRequestCenterLonMin = -180;
 export const postSearchFederatedSaveBodyAreaRequestCenterLonMax = 180;
 
 
-
 export const PostSearchFederatedSaveBody = zod.object({
   "result": zod.object({
   "id": zod.string().describe('Globally unique id (\"<sourceId>:<upstream id>\")'),
@@ -4563,7 +4534,6 @@ export const getNceiSearchQueryMaxDefault = 20;
 export const getNceiSearchQueryMaxMax = 100;
 
 
-
 export const GetNceiSearchQueryParams = zod.object({
   "q": zod.coerce.string().optional().describe('Free-text keyword query (e.g. \"Sitka bathymetry\", \"Alaska DEM\")'),
   "bbox": zod.coerce.string().optional().describe('Spatial filter as \"minLon,minLat,maxLon,maxLat\"'),
@@ -4607,7 +4577,6 @@ export const postNceiSaveBodyAreaRequestCenterLatMax = 90;
 
 export const postNceiSaveBodyAreaRequestCenterLonMin = -180;
 export const postNceiSaveBodyAreaRequestCenterLonMax = 180;
-
 
 
 export const PostNceiSaveBody = zod.object({
@@ -4694,7 +4663,6 @@ export const postDatasetsCatalogIdSaveBodyAreaRequestCenterLatMax = 90;
 
 export const postDatasetsCatalogIdSaveBodyAreaRequestCenterLonMin = -180;
 export const postDatasetsCatalogIdSaveBodyAreaRequestCenterLonMax = 180;
-
 
 
 export const PostDatasetsCatalogIdSaveBody = zod.object({
@@ -5025,7 +4993,6 @@ export const getSurfaceConditionsResponseForecast48hItemRelHourMin = 0;
 export const getSurfaceConditionsResponseForecast48hItemRelHourMax = 47;
 
 
-
 export const GetSurfaceConditionsResponse = zod.object({
   "available": zod.boolean(),
   "lat": zod.number(),
@@ -5270,7 +5237,6 @@ export const getEnvPackQueryRadiusMilesMax = 200;
 
 export const getEnvPackQueryDaysDefault = 14;
 export const getEnvPackQueryDaysMax = 14;
-
 
 
 export const GetEnvPackQueryParams = zod.object({
@@ -5535,7 +5501,6 @@ export const finalizeChunkedUploadBodyResolutionMin = 32;
 export const finalizeChunkedUploadBodyResolutionMax = 512;
 
 
-
 export const FinalizeChunkedUploadBody = zod.object({
   "uploadId": zod.string(),
   "fileName": zod.string(),
@@ -5557,7 +5522,6 @@ export const GetUploadJobStatusParams = zod.object({
 })
 
 export const getUploadJobStatusResponseEtaMin = 0;
-
 
 
 export const GetUploadJobStatusResponse = zod.object({
@@ -5609,7 +5573,6 @@ export const GetGcsJobStatusResponse = zod.object({
  * @summary List the authenticated user's active oversized uploads
  */
 export const getGcsUploadJobsResponseProgressMin = 0;
-
 
 
 export const GetGcsUploadJobsResponseItem = zod.object({
@@ -5735,7 +5698,6 @@ request with no compatible NOAA observation returns `available:false`,
  */
 export const getTidalScheduleQueryDaysDefault = 3;
 export const getTidalScheduleQueryDaysMax = 14;
-
 
 
 export const GetTidalScheduleQueryParams = zod.object({
@@ -5868,7 +5830,6 @@ export const adminListUsersQueryLimitDefault = 50;
 export const adminListUsersQueryLimitMax = 200;
 
 
-
 export const AdminListUsersQueryParams = zod.object({
   "status": zod.enum(['pending', 'approved', 'banned']).optional(),
   "limit": zod.coerce.number().min(1).max(adminListUsersQueryLimitMax).default(adminListUsersQueryLimitDefault),
@@ -5896,7 +5857,6 @@ export const AdminListUsersResponse = zod.object({
 export const adminPendingUsersCountResponseCountMin = 0;
 
 
-
 export const AdminPendingUsersCountResponse = zod.object({
   "count": zod.number().min(adminPendingUsersCountResponseCountMin)
 })
@@ -5907,7 +5867,6 @@ export const AdminPendingUsersCountResponse = zod.object({
  * @summary Send a test pending-user notification email
  */
 export const adminTestNotificationResponseOneRecipientCountMin = 0;
-
 
 
 export const AdminTestNotificationResponse = zod.union([zod.object({
@@ -5947,7 +5906,6 @@ export const AdminBanUserParams = zod.object({
 })
 
 export const adminBanUserBodyNoteMax = 2000;
-
 
 
 export const AdminBanUserBody = zod.object({
@@ -6141,7 +6099,6 @@ export const QueryTerrainResponse = zod.object({
 export const poeHelpBodyQuestionMax = 1000;
 
 
-
 export const PoeHelpBody = zod.object({
   "question": zod.string().max(poeHelpBodyQuestionMax),
   "history": zod.array(zod.object({
@@ -6162,7 +6119,6 @@ export const PoeHelpResponse = zod.object({
 export const poeUpscaleBodyUpscaleFactorDefault = 2;
 export const poeUpscaleBodyUpscaleFactorMin = 2;
 export const poeUpscaleBodyUpscaleFactorMax = 4;
-
 
 
 export const PoeUpscaleBody = zod.object({
@@ -6210,7 +6166,6 @@ export const createRouteBodyWaypointsMin = 2;
 export const createRouteBodyWaypointsMax = 20;
 
 
-
 export const CreateRouteBody = zod.object({
   "datasetId": zod.string(),
   "name": zod.string().max(createRouteBodyNameMax),
@@ -6231,7 +6186,6 @@ export const PatchRouteParams = zod.object({
 })
 
 export const patchRouteBodyNameMax = 120;
-
 
 
 export const PatchRouteBody = zod.object({
@@ -6274,7 +6228,6 @@ export const getTerrainLandQuerySizeMin = 32;
 export const getTerrainLandQuerySizeMax = 256;
 
 
-
 export const GetTerrainLandQueryParams = zod.object({
   "bbox": zod.coerce.string().describe('\"minLon,minLat,maxLon,maxLat\" — four comma-separated finite numbers'),
   "size": zod.coerce.number().min(getTerrainLandQuerySizeMin).max(getTerrainLandQuerySizeMax).default(getTerrainLandQuerySizeDefault).describe('Grid side length N, clamped to [32, 256]')
@@ -6299,7 +6252,6 @@ export const getTerrainSatelliteTileQuerySizeMin = 64;
 export const getTerrainSatelliteTileQuerySizeMax = 1024;
 
 
-
 export const GetTerrainSatelliteTileQueryParams = zod.object({
   "bbox": zod.coerce.string().describe('\"minLon,minLat,maxLon,maxLat\" — four comma-separated finite numbers'),
   "size": zod.coerce.number().min(getTerrainSatelliteTileQuerySizeMin).max(getTerrainSatelliteTileQuerySizeMax).default(getTerrainSatelliteTileQuerySizeDefault).describe('Image resolution in pixels, clamped to [64, 1024]')
@@ -6318,7 +6270,6 @@ Map (terrain → heatmap → satellite). Antimeridian-crossing bboxes
 export const getTerrainTerrainTileQuerySizeDefault = 512;
 export const getTerrainTerrainTileQuerySizeMin = 64;
 export const getTerrainTerrainTileQuerySizeMax = 1024;
-
 
 
 export const GetTerrainTerrainTileQueryParams = zod.object({
@@ -6346,7 +6297,6 @@ export const GetTerrainDownloadInfoQueryParams = zod.object({
 
 export const getTerrainDownloadInfoResponseWaterFractionMin = 0;
 export const getTerrainDownloadInfoResponseWaterFractionMax = 1;
-
 
 
 export const GetTerrainDownloadInfoResponse = zod.object({
@@ -6397,7 +6347,6 @@ export const getTidalPackQueryDaysMin = 3;
 export const getTidalPackQueryDaysMax = 14;
 
 
-
 export const GetTidalPackQueryParams = zod.object({
   "lat": zod.coerce.number().min(getTidalPackQueryLatMin).max(getTidalPackQueryLatMax),
   "lon": zod.coerce.number().min(getTidalPackQueryLonMin).max(getTidalPackQueryLonMax),
@@ -6433,7 +6382,6 @@ export const getWeatherPackQueryLatMax = 90;
 
 export const getWeatherPackQueryLonMin = -180;
 export const getWeatherPackQueryLonMax = 180;
-
 
 
 export const GetWeatherPackQueryParams = zod.object({
@@ -6577,7 +6525,6 @@ export const GetTerrainBundlesPresetIdStatusParams = zod.object({
 export const getTerrainBundlesPresetIdStatusResponseAgeMsMin = 0;
 
 
-
 export const GetTerrainBundlesPresetIdStatusResponse = zod.object({
   "jobId": zod.string().uuid().optional(),
   "status": zod.enum(['pending', 'running', 'complete', 'error']).optional(),
@@ -6605,3 +6552,56 @@ export const GetTerrainBundlesPresetIdResponse = zod.object({
 }).passthrough().describe('Processed depth grid bundle with metadata')
 
 
+export const getDatasetsIdAuditResponseFindingsMax = 32;
+
+export const GetUserDatasetsIdAuditResponse = zod.object({
+  "version": zod.number().describe('Audit contract version.'),
+  "datasetId": zod.string().nullable(),
+  "status": zod.enum(['pass', 'warning', 'blocked']),
+  "findings": zod.array(zod.object({
+  "severity": zod.enum(['pass', 'warning', 'blocked']),
+  "reason": zod.enum(['dataset_id_missing', 'grid_dimensions_invalid', 'grid_cardinality_mismatch', 'grid_values_non_finite', 'grid_all_nodata', 'nodata_ratio_high', 'topography_nodata_ratio_high', 'depth_semantics_invalid', 'topography_semantics_invalid', 'depth_range_mismatch', 'bbox_invalid', 'bbox_antimeridian', 'center_invalid', 'center_outside_bbox', 'orientation_unknown', 'orientation_not_row_zero_south', 'orientation_columns_not_west_to_east', 'orientation_source_served_mismatch', 'provenance_unknown', 'crs_unknown', 'crs_not_wgs84', 'gps_placement_ready', 'gps_placement_uncertain', 'parity_shape_drift', 'parity_bounds_drift', 'parity_depth_semantics_drift', 'parity_orientation_drift', 'parity_provenance_drift', 'parity_crs_drift', 'parity_dataset_identity_drift']),
+  "message": zod.string(),
+  "evidence": zod.record(zod.string(), zod.union([zod.string(),zod.number(),zod.boolean(),zod.null()])).optional()
+})).max(getUserDatasetsIdAuditResponseFindingsMax),
+  "metrics": zod.object({
+  "expectedCellCount": zod.number().nullable(),
+  "depthCellCount": zod.number(),
+  "depthNoDataCount": zod.number(),
+  "depthNoDataRatio": zod.number().nullable(),
+  "depthInvalidFiniteCount": zod.number(),
+  "topographyCellCount": zod.number(),
+  "topographyNoDataCount": zod.number(),
+  "topographyNoDataRatio": zod.number().nullable(),
+  "topographyInvalidFiniteCount": zod.number(),
+  "antimeridianCrossing": zod.boolean().nullable()
+}),
+  "gpsPlacementReady": zod.boolean()
+}).describe('Bounded read-only integrity report for one dataset.')
+
+export const getUserDatasetsIdAuditResponseFindingsMax = 32;
+
+export const GetDatasetsIdAuditResponse = zod.object({
+  "version": zod.number().describe('Audit contract version.'),
+  "datasetId": zod.string().nullable(),
+  "status": zod.enum(['pass', 'warning', 'blocked']),
+  "findings": zod.array(zod.object({
+  "severity": zod.enum(['pass', 'warning', 'blocked']),
+  "reason": zod.enum(['dataset_id_missing', 'grid_dimensions_invalid', 'grid_cardinality_mismatch', 'grid_values_non_finite', 'grid_all_nodata', 'nodata_ratio_high', 'topography_nodata_ratio_high', 'depth_semantics_invalid', 'topography_semantics_invalid', 'depth_range_mismatch', 'bbox_invalid', 'bbox_antimeridian', 'center_invalid', 'center_outside_bbox', 'orientation_unknown', 'orientation_not_row_zero_south', 'orientation_columns_not_west_to_east', 'orientation_source_served_mismatch', 'provenance_unknown', 'crs_unknown', 'crs_not_wgs84', 'gps_placement_ready', 'gps_placement_uncertain', 'parity_shape_drift', 'parity_bounds_drift', 'parity_depth_semantics_drift', 'parity_orientation_drift', 'parity_provenance_drift', 'parity_crs_drift', 'parity_dataset_identity_drift']),
+  "message": zod.string(),
+  "evidence": zod.record(zod.string(), zod.union([zod.string(),zod.number(),zod.boolean(),zod.null()])).optional()
+})).max(getDatasetsIdAuditResponseFindingsMax),
+  "metrics": zod.object({
+  "expectedCellCount": zod.number().nullable(),
+  "depthCellCount": zod.number(),
+  "depthNoDataCount": zod.number(),
+  "depthNoDataRatio": zod.number().nullable(),
+  "depthInvalidFiniteCount": zod.number(),
+  "topographyCellCount": zod.number(),
+  "topographyNoDataCount": zod.number(),
+  "topographyNoDataRatio": zod.number().nullable(),
+  "topographyInvalidFiniteCount": zod.number(),
+  "antimeridianCrossing": zod.boolean().nullable()
+}),
+  "gpsPlacementReady": zod.boolean()
+}).describe('Bounded read-only integrity report for one dataset.')

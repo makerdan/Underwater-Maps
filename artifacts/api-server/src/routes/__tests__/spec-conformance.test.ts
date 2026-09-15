@@ -331,6 +331,60 @@ const FIXTURES: Record<string, { schema: z.ZodTypeAny; payloads: unknown[] }> = 
       },
     ],
   },
+  GetDatasetsIdAuditResponse: {
+    schema: apiZod.GetDatasetsIdAuditResponse,
+    payloads: [{
+      version: 1,
+      datasetId: "preset-puget",
+      status: "warning",
+      findings: [{
+        severity: "warning",
+        reason: "gps_placement_uncertain",
+        message: "GPS placement is uncertain because one or more geographic metadata declarations are incomplete.",
+        evidence: { missingDeclaration: "orientation" },
+      }],
+      metrics: {
+        expectedCellCount: 4,
+        depthCellCount: 4,
+        depthNoDataCount: 1,
+        depthNoDataRatio: 0.25,
+        depthInvalidFiniteCount: 0,
+        topographyCellCount: 0,
+        topographyNoDataCount: 0,
+        topographyNoDataRatio: null,
+        topographyInvalidFiniteCount: 0,
+        antimeridianCrossing: false,
+      },
+      gpsPlacementReady: false,
+    }],
+  },
+  GetUserDatasetsIdAuditResponse: {
+    schema: apiZod.GetUserDatasetsIdAuditResponse,
+    payloads: [{
+      version: 1,
+      datasetId: "11111111-2222-4333-8444-555555555555",
+      status: "blocked",
+      findings: [{
+        severity: "blocked",
+        reason: "grid_values_non_finite",
+        message: "Grid contains values that are neither finite numbers nor recognized no-data cells.",
+        evidence: { depthInvalidFiniteCount: 1, topographyInvalidFiniteCount: 0 },
+      }],
+      metrics: {
+        expectedCellCount: null,
+        depthCellCount: 1,
+        depthNoDataCount: 0,
+        depthNoDataRatio: 0,
+        depthInvalidFiniteCount: 1,
+        topographyCellCount: 0,
+        topographyNoDataCount: 0,
+        topographyNoDataRatio: null,
+        topographyInvalidFiniteCount: 0,
+        antimeridianCrossing: null,
+      },
+      gpsPlacementReady: false,
+    }],
+  },
   GetDatasetZonesResponse: {
     schema: apiZod.GetDatasetZonesResponse,
     payloads: [
@@ -852,6 +906,7 @@ const LOCAL_SCHEMA_ALLOWLIST = new Set([
   "TemperatureProfileResponseSchema", // temperature-profile.ts (local union)
   "AdminRateLimitUsageResponseSchema", // admin.ts (local)
   "AdminUpscaleCacheStatsResponseSchema", // admin.ts (local)
+  "AdminPoeVerificationDiagnosticsResponseSchema", // admin.ts (local)
 ]);
 
 // ---------------------------------------------------------------------------

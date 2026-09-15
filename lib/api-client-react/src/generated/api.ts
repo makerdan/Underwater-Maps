@@ -42,6 +42,7 @@ import type {
   CreateDatasetFolderBody,
   CreateRouteBody,
   CreateTrollingPresetFolderBody,
+  DatasetAuditReport,
   DatasetCatalogEntry,
   DatasetCatalogSearchResult,
   DatasetCollection,
@@ -372,6 +373,88 @@ export function useGetDatasetsIdTerrain<TData = Awaited<ReturnType<typeof getDat
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetDatasetsIdTerrainQueryOptions(id,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetDatasetsIdAuditUrl = (id: string,) => {
+
+
+
+
+  return `/api/datasets/${id}/audit`
+}
+
+/**
+ * Returns a bounded, read-only integrity report for a public built-in
+dataset. The report contains scalar findings and metrics only; private
+object paths, credentials, and upstream request details are not
+included.
+
+ * @summary Audit a public built-in dataset
+ */
+export const getDatasetsIdAudit = async (id: string, options?: RequestInit): Promise<DatasetAuditReport> => {
+
+  return customFetch<DatasetAuditReport>(getGetDatasetsIdAuditUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDatasetsIdAuditQueryKey = (id: string,) => {
+    return [
+    `/api/datasets/${id}/audit`
+    ] as const;
+    }
+
+
+export const getGetDatasetsIdAuditQueryOptions = <TData = Awaited<ReturnType<typeof getDatasetsIdAudit>>, TError = ErrorType<ApiError>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetsIdAudit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDatasetsIdAuditQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDatasetsIdAudit>>> = ({ signal }) => getDatasetsIdAudit(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDatasetsIdAudit>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDatasetsIdAuditQueryResult = NonNullable<Awaited<ReturnType<typeof getDatasetsIdAudit>>>
+export type GetDatasetsIdAuditQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Audit a public built-in dataset
+ */
+
+export function useGetDatasetsIdAudit<TData = Awaited<ReturnType<typeof getDatasetsIdAudit>>, TError = ErrorType<ApiError>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetsIdAudit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDatasetsIdAuditQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -934,6 +1017,87 @@ export function useGetUserDatasetsIdTerrain<TData = Awaited<ReturnType<typeof ge
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetUserDatasetsIdTerrainQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetUserDatasetsIdAuditUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/datasets/${id}/audit`
+}
+
+/**
+ * Returns a bounded, read-only integrity report for a dataset owned by
+the authenticated user. Non-owned and missing datasets are
+indistinguishable.
+
+ * @summary Audit a saved user dataset
+ */
+export const getUserDatasetsIdAudit = async (id: string, options?: RequestInit): Promise<DatasetAuditReport> => {
+
+  return customFetch<DatasetAuditReport>(getGetUserDatasetsIdAuditUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUserDatasetsIdAuditQueryKey = (id: string,) => {
+    return [
+    `/api/user/datasets/${id}/audit`
+    ] as const;
+    }
+
+
+export const getGetUserDatasetsIdAuditQueryOptions = <TData = Awaited<ReturnType<typeof getUserDatasetsIdAudit>>, TError = ErrorType<ApiError>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserDatasetsIdAudit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUserDatasetsIdAuditQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUserDatasetsIdAudit>>> = ({ signal }) => getUserDatasetsIdAudit(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUserDatasetsIdAudit>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUserDatasetsIdAuditQueryResult = NonNullable<Awaited<ReturnType<typeof getUserDatasetsIdAudit>>>
+export type GetUserDatasetsIdAuditQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Audit a saved user dataset
+ */
+
+export function useGetUserDatasetsIdAudit<TData = Awaited<ReturnType<typeof getUserDatasetsIdAudit>>, TError = ErrorType<ApiError>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserDatasetsIdAudit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUserDatasetsIdAuditQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

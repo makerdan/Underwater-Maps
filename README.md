@@ -325,6 +325,7 @@ All routes are served under the `/api` prefix by the Express 5 server.
 |---|---|---|
 | GET | `/user/datasets` | List the current user's saved custom terrain datasets |
 | GET | `/user/datasets/:id/terrain` | Get full terrain grid for a saved user dataset |
+| GET | `/user/datasets/:id/audit` | Audit a saved user dataset |
 | GET | `/user/datasets/:id/overview` | Get low-resolution overview grid for a saved user dataset |
 | GET | `/user/datasets/:id/hyd93-features` | Get HYD93 cartographic annotation features for a saved user dataset |
 | GET | `/user/datasets/:id/raster-image` | Get the scanned raster image for a dataset pending georeferencing |
@@ -472,6 +473,7 @@ All routes are served under the `/api` prefix by the Express 5 server.
 
 | Method | Path | Purpose |
 |---|---|---|
+| GET | `/datasets/:id/audit` | Audit a public built-in dataset |
 | POST | `/datasets/raster-extract` | "Step 1 of raster contour pipeline: extract polylines and depth labels from an image" |
 | POST | `/datasets/raster-commit` | "Step 2 of raster contour pipeline: georeference and persist the dataset" |
 | GET | `/catches` | List all catch entries for the caller's markers in a dataset |

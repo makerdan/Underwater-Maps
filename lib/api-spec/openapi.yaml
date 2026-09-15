@@ -109,6 +109,48 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /datasets/{id}/audit:
+    get:
+      operationId: getDatasetsIdAudit
+      tags: [datasets]
+      summary: Audit a public built-in dataset
+      description: |
+        Returns a bounded, read-only integrity report for a public built-in
+        dataset. The report contains scalar findings and metrics only; private
+        object paths, credentials, and upstream request details are not
+        included.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Dataset integrity report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetAuditReport"
+        "400":
+          description: Malformed dataset id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Dataset not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Dataset terrain is temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /datasets/{id}/preview:
     get:
       operationId: getDatasetsIdPreview
@@ -443,6 +485,49 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TerrainData"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Dataset not found or does not belong to current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /user/datasets/{id}/audit:
+    get:
+      operationId: getUserDatasetsIdAudit
+      tags: [user-datasets]
+      summary: Audit a saved user dataset
+      description: |
+        Returns a bounded, read-only integrity report for a dataset owned by
+        the authenticated user. Non-owned and missing datasets are
+        indistinguishable.
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Dataset integrity report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetAuditReport"
+        "400":
+          description: Malformed dataset id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthenticated
           content:
@@ -7500,6 +7585,120 @@ components:
       required:
         - error
         - details
+
+    DatasetAuditReport:
+      type: object
+      description: Bounded read-only integrity report for one dataset.
+      properties:
+        version:
+          type: integer
+          description: Audit contract version.
+        datasetId:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [pass, warning, blocked]
+        findings:
+          type: array
+          maxItems: 32
+          items:
+            $ref: "#/components/schemas/DatasetAuditFinding"
+        metrics:
+          $ref: "#/components/schemas/DatasetAuditMetrics"
+        gpsPlacementReady:
+          type: boolean
+      required: [version, datasetId, status, findings, metrics, gpsPlacementReady]
+
+    DatasetAuditFinding:
+      type: object
+      properties:
+        severity:
+          type: string
+          enum: [pass, warning, blocked]
+        reason:
+          type: string
+          enum:
+            - dataset_id_missing
+            - grid_dimensions_invalid
+            - grid_cardinality_mismatch
+            - grid_values_non_finite
+            - grid_all_nodata
+            - nodata_ratio_high
+            - topography_nodata_ratio_high
+            - depth_semantics_invalid
+            - topography_semantics_invalid
+            - depth_range_mismatch
+            - bbox_invalid
+            - bbox_antimeridian
+            - center_invalid
+            - center_outside_bbox
+            - orientation_unknown
+            - orientation_not_row_zero_south
+            - orientation_columns_not_west_to_east
+            - orientation_source_served_mismatch
+            - provenance_unknown
+            - crs_unknown
+            - crs_not_wgs84
+            - gps_placement_ready
+            - gps_placement_uncertain
+            - parity_shape_drift
+            - parity_bounds_drift
+            - parity_depth_semantics_drift
+            - parity_orientation_drift
+            - parity_provenance_drift
+            - parity_crs_drift
+            - parity_dataset_identity_drift
+        message:
+          type: string
+        evidence:
+          type: object
+          additionalProperties:
+            oneOf:
+              - type: string
+              - type: number
+              - type: boolean
+              - type: "null"
+      required: [severity, reason, message]
+
+    DatasetAuditMetrics:
+      type: object
+      properties:
+        expectedCellCount:
+          type: number
+          nullable: true
+        depthCellCount:
+          type: integer
+        depthNoDataCount:
+          type: integer
+        depthNoDataRatio:
+          type: number
+          nullable: true
+        depthInvalidFiniteCount:
+          type: integer
+        topographyCellCount:
+          type: integer
+        topographyNoDataCount:
+          type: integer
+        topographyNoDataRatio:
+          type: number
+          nullable: true
+        topographyInvalidFiniteCount:
+          type: integer
+        antimeridianCrossing:
+          type: boolean
+          nullable: true
+      required:
+        - expectedCellCount
+        - depthCellCount
+        - depthNoDataCount
+        - depthNoDataRatio
+        - depthInvalidFiniteCount
+        - topographyCellCount
+        - topographyNoDataCount
+        - topographyNoDataRatio
+        - topographyInvalidFiniteCount
+        - antimeridianCrossing
 
     DatasetMeta:
       type: object
