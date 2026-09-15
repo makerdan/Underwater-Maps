@@ -90,11 +90,20 @@ bash scripts/check-e2e-panel-collapse.sh
 # Zustand rehydration; the spec must use setItem with an explicit known-good value
 # instead.  See the script header for the correct pattern per key.
 bash scripts/check-e2e-localstorage-removeitem.sh
-# Guardrail: reject a .replit that adds workflow.run tasks to the run-button
-# workflow, which would launch a boot storm on every environment restart.
-# This check runs after the merge has landed so any agent-written .replit
-# replacement is evaluated before the environment restarts and fires it.
-node scripts/check-runbutton-noop.mjs
+# Guardrail: atomically repair a merged .replit that adds workflow.run tasks,
+# changes Project to parallel mode, or alters its canonical no-op. This runs
+# before workflow reconciliation, so an older task branch cannot reintroduce a
+# validation boot storm. Commit the repair so subsequent task branches inherit
+# the safe configuration instead of requiring the same repair again.
+runbutton_before="$(git hash-object .replit)"
+node scripts/check-runbutton-noop.mjs --fix
+runbutton_after="$(git hash-object .replit)"
+if [ "${runbutton_before}" != "${runbutton_after}" ]; then
+  git add .replit
+  git config --local user.email "post-merge@replit.local" 2>/dev/null || true
+  git config --local user.name "BathyScan Post-Merge Bot" 2>/dev/null || true
+  git commit -m "chore: restore safe Project workflow [post-merge]"
+fi
 # Unit tests are intentionally not run here — the full recursive test suite
 # consumes enough memory to get OOM-killed mid-run. Tests are covered by the
 # validation system (test-unit workflow) and pre-existing failures are tracked

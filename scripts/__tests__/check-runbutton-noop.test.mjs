@@ -15,7 +15,12 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseReplitWorkflows, checkRunButtonNoop } from "../check-runbutton-noop.mjs";
+import {
+  CANONICAL_RUN_BUTTON_COMMAND,
+  checkRunButtonNoop,
+  parseReplitWorkflows,
+  repairRunButtonNoopContent,
+} from "../check-runbutton-noop.mjs";
 import { writeFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -142,7 +147,7 @@ mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "echo \\"BathyScan environment ready.\\""
+args = "echo BathyScan environment ready."
 `);
     try {
       const result = checkRunButtonNoop(p);
@@ -173,6 +178,50 @@ args = "typecheck"
       assert.ok(!result.ok);
       assert.equal(result.workflowRunTasks.length, 1);
       assert.equal(result.workflowRunTasks[0], "workflow.run");
+    } finally {
+      unlinkSync(p);
+    }
+  });
+
+  it("fails when Project is parallel even with one shell task", () => {
+    const p = writeTmp(`
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "${CANONICAL_RUN_BUTTON_COMMAND}"
+`);
+    try {
+      const result = checkRunButtonNoop(p);
+      assert.equal(result.ok, false);
+      assert.equal(result.mode, "parallel");
+    } finally {
+      unlinkSync(p);
+    }
+  });
+
+  it("fails when the sole task is not the canonical shell no-op", () => {
+    const p = writeTmp(`
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo something else"
+`);
+    try {
+      const result = checkRunButtonNoop(p);
+      assert.equal(result.ok, false);
+      assert.equal(result.taskArgs, "echo something else");
     } finally {
       unlinkSync(p);
     }
@@ -270,5 +319,61 @@ args = "echo ok"
     } finally {
       unlinkSync(p);
     }
+  });
+});
+
+describe("repairRunButtonNoopContent", () => {
+  it("repairs only the run-button workflow and preserves validation workflows", () => {
+    const unsafe = `[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo BathyScan environment ready."
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-standard"
+
+[[workflows.workflow]]
+name = "test-fast"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node scripts/run-tier.mjs fast"
+`;
+    const result = repairRunButtonNoopContent(unsafe);
+    assert.equal(result.changed, true);
+    assert.match(result.content, /name = "Project"\nmode = "sequential"/);
+    assert.doesNotMatch(result.content, /task = "workflow\.run"/);
+    assert.match(result.content, /name = "test-fast"/);
+    assert.match(result.content, /node scripts\/run-tier\.mjs fast/);
+  });
+
+  it("is idempotent for the canonical Project workflow", () => {
+    const safe = `[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "sequential"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "${CANONICAL_RUN_BUTTON_COMMAND}"
+
+[[workflows.workflow]]
+name = "test-fast"
+`;
+    const result = repairRunButtonNoopContent(safe);
+    assert.equal(result.changed, false);
+    assert.equal(result.content, safe);
   });
 });

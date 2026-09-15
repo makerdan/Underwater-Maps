@@ -10,31 +10,34 @@
  * launch multiple validation workflows in parallel, queueing hours of work on
  * the global validation lock — a "boot storm".
  *
- * The fix is to keep the run-button workflow as a single cheap no-op shell
- * command (e.g. `echo "…"`). This check enforces that convention:
+ * The fix is to keep the run-button workflow as one canonical sequential no-op
+ * shell command. This check enforces that convention:
  *
  *   FAIL  — the run-button workflow has more than one task, OR any of its
  *            tasks has `task = "workflow.run"`.
  *   PASS  — the run-button workflow has exactly one task and no
  *            `workflow.run` entries.
  *
- * Note: `.replit` cannot be edited directly by agents, but it is readable, so
- * this check is read-only and purely structural.
+ * Agents must use verifyAndReplaceDotReplit for interactive repairs. The
+ * post-merge runner may call this script with --fix; that mode performs one
+ * atomic local replacement before workflow reconciliation.
  *
  * Usage:
  *   node scripts/check-runbutton-noop.mjs
+ *   node scripts/check-runbutton-noop.mjs --fix
  *
  * Self-test:
  *   node --test scripts/__tests__/check-runbutton-noop.test.mjs
  *   (run automatically by the `check:runbutton-noop` npm script before the
  *   real scan, so a broken detector fails loudly instead of passing quietly)
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const repoRoot = resolve(__dirname, "..");
+export const CANONICAL_RUN_BUTTON_COMMAND = "echo BathyScan environment ready.";
 
 /**
  * Minimal structural parser for the `.replit` TOML subset we care about.
@@ -73,7 +76,7 @@ export function parseReplitWorkflows(content) {
 
     // Section transitions
     if (WORKFLOW_HEADER.test(rawLine)) {
-      currentWorkflow = { name: "", tasks: [] };
+      currentWorkflow = { name: "", mode: "", tasks: [] };
       workflows.push(currentWorkflow);
       inWorkflowsSection = false;
       inTasksBlock = false;
@@ -83,7 +86,7 @@ export function parseReplitWorkflows(content) {
     if (TASKS_HEADER.test(rawLine)) {
       inTasksBlock = true;
       if (currentWorkflow) {
-        currentWorkflow.tasks.push({ task: "" });
+        currentWorkflow.tasks.push({ task: "", args: "" });
       }
       continue;
     }
@@ -125,11 +128,21 @@ export function parseReplitWorkflows(content) {
       continue;
     }
 
+    if (currentWorkflow && !inTasksBlock && key === "mode") {
+      currentWorkflow.mode = value;
+      continue;
+    }
+
     if (currentWorkflow && inTasksBlock && key === "task") {
       // Set on the last task entry
       const last = currentWorkflow.tasks[currentWorkflow.tasks.length - 1];
       if (last) last.task = value;
       continue;
+    }
+
+    if (currentWorkflow && inTasksBlock && key === "args") {
+      const last = currentWorkflow.tasks[currentWorkflow.tasks.length - 1];
+      if (last) last.args = value;
     }
   }
 
@@ -153,7 +166,7 @@ function parseTomlString(raw) {
  * Main check logic.
  *
  * @param {string} [replitPath] Path to the .replit file (defaults to repo root).
- * @returns {{ ok: boolean, runButtonName: string, taskCount: number, workflowRunTasks: string[] }}
+ * @returns {{ ok: boolean, runButtonName: string, mode?: string, taskCount: number, workflowRunTasks: string[] }}
  */
 export function checkRunButtonNoop(replitPath) {
   const filePath = replitPath ?? resolve(repoRoot, ".replit");
@@ -185,14 +198,102 @@ export function checkRunButtonNoop(replitPath) {
   const workflowRunTasks = rbWorkflow.tasks
     .map((t) => t.task)
     .filter((t) => t === "workflow.run");
+  const onlyTask = rbWorkflow.tasks[0];
 
-  const ok = taskCount <= 1 && workflowRunTasks.length === 0;
-  return { ok, runButtonName: runButton, taskCount, workflowRunTasks };
+  const ok =
+    rbWorkflow.mode === "sequential" &&
+    taskCount === 1 &&
+    onlyTask?.task === "shell.exec" &&
+    onlyTask?.args === CANONICAL_RUN_BUTTON_COMMAND;
+  return {
+    ok,
+    runButtonName: runButton,
+    mode: rbWorkflow.mode,
+    taskCount,
+    taskType: onlyTask?.task ?? "",
+    taskArgs: onlyTask?.args ?? "",
+    workflowRunTasks,
+  };
+}
+
+export function repairRunButtonNoopContent(content) {
+  const normalized = content.replace(/\r\n/g, "\n");
+  const parsed = parseReplitWorkflows(normalized);
+  if (!parsed.runButton) {
+    throw new Error("Cannot repair .replit without [workflows].runButton");
+  }
+
+  const workflowIndex = parsed.workflows.findIndex(
+    (workflow) => workflow.name === parsed.runButton,
+  );
+  if (workflowIndex === -1) {
+    throw new Error(
+      `Cannot repair missing run-button workflow "${parsed.runButton}"`,
+    );
+  }
+
+  const lines = normalized.split("\n");
+  const starts = lines
+    .map((line, index) =>
+      /^\s*\[\[workflows\.workflow\]\]\s*$/.test(line) ? index : -1,
+    )
+    .filter((index) => index !== -1);
+  const start = starts[workflowIndex];
+  const end = starts[workflowIndex + 1] ?? lines.length;
+  if (start === undefined) {
+    throw new Error("Cannot locate run-button workflow block");
+  }
+
+  const canonicalBlock = [
+    "[[workflows.workflow]]",
+    `name = "${parsed.runButton}"`,
+    'mode = "sequential"',
+    'author = "agent"',
+    "",
+    "[[workflows.workflow.tasks]]",
+    'task = "shell.exec"',
+    `args = "${CANONICAL_RUN_BUTTON_COMMAND}"`,
+    "",
+  ];
+  const repaired = [...lines.slice(0, start), ...canonicalBlock, ...lines.slice(end)].join(
+    "\n",
+  );
+
+  return { content: repaired, changed: repaired !== normalized };
+}
+
+export function repairRunButtonNoop(replitPath) {
+  const filePath = replitPath ?? resolve(repoRoot, ".replit");
+  const current = readFileSync(filePath, "utf8");
+  const repaired = repairRunButtonNoopContent(current);
+  if (!repaired.changed) return repaired;
+
+  const tempPath = `${filePath}.repair-${process.pid}`;
+  try {
+    writeFileSync(tempPath, repaired.content, {
+      encoding: "utf8",
+      mode: statSync(filePath).mode,
+      flag: "wx",
+    });
+    renameSync(tempPath, filePath);
+  } finally {
+    rmSync(tempPath, { force: true });
+  }
+  return repaired;
 }
 
 // ── CLI entry point ────────────────────────────────────────────────────────
 
 function main() {
+  if (process.argv.slice(2).includes("--fix")) {
+    const repaired = repairRunButtonNoop();
+    console.log(
+      repaired.changed
+        ? "[check-runbutton-noop] REPAIRED — restored the canonical sequential Project no-op."
+        : "[check-runbutton-noop] repair not needed — Project already canonical.",
+    );
+  }
+
   const result = checkRunButtonNoop();
 
   if (result.error) {
@@ -220,6 +321,21 @@ function main() {
     if (result.taskCount > 1) {
       lines.push(
         `  Found ${result.taskCount} task(s) in the run-button workflow (max allowed: 1).`,
+        "",
+      );
+    }
+
+    if (result.mode !== "sequential") {
+      lines.push(`  Found mode = "${result.mode || "(missing)"}"; expected "sequential".`, "");
+    }
+
+    if (
+      result.taskCount !== 1 ||
+      result.taskType !== "shell.exec" ||
+      result.taskArgs !== CANONICAL_RUN_BUTTON_COMMAND
+    ) {
+      lines.push(
+        `  Expected exactly: shell.exec → ${CANONICAL_RUN_BUTTON_COMMAND}`,
         "",
       );
     }
