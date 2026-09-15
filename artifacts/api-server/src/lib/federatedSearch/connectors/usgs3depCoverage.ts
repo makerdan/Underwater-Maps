@@ -5,23 +5,23 @@
  * ImageServer (exportImage REST). This connector therefore answers the
  * question "could 3DEP serve the area I'm looking at?":
  *
- *  - viewport bbox centred inside CONUS  → one importable, unverified result
+ *  - viewport bbox centred inside CONUS with usable raster data
+ *    → one verified importable result
  *  - no bbox but an elevation-flavoured query ("dem", "lidar", "3dep",
  *    "elevation", "topobathy") → one CONUS-wide, unverified result
  *  - otherwise → no results (status still "ok" — checked, nothing relevant)
  *
- * This is a discovery hint, not a 3DEP footprint query: 3DEP exposes a
- * service-wide ImageServer rather than a searchable coverage index, so the
- * coarse CONUS test cannot prove that a specific lake or bbox has data. The
- * result is marked `syntheticCoverage` to make that uncertainty visible before
- * a user starts materialization; the fetcher remains responsible for rejecting
- * all-nodata and near-flat responses.
+ * 3DEP exposes a service-wide ImageServer rather than a searchable coverage
+ * index, so the connector performs a bounded 4×4 raster probe for a specific
+ * bbox before returning an importable result. Empty/all-nodata responses are
+ * treated as no coverage; upstream failures are thrown so the federated runner
+ * can label the source as errored or timed out.
  *
  * The endpoint URL is the shared USGS_3DEP_URL constant, which
  * deriveCatalogFetchStrategy maps to the `usgs-3dep` fetcher.
  */
 
-import { USGS_3DEP_URL } from "../../fetchers/usgs3dep.js";
+import { probeUsgs3depCoverage, USGS_3DEP_URL } from "../../fetchers/usgs3dep.js";
 import { deriveImportability } from "../importable.js";
 import type { FederatedBbox, FederatedConnector, FederatedResultItem } from "../types.js";
 
@@ -36,7 +36,11 @@ function centerInConus(bbox: FederatedBbox): boolean {
   return cx >= CONUS.minLon && cx <= CONUS.maxLon && cy >= CONUS.minLat && cy <= CONUS.maxLat;
 }
 
-function makeResult(coverageBbox: FederatedBbox, areaLabel: string): FederatedResultItem {
+function makeResult(
+  coverageBbox: FederatedBbox,
+  areaLabel: string,
+  verified = false,
+): FederatedResultItem {
   const { importable, importKind } = deriveImportability({
     id: "usgs-3dep-coverage",
     endpointUrl: USGS_3DEP_URL,
@@ -56,7 +60,7 @@ function makeResult(coverageBbox: FederatedBbox, areaLabel: string): FederatedRe
     resolutionMMax: 30,
     importable,
     importKind,
-    syntheticCoverage: true,
+    syntheticCoverage: !verified,
   };
 }
 
@@ -64,9 +68,15 @@ export const usgs3depCoverageConnector: FederatedConnector = {
   id: "usgs-3dep",
   label: "USGS 3DEP",
 
-  async search(q: string, bbox: FederatedBbox | null): Promise<FederatedResultItem[]> {
+  async search(
+    q: string,
+    bbox: FederatedBbox | null,
+    signal: AbortSignal,
+  ): Promise<FederatedResultItem[]> {
     if (bbox) {
-      return centerInConus(bbox) ? [makeResult(bbox, "this area")] : [];
+      if (!centerInConus(bbox)) return [];
+      const probe = await probeUsgs3depCoverage(bbox, signal);
+      return probe.available ? [makeResult(bbox, "this area", true)] : [];
     }
     if (ELEVATION_QUERY_RE.test(q)) {
       return [makeResult(CONUS, "contiguous US")];

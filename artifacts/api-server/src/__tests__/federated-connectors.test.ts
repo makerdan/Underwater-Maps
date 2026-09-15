@@ -6,7 +6,9 @@
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { writeArrayBuffer } from "geotiff";
 import { deriveImportability } from "../lib/federatedSearch/importable.js";
+import { runFederatedSearch } from "../lib/federatedSearch/runner.js";
 import { scienceBaseConnector } from "../lib/federatedSearch/connectors/scienceBase.js";
 import { usgs3depCoverageConnector } from "../lib/federatedSearch/connectors/usgs3depCoverage.js";
 import {
@@ -16,6 +18,29 @@ import {
 import { githubAllowlistConnector, GITHUB_ALLOWLIST_USERS } from "../lib/federatedSearch/connectors/githubAllowlist.js";
 
 const signal = new AbortController().signal;
+const USGS_BBOX = { minLon: -98.2, minLat: 31.0, maxLon: -97.8, maxLat: 31.4 };
+
+async function makeUsgsGeoTiff(values: Float32Array): Promise<ArrayBuffer> {
+  return (await writeArrayBuffer(values, {
+    width: 4,
+    height: 4,
+    ModelPixelScale: [0.01, 0.01, 0],
+    ModelTiepoint: [0, 0, 0, USGS_BBOX.minLon, USGS_BBOX.minLat, 0],
+    GDAL_NODATA: "-9999",
+    SampleFormat: [3],
+  })) as ArrayBuffer;
+}
+
+function stubUsgsRaster(raster: ArrayBuffer): ReturnType<typeof vi.fn> {
+  const fn = vi.fn(async () => ({
+    ok: true,
+    status: 200,
+    headers: new Headers({ "content-type": "image/tiff" }),
+    arrayBuffer: async () => raster,
+  }));
+  vi.stubGlobal("fetch", fn);
+  return fn;
+}
 
 function stubFetchJson(payload: unknown, ok = true, status = 200): ReturnType<typeof vi.fn> {
   const fn = vi.fn(async () => ({
@@ -126,11 +151,14 @@ describe("scienceBaseConnector", () => {
 // ---------------------------------------------------------------------------
 
 describe("usgs3depCoverageConnector", () => {
-  it("marks coarse CONUS matches as unverified coverage", async () => {
-    // Central Texas — inside the coarse CONUS guard but not proof of lake data.
+  it("returns a verified importable result when the raster probe has usable values", async () => {
+    const raster = await makeUsgsGeoTiff(Float32Array.from(
+      Array.from({ length: 16 }, (_, index) => 100 + index),
+    ));
+    stubUsgsRaster(raster);
     const out = await usgs3depCoverageConnector.search(
       "",
-      { minLon: -98.2, minLat: 31.0, maxLon: -97.8, maxLat: 31.4 },
+      USGS_BBOX,
       signal,
     );
     expect(out).toHaveLength(1);
@@ -138,17 +166,63 @@ describe("usgs3depCoverageConnector", () => {
       sourceId: "usgs-3dep",
       importable: true,
       importKind: "usgs-3dep",
-      syntheticCoverage: true,
+      syntheticCoverage: false,
     });
   });
 
-  it("returns nothing when the coarse coverage check is empty", async () => {
+  it("returns nothing when the coverage probe is empty", async () => {
+    stubUsgsRaster(new ArrayBuffer(0));
     const out = await usgs3depCoverageConnector.search(
       "",
-      { minLon: 5, minLat: 45, maxLon: 6, maxLat: 46 },
+      USGS_BBOX,
       signal,
     );
     expect(out).toEqual([]);
+  });
+
+  it("returns nothing when the coverage probe is all nodata", async () => {
+    stubUsgsRaster(await makeUsgsGeoTiff(new Float32Array(16).fill(-9999)));
+    const out = await usgs3depCoverageConnector.search("", USGS_BBOX, signal);
+    expect(out).toEqual([]);
+  });
+
+  it("surfaces a cancelled probe so the runner can label it as a timeout", async () => {
+    const fetchSpy = vi.fn(
+      async (_url: string, init: RequestInit) =>
+        await new Promise<never>((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () => {
+            reject(init.signal?.reason ?? new Error("aborted"));
+          }, { once: true });
+        }),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+    const controller = new AbortController();
+    const pending = usgs3depCoverageConnector.search("", USGS_BBOX, controller.signal);
+    controller.abort(new Error("test timeout"));
+    await expect(pending).rejects.toThrow(/timed out or was cancelled/i);
+    expect(fetchSpy).toHaveBeenCalledOnce();
+  });
+
+  it("keeps transient upstream failures visible as a source error", async () => {
+    const fetchSpy = vi.fn(async () => ({
+      ok: false,
+      status: 503,
+      headers: new Headers({ "content-type": "text/plain" }),
+      arrayBuffer: async () => new ArrayBuffer(0),
+    }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const response = await runFederatedSearch("", USGS_BBOX, {
+      connectors: [usgs3depCoverageConnector],
+      timeoutMs: 1_000,
+    });
+    expect(response.results).toEqual([]);
+    expect(response.sources).toMatchObject([
+      {
+        sourceId: "usgs-3dep",
+        status: "error",
+        error: expect.stringContaining("coverage probe failed"),
+      },
+    ]);
   });
 
   it("returns a CONUS-wide result for elevation-flavoured queries without bbox", async () => {

@@ -1663,9 +1663,19 @@ export async function fetchWcsGeoTiffGrid(
   url: string,
   timeoutMs: number,
   sourceLabel: string,
+  externalSignal?: AbortSignal,
 ): Promise<{ ncols: number; nrows: number; nodata: number; values: number[] }> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const abortFromExternalSignal = () => controller.abort(externalSignal?.reason);
+  if (externalSignal?.aborted) {
+    abortFromExternalSignal();
+  } else {
+    externalSignal?.addEventListener("abort", abortFromExternalSignal, { once: true });
+  }
+  const timeout = setTimeout(
+    () => controller.abort(new Error(`${sourceLabel} timed out after ${timeoutMs} ms`)),
+    timeoutMs,
+  );
   let buf: ArrayBuffer;
   let contentType: string;
   try {
@@ -1675,8 +1685,10 @@ export async function fetchWcsGeoTiffGrid(
     buf = await resp.arrayBuffer();
   } finally {
     clearTimeout(timeout);
+    externalSignal?.removeEventListener("abort", abortFromExternalSignal);
   }
 
+  if (buf.byteLength === 0) throw new Error(`${sourceLabel} returned an empty response`);
   const firstByte = new Uint8Array(buf, 0, Math.min(1, buf.byteLength))[0];
   if (/xml|html/i.test(contentType) || firstByte === 0x3c /* '<' */) {
     const snippet = Buffer.from(buf.slice(0, 300)).toString("utf8");

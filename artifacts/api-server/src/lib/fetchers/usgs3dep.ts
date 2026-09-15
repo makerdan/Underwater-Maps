@@ -12,12 +12,14 @@ import type {
   FetchStrategy,
   ProbeResult,
 } from "./types.js";
-import { buildUsgs3depTerrainForBbox } from "../terrain.js";
+import { buildUsgs3depTerrainForBbox, fetchWcsGeoTiffGrid } from "../terrain.js";
 
 export const USGS_3DEP_URL =
   "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer";
 
 const CONUS = { minLon: -130, maxLon: -60, minLat: 24, maxLat: 50 };
+const USGS_PROBE_RESOLUTION = 4;
+const USGS_PROBE_TIMEOUT_MS = 30_000;
 
 function centerInConus(bbox: Bbox): boolean {
   const cx = (bbox.minLon + bbox.maxLon) / 2;
@@ -27,37 +29,14 @@ function centerInConus(bbox: Bbox): boolean {
 
 export const usgs3depFetcher: BathymetryFetcher = {
   async probe(_strategy: FetchStrategy, bbox: Bbox): Promise<ProbeResult> {
-    if (!centerInConus(bbox)) {
-      return { available: false, title: "USGS 3DEP", error: "bbox outside continental US" };
-    }
     try {
-      const params = new URLSearchParams({
-        bbox: `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat}`,
-        bboxSR: "4326",
-        imageSR: "4326",
-        size: "4,4",
-        format: "tiff",
-        pixelType: "F32",
-        noData: "-9999",
-        f: "image",
-      });
-      const r = await fetch(`${USGS_3DEP_URL}/exportImage?${params}`, {
-        signal: AbortSignal.timeout(30_000),
-      });
-      if (!r.ok) {
-        return { available: false, title: "USGS 3DEP", error: `HTTP ${r.status}` };
-      }
-      const ct = r.headers.get("content-type") ?? "";
-      if (!/tiff/i.test(ct)) {
-        return { available: false, title: "USGS 3DEP", error: `Unexpected content-type: ${ct}` };
-      }
-      return {
-        available: true,
-        title: "USGS 3DEP Best-Available DEM",
-        resolution: "1–10 m (lidar) / 1/3 arc-second seamless",
-      };
+      return await probeUsgs3depCoverage(bbox);
     } catch (err) {
-      return { available: false, title: "USGS 3DEP", error: (err as Error).message };
+      return {
+        available: false,
+        title: "USGS 3DEP",
+        error: err instanceof Error ? err.message : String(err),
+      };
     }
   },
 
@@ -89,3 +68,68 @@ export const usgs3depFetcher: BathymetryFetcher = {
     };
   },
 };
+
+/**
+ * Probe the same ImageServer raster used by the full 3DEP fetcher.
+ *
+ * A successful HTTP response is not enough: ImageServer can return an
+ * otherwise valid GeoTIFF whose cells are all no-data for the requested bbox.
+ * The connector uses this function directly so the federated search request's
+ * AbortSignal cancels the raster download and decode as well.
+ */
+export async function probeUsgs3depCoverage(
+  bbox: Bbox,
+  signal?: AbortSignal,
+): Promise<ProbeResult> {
+  if (!centerInConus(bbox)) {
+    return { available: false, title: "USGS 3DEP", error: "bbox outside continental US" };
+  }
+  try {
+    const params = new URLSearchParams({
+      bbox: `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat}`,
+      bboxSR: "4326",
+      imageSR: "4326",
+      size: `${USGS_PROBE_RESOLUTION},${USGS_PROBE_RESOLUTION}`,
+      format: "tiff",
+      pixelType: "F32",
+      noData: "-9999",
+      f: "image",
+    });
+    const grid = await fetchWcsGeoTiffGrid(
+      `${USGS_3DEP_URL}/exportImage?${params}`,
+      USGS_PROBE_TIMEOUT_MS,
+      "USGS 3DEP coverage probe",
+      signal,
+    );
+    const hasUsableElevation = grid.values.some(
+      (value) => value !== grid.nodata && Number.isFinite(value),
+    );
+    if (!hasUsableElevation) {
+      return {
+        available: false,
+        title: "USGS 3DEP",
+        error: "no usable elevation data for bbox",
+      };
+    }
+    return {
+      available: true,
+      title: "USGS 3DEP Best-Available DEM",
+      resolution: "1–10 m (lidar) / 1/3 arc-second seamless",
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (signal?.aborted || /timed out|aborted|cancelled/i.test(message)) {
+      throw new Error(`USGS 3DEP coverage probe timed out or was cancelled: ${message}`, {
+        cause: err,
+      });
+    }
+    if (/empty|invalid|no readable raster|not a valid/i.test(message)) {
+      return {
+        available: false,
+        title: "USGS 3DEP",
+        error: `no usable elevation data for bbox: ${message}`,
+      };
+    }
+    throw new Error(`USGS 3DEP coverage probe failed: ${message}`, { cause: err });
+  }
+}
