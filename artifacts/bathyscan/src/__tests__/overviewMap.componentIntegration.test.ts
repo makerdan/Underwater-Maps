@@ -25,12 +25,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, waitFor, fireEvent, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderWithProviders } from "./setup";
-import { useTerrainStore } from "@/lib/terrainStore";
+import { useTerrainStore, type VisibleDataset } from "@/lib/terrainStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useSpecialCollectionStore } from "@/lib/specialCollectionStore";
 import { usePuzzleStore } from "@/lib/puzzleStore";
+import { useContextMenuStore } from "@/lib/contextMenuStore";
 import * as overviewRenderer from "@/lib/overviewRenderer";
 import { POLYGON_LOD_MIN_ZOOM } from "@/lib/overviewRenderer";
 import type { TerrainData } from "@workspace/api-client-react";
@@ -149,6 +150,11 @@ function makeOverviewGrid(): TerrainData {
     centerLat: 48.0,
     waterType: "saltwater" as const,
   } as unknown as TerrainData;
+}
+
+function makeOverlapGrid(id: string): TerrainData {
+  const grid = makeOverviewGrid();
+  return { ...grid, datasetId: id, name: id };
 }
 
 /** A single EFH polygon that sits within the test grid's bbox. */
@@ -2292,5 +2298,143 @@ describe("OverviewMap — toolbar zoom preserves geographic registration", () =>
       expect(restored!.offsetX).toBeCloseTo(initial!.offsetX, 6);
       expect(restored!.offsetY).toBeCloseTo(initial!.offsetY, 6);
     }
+  });
+});
+
+describe("OverviewMap — puzzle context actions on a vertically flipped overlap", () => {
+  const UNDERLYING_ID = "ds-underlying";
+  const TOPMOST_ID = "ds-topmost";
+  const TILE_TRANSFORM = {
+    tx: 42,
+    ty: -26,
+    angleDeg: 37,
+    flipH: true,
+    flipV: true,
+  } as const;
+
+  function transformedCanvasPoint(
+    lon: number,
+    lat: number,
+    grid: TerrainData,
+    transform: overviewRenderer.OverviewTransform,
+    tileTransform: typeof TILE_TRANSFORM,
+  ): [number, number] {
+    const [x, y] = overviewRenderer.lonLatToCanvas(lon, lat, grid, transform);
+    const [x0, y0] = overviewRenderer.lonLatToCanvas(
+      grid.minLon,
+      grid.maxLat,
+      grid,
+      transform,
+    );
+    const [x1, y1] = overviewRenderer.lonLatToCanvas(
+      grid.maxLon,
+      grid.minLat,
+      grid,
+      transform,
+    );
+    const centerX = (x0 + x1) / 2;
+    const centerY = (y0 + y1) / 2;
+    const dx = x - centerX;
+    const dy = y - centerY;
+    const angle = (tileTransform.angleDeg * Math.PI) / 180;
+    const rotatedX = dx * Math.cos(angle) - dy * Math.sin(angle);
+    const rotatedY = dx * Math.sin(angle) + dy * Math.cos(angle);
+    return [
+      centerX + tileTransform.tx + (tileTransform.flipH ? -rotatedX : rotatedX),
+      centerY + tileTransform.ty + (tileTransform.flipV ? -rotatedY : rotatedY),
+    ];
+  }
+
+  beforeEach(() => {
+    setupStores();
+    sessionStorage.removeItem("bathyscan:puzzleTransforms");
+    useContextMenuStore.setState({ open: false, x: 0, y: 0, items: [] });
+
+    const underlyingGrid = makeOverlapGrid(UNDERLYING_ID);
+    const topmostGrid = makeOverlapGrid(TOPMOST_ID);
+    const visibleDatasets: VisibleDataset[] = [
+      {
+        datasetId: UNDERLYING_ID,
+        source: "preset",
+        overviewGrid: underlyingGrid,
+        activeGrid: null,
+        dataUpdatedAt: "2024-01-01",
+      },
+      {
+        datasetId: TOPMOST_ID,
+        source: "preset",
+        overviewGrid: topmostGrid,
+        activeGrid: null,
+        dataUpdatedAt: "2025-01-01",
+      },
+    ];
+    useTerrainStore.setState({
+      visibleDatasets,
+      primaryDatasetId: TOPMOST_ID,
+      overviewGrid: topmostGrid,
+      activeGrid: null,
+    });
+    sessionStorage.setItem(
+      "bathyscan:puzzleTransforms",
+      JSON.stringify([
+        [UNDERLYING_ID, { tx: 0, ty: 0, angleDeg: 0, flipH: false, flipV: false }],
+        [TOPMOST_ID, TILE_TRANSFORM],
+      ]),
+    );
+  });
+
+  afterEach(() => {
+    sessionStorage.removeItem("bathyscan:puzzleTransforms");
+    useContextMenuStore.setState({ open: false, x: 0, y: 0, items: [] });
+  });
+
+  it("opens the vertically flipped top tile actions and changes only that tile", async () => {
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+    await waitForCameraArrow();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("overview-puzzle-toggle"));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    const canvas = screen.getByTestId("overview-map-canvas") as HTMLCanvasElement;
+    canvas.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        right: CANVAS_W,
+        bottom: CANVAS_H,
+        width: CANVAS_W,
+        height: CANVAS_H,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    const viewTransform = usePuzzleStore.getState().overviewTransform;
+    expect(viewTransform).not.toBeNull();
+
+    const [clientX, clientY] = transformedCanvasPoint(
+      -120.2,
+      48.25,
+      makeOverlapGrid(TOPMOST_ID),
+      viewTransform!,
+      TILE_TRANSFORM,
+    );
+    fireEvent.contextMenu(canvas, { clientX, clientY });
+
+    const menu = useContextMenuStore.getState();
+    expect(menu.open).toBe(true);
+    expect(menu.items.map((item) => item.label)).toContain("Flip V");
+
+    const flipV = menu.items.find((item) => item.label === "Flip V");
+    expect(flipV).toBeDefined();
+    await act(async () => {
+      flipV!.onClick();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    });
+
+    expect(usePuzzleStore.getState().puzzleTransforms[TOPMOST_ID]?.flipV).toBe(false);
+    expect(usePuzzleStore.getState().puzzleTransforms[UNDERLYING_ID]?.flipV).toBe(false);
   });
 });
