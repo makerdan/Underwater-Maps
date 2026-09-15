@@ -921,5 +921,169 @@ test.describe("BathyScan — Overview Map", () => {
       await expect(page.getByTestId(`overview-bbox-save-error-${BOX_SELECT_FAILED_ID}`)).toHaveCount(0);
       await expect(page.getByTestId("overview-bbox-result-card")).toHaveCount(2);
     });
+
+    test("preserves saved catalog states after closing and reopening the overview", async ({
+      page,
+    }) => {
+      const savedCatalogIds = new Set<string>();
+
+      await page.route("**/api/datasets/bbox-query", async (route) => {
+        if (route.request().method() !== "POST") {
+          await route.continue();
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            bbox: { north: 90, south: -90, east: 180, west: -180 },
+            datasets: BOX_SELECT_RESULTS,
+          }),
+        });
+      });
+
+      // The fixture owns both the save responses and the subsequent saved-list
+      // refetch, so this test never depends on the account's persisted library.
+      await page.route("**/api/datasets/my-saves*", async (route) => {
+        if (route.request().method() !== "GET") {
+          await route.continue();
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(
+            [...savedCatalogIds].map((catalogId) => ({
+              id: `e2e-save-${catalogId}`,
+              catalogId,
+              status: "ready",
+              requestedAt: "2024-01-01T00:00:00.000Z",
+              readyAt: "2024-01-01T00:00:00.000Z",
+              datasetId: null,
+            })),
+          ),
+        });
+      });
+
+      await page.route("**/api/datasets/catalog/*/save", async (route) => {
+        if (route.request().method() !== "POST") {
+          await route.continue();
+          return;
+        }
+        const catalogId = new URL(route.request().url()).pathname
+          .split("/")
+          .at(-2);
+        if (!catalogId) {
+          await route.fulfill({
+            status: 400,
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ detail: "Missing catalog id" }),
+          });
+          return;
+        }
+
+        savedCatalogIds.add(catalogId);
+        await route.fulfill({
+          status: 201,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            id: `e2e-save-${catalogId}`,
+            catalogId,
+            status: "ready",
+            requestedAt: "2024-01-01T00:00:00.000Z",
+            readyAt: "2024-01-01T00:00:00.000Z",
+            datasetId: null,
+          }),
+        });
+      });
+
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+      if (!(await ensureSignedInOrSkip(page))) return;
+
+      await page
+        .evaluate(() => window.__bathyTest?.seedTerrain?.())
+        .catch(() => {});
+      await page
+        .waitForFunction(
+          () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
+          null,
+          { timeout: 5_000 },
+        )
+        .catch(() => {});
+
+      const openAndRequestResults = async () => {
+        const hudBtn = page.getByTestId("hud-toggle-overview");
+        await expect(hudBtn).toBeVisible({ timeout: 10_000 });
+        await hudBtn.click();
+        if (!(await waitForOverviewHeaderOrSkip(page))) return false;
+
+        await expect(page.getByTestId("overview-tools-toggle")).toBeVisible({
+          timeout: 5_000,
+        });
+        await page.getByTestId("overview-tools-toggle").dispatchEvent("click");
+        const selectBtn = page.getByTestId("overview-select-area-toggle");
+        await selectBtn.dispatchEvent("click");
+        await expect(selectBtn).toHaveAttribute("aria-pressed", "true");
+
+        const canvas = overviewCanvas(page);
+        const box = await canvas.boundingBox();
+        if (!box) throw new Error("Overview canvas missing");
+        const x0 = box.x + box.width * 0.35;
+        const y0 = box.y + box.height * 0.35;
+        const x1 = box.x + box.width * 0.65;
+        const y1 = box.y + box.height * 0.65;
+        await page.mouse.move(x0, y0);
+        await page.mouse.down();
+        await page.mouse.move(x1, y1, { steps: 10 });
+        await page.mouse.up();
+
+        await expect(page.getByTestId("overview-bbox-panel")).toBeVisible({
+          timeout: 5_000,
+        });
+        await page.getByTestId("overview-bbox-request").click();
+        await expect(page.getByTestId("overview-bbox-results")).toBeVisible({
+          timeout: 10_000,
+        });
+        return true;
+      };
+
+      if (!(await openAndRequestResults())) return;
+
+      const failedCard = page
+        .getByTestId("overview-bbox-result-card")
+        .filter({ hasText: "Box Select Failure Survey" });
+      const neighborCard = page
+        .getByTestId("overview-bbox-result-card")
+        .filter({ hasText: "Box Select Neighbor Survey" });
+      await expect(failedCard).toBeVisible();
+      await expect(neighborCard).toBeVisible();
+
+      const failedSave = failedCard.getByTestId("overview-bbox-save");
+      const neighborSave = neighborCard.getByTestId("overview-bbox-save");
+      await failedSave.click();
+      await expect(failedSave).toHaveText("✓ SAVED");
+      await neighborSave.click();
+      await expect(neighborSave).toHaveText("✓ SAVED");
+
+      await page.getByRole("button", { name: "Close overview map" }).click();
+      await expect(page.locator(OVERLAY_HEADER)).toHaveCount(0, {
+        timeout: 5_000,
+      });
+
+      if (!(await openAndRequestResults())) return;
+
+      const reopenedCards = page.getByTestId("overview-bbox-result-card");
+      await expect(reopenedCards).toHaveCount(2);
+      await expect(
+        reopenedCards
+          .filter({ hasText: "Box Select Failure Survey" })
+          .getByTestId("overview-bbox-save"),
+      ).toHaveText("✓ SAVED");
+      await expect(
+        reopenedCards
+          .filter({ hasText: "Box Select Neighbor Survey" })
+          .getByTestId("overview-bbox-save"),
+      ).toHaveText("✓ SAVED");
+    });
   });
 });
