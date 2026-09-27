@@ -1,6 +1,6 @@
 {
-  "id": "fc21e4ad-555f-4c35-b759-f27576419eab",
-  "prevId": "faeb5275-ad25-4bfc-a955-f59977e77cab",
+  "id": "f9d0dc23-5414-4b5f-963b-e4ec22c85869",
+  "prevId": "fc21e4ad-555f-4c35-b759-f27576419eab",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -91,6 +91,64 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.poe_verification_diagnostics": {
+      "name": "poe_verification_diagnostics",
+      "schema": "",
+      "columns": {
+        "route": {
+          "name": "route",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "count": {
+          "name": "count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_occurred_at": {
+          "name": "last_occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "poe_verification_diagnostics_pk": {
+          "name": "poe_verification_diagnostics_pk",
+          "columns": [
+            "route",
+            "code"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "poe_verification_diagnostics_route_check": {
+          "name": "poe_verification_diagnostics_route_check",
+          "value": "\"poe_verification_diagnostics\".\"route\" IN ('classify', 'help', 'models', 'query', 'unknown', 'upscale')"
+        },
+        "poe_verification_diagnostics_code_check": {
+          "name": "poe_verification_diagnostics_code_check",
+          "value": "\"poe_verification_diagnostics\".\"code\" IN ('model_registry_unavailable', 'model_unavailable')"
+        },
+        "poe_verification_diagnostics_count_check": {
+          "name": "poe_verification_diagnostics_count_check",
+          "value": "\"poe_verification_diagnostics\".\"count\" > 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.rate_limit_events": {

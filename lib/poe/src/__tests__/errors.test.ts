@@ -11,8 +11,10 @@ import {
   mapHttpStatusToError,
   normalizePoeError,
   __resetPoeVerificationDiagnosticsForTests,
+  configurePoeVerificationDiagnosticsStore,
   getPoeVerificationDiagnostics,
   recordPoeVerificationFailure,
+  type PoeVerificationDiagnosticState,
 } from "../errors.js";
 
 describe("PoeCreditsError", () => {
@@ -107,21 +109,22 @@ describe("normalizePoeError", () => {
 describe("Poe verification diagnostics", () => {
   beforeEach(() => {
     __resetPoeVerificationDiagnosticsForTests();
+    configurePoeVerificationDiagnosticsStore(null);
   });
 
-  it("counts repeated registry failures without retaining sensitive details", () => {
-    recordPoeVerificationFailure(
+  it("counts repeated registry failures without retaining sensitive details", async () => {
+    await recordPoeVerificationFailure(
       "query",
       new PoeModelRegistryError("prompt=secret Bearer sk-secret"),
       1_000,
     );
-    recordPoeVerificationFailure(
+    await recordPoeVerificationFailure(
       "query",
       new PoeModelRegistryError("provider response with tokens"),
       2_000,
     );
 
-    expect(getPoeVerificationDiagnostics(2_000)).toEqual({
+    await expect(getPoeVerificationDiagnostics(2_000)).resolves.toEqual({
       windowMs: 15 * 60 * 1000,
       generatedAt: "1970-01-01T00:00:02.000Z",
       count: 1,
@@ -132,21 +135,21 @@ describe("Poe verification diagnostics", () => {
         lastOccurredAt: "1970-01-01T00:00:02.000Z",
       }],
     });
-    expect(JSON.stringify(getPoeVerificationDiagnostics(2_000))).not.toMatch(
+    expect(JSON.stringify(await getPoeVerificationDiagnostics(2_000))).not.toMatch(
       /secret|Bearer|prompt|tokens/,
     );
   });
 
-  it("keeps cardinality bounded and collapses unknown routes", () => {
+  it("keeps cardinality bounded and collapses unknown routes", async () => {
     for (let index = 0; index < 100; index += 1) {
-      recordPoeVerificationFailure(
+      await recordPoeVerificationFailure(
         `untrusted-route-${index}`,
         new PoeModelUnavailableError(`retired-model-${index}`),
         index + 1,
       );
     }
 
-    const diagnostics = getPoeVerificationDiagnostics(100);
+    const diagnostics = await getPoeVerificationDiagnostics(100);
     expect(diagnostics.count).toBe(1);
     expect(diagnostics.rows[0]).toMatchObject({
       route: "unknown",
@@ -155,18 +158,61 @@ describe("Poe verification diagnostics", () => {
     });
   });
 
-  it("expires old entries and supports a clean reset", () => {
-    recordPoeVerificationFailure("help", new PoeModelUnavailableError(), 1_000);
-    expect(getPoeVerificationDiagnostics(1_000).count).toBe(1);
-    expect(getPoeVerificationDiagnostics(1_000 + 15 * 60 * 1000).count).toBe(0);
+  it("expires old entries and supports a clean reset", async () => {
+    await recordPoeVerificationFailure("help", new PoeModelUnavailableError(), 1_000);
+    expect((await getPoeVerificationDiagnostics(1_000)).count).toBe(1);
+    expect((await getPoeVerificationDiagnostics(1_000 + 15 * 60 * 1000)).count).toBe(0);
 
-    recordPoeVerificationFailure("help", new PoeModelUnavailableError(), 2_000);
+    await recordPoeVerificationFailure("help", new PoeModelUnavailableError(), 2_000);
     __resetPoeVerificationDiagnosticsForTests();
-    expect(getPoeVerificationDiagnostics(2_000).count).toBe(0);
+    expect((await getPoeVerificationDiagnostics(2_000)).count).toBe(0);
   });
 
-  it("ignores unrelated Poe failures", () => {
-    recordPoeVerificationFailure("query", new PoeCapabilityError("unsupported"), 1_000);
-    expect(getPoeVerificationDiagnostics(1_000).count).toBe(0);
+  it("retains aggregated diagnostics in the configured store after local state resets", async () => {
+    const persisted: PoeVerificationDiagnosticState[] = [];
+    configurePoeVerificationDiagnosticsStore({
+      async recordFailure(event) {
+        const existing = persisted.find(
+          (entry) => entry.route === event.route && entry.code === event.code,
+        );
+        if (existing) {
+          existing.count += 1;
+          existing.lastOccurredAt = event.occurredAt;
+        } else {
+          persisted.push({
+            route: event.route,
+            code: event.code,
+            count: 1,
+            lastOccurredAt: event.occurredAt,
+          });
+        }
+      },
+      async read(now) {
+        return persisted.filter((entry) => now - entry.lastOccurredAt < 15 * 60 * 1000);
+      },
+    });
+
+    await recordPoeVerificationFailure(
+      "query",
+      new PoeModelRegistryError("Bearer private provider response"),
+      2_000,
+    );
+    __resetPoeVerificationDiagnosticsForTests();
+
+    await expect(getPoeVerificationDiagnostics(2_000)).resolves.toMatchObject({
+      count: 1,
+      rows: [{
+        route: "query",
+        code: "model_registry_unavailable",
+        count: 1,
+        lastOccurredAt: "1970-01-01T00:00:02.000Z",
+      }],
+    });
+    expect(JSON.stringify(persisted)).not.toMatch(/Bearer|private|provider response/);
+  });
+
+  it("ignores unrelated Poe failures", async () => {
+    await recordPoeVerificationFailure("query", new PoeCapabilityError("unsupported"), 1_000);
+    expect((await getPoeVerificationDiagnostics(1_000)).count).toBe(0);
   });
 });

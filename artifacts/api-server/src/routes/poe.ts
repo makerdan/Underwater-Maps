@@ -342,20 +342,20 @@ router.get("/models", asyncHandler(async (_req, res) => {
       signal: AbortSignal.timeout(POE_MODELS_TIMEOUT_MS),
     });
     if (response.ok === false) {
-      recordPoeVerificationFailure("models", new PoeModelRegistryError("Poe models catalogue request failed"));
+      await recordPoeVerificationFailure("models", new PoeModelRegistryError("Poe models catalogue request failed"));
       res.status(502).json({ error: "models_unavailable", details: "Could not fetch Poe models list" });
       return;
     }
     data = await response.json();
   } catch {
-    recordPoeVerificationFailure("models", new PoeModelRegistryError("Could not fetch Poe models list"));
+    await recordPoeVerificationFailure("models", new PoeModelRegistryError("Could not fetch Poe models list"));
     res.status(502).json({ error: "models_unavailable", details: "Could not fetch Poe models list" });
     return;
   }
 
   const parsed = PoeModelsLenientResponse.safeParse(data);
   if (!parsed.success) {
-    recordPoeVerificationFailure("models", new PoeModelRegistryError("Poe models response had an unexpected shape"));
+    await recordPoeVerificationFailure("models", new PoeModelRegistryError("Poe models response had an unexpected shape"));
     logger.error({ err: parsed.error }, "GET /api/poe/models — upstream response missing consumed fields");
     res.status(502).json({ error: "models_unavailable", details: "Poe models response had an unexpected shape" });
     return;

@@ -104,14 +104,26 @@ export interface PoeVerificationDiagnostics {
   rows: PoeVerificationDiagnostic[];
 }
 
-interface PoeVerificationDiagnosticState {
+export interface PoeVerificationDiagnosticState {
   route: PoeDiagnosticRoute;
   code: PoeVerificationFailureCode;
   count: number;
   lastOccurredAt: number;
 }
 
+export interface PoeVerificationDiagnosticEvent {
+  route: PoeDiagnosticRoute;
+  code: PoeVerificationFailureCode;
+  occurredAt: number;
+}
+
+export interface PoeVerificationDiagnosticsStore {
+  recordFailure(event: PoeVerificationDiagnosticEvent): Promise<void>;
+  read(now: number): Promise<PoeVerificationDiagnosticState[]>;
+}
+
 const poeVerificationDiagnostics = new Map<string, PoeVerificationDiagnosticState>();
+let poeVerificationDiagnosticsStore: PoeVerificationDiagnosticsStore | null = null;
 
 function isPoeDiagnosticRoute(route: string): route is PoeDiagnosticRoute {
   return (POE_DIAGNOSTIC_ROUTES as readonly string[]).includes(route);
@@ -132,11 +144,11 @@ function pruneExpiredPoeVerificationDiagnostics(now: number): void {
  * No provider message, prompt, token count, model identifier, or credential is
  * retained. Routes outside the known internal set collapse to "unknown".
  */
-export function recordPoeVerificationFailure(
+export async function recordPoeVerificationFailure(
   route: string,
   error: unknown,
   now = Date.now(),
-): void {
+): Promise<void> {
   const normalized = normalizePoeError(error);
   if (
     normalized.code !== "model_registry_unavailable" &&
@@ -154,28 +166,49 @@ export function recordPoeVerificationFailure(
   if (existing) {
     existing.count += 1;
     existing.lastOccurredAt = now;
-    return;
+  } else {
+    if (poeVerificationDiagnostics.size >= POE_VERIFICATION_DIAGNOSTIC_MAX_ENTRIES) {
+      const oldest = [...poeVerificationDiagnostics.entries()]
+        .sort(([, left], [, right]) => left.lastOccurredAt - right.lastOccurredAt)[0];
+      if (oldest) poeVerificationDiagnostics.delete(oldest[0]);
+    }
+
+    poeVerificationDiagnostics.set(key, {
+      route: safeRoute,
+      code,
+      count: 1,
+      lastOccurredAt: now,
+    });
   }
 
-  if (poeVerificationDiagnostics.size >= POE_VERIFICATION_DIAGNOSTIC_MAX_ENTRIES) {
-    const oldest = [...poeVerificationDiagnostics.entries()]
-      .sort(([, left], [, right]) => left.lastOccurredAt - right.lastOccurredAt)[0];
-    if (oldest) poeVerificationDiagnostics.delete(oldest[0]);
+  if (poeVerificationDiagnosticsStore) {
+    try {
+      await poeVerificationDiagnosticsStore.recordFailure({
+        route: safeRoute,
+        code,
+        occurredAt: now,
+      });
+    } catch {
+      // Diagnostics must never turn a provider failure into a request failure.
+      // The in-process copy remains available as a degraded fallback.
+    }
   }
-
-  poeVerificationDiagnostics.set(key, {
-    route: safeRoute,
-    code,
-    count: 1,
-    lastOccurredAt: now,
-  });
 }
 
-export function getPoeVerificationDiagnostics(
+export async function getPoeVerificationDiagnostics(
   now = Date.now(),
-): PoeVerificationDiagnostics {
+): Promise<PoeVerificationDiagnostics> {
   pruneExpiredPoeVerificationDiagnostics(now);
-  const rows = [...poeVerificationDiagnostics.values()]
+  let entries = [...poeVerificationDiagnostics.values()];
+  if (poeVerificationDiagnosticsStore) {
+    try {
+      entries = await poeVerificationDiagnosticsStore.read(now);
+    } catch {
+      // Fall back to the bounded in-process copy if the database is unavailable.
+    }
+  }
+
+  const rows = entries
     .sort((left, right) => {
       if (right.lastOccurredAt !== left.lastOccurredAt) {
         return right.lastOccurredAt - left.lastOccurredAt;
@@ -195,6 +228,12 @@ export function getPoeVerificationDiagnostics(
     count: rows.length,
     rows,
   };
+}
+
+export function configurePoeVerificationDiagnosticsStore(
+  store: PoeVerificationDiagnosticsStore | null,
+): void {
+  poeVerificationDiagnosticsStore = store;
 }
 
 /** Test-only reset; production code should allow the TTL to expire naturally. */

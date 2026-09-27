@@ -86,7 +86,7 @@ async function validatePoeRequest(endpoint: PoeEndpoint, body: Record<string, un
     selectPoeRoute(route, liveIds);
     void entry;
   } catch (error) {
-    recordPoeVerificationFailure(route, error);
+    await recordPoeVerificationFailure(route, error);
     throw error;
   }
 }

@@ -456,11 +456,11 @@ describe("GET /admin/poe-verification", () => {
   });
 
   it("returns redacted, bounded failure aggregates to admins", async () => {
-    recordPoeVerificationFailure(
+    await recordPoeVerificationFailure(
       "query",
       new PoeModelRegistryError("prompt secret Bearer sk-secret"),
     );
-    recordPoeVerificationFailure("help", new PoeModelUnavailableError("retired model"));
+    await recordPoeVerificationFailure("help", new PoeModelUnavailableError("retired model"));
 
     const res = await request(makeApp())
       .get("/admin/poe-verification")
@@ -475,6 +475,6 @@ describe("GET /admin/poe-verification", () => {
       expect.objectContaining({ route: "help", code: "model_unavailable", count: 1 }),
     ]));
     expect(JSON.stringify(res.body)).not.toMatch(/secret|Bearer|prompt|retired/);
-    expect(getPoeVerificationDiagnostics().count).toBe(2);
+    await expect(getPoeVerificationDiagnostics()).resolves.toMatchObject({ count: 2 });
   });
 });

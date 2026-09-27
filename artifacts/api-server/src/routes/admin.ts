@@ -205,7 +205,7 @@ router.get(
 
     res.json(validateResponse(
       AdminPoeVerificationDiagnosticsResponseSchema,
-      getPoeVerificationDiagnostics(),
+      await getPoeVerificationDiagnostics(),
       "GET /api/admin/poe-verification",
     ));
   }),

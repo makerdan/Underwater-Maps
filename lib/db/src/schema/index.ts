@@ -1,4 +1,5 @@
 export * from "./poe-usage.js";
+export * from "./poe-verification-diagnostics.js";
 export * from "./rate-limit-events.js";
 export * from "./markers.js";
 export * from "./catches.js";

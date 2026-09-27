@@ -18,6 +18,7 @@ import {
 } from "./domains/terrain/index.js";
 import { seedCatalog } from "./domains/catalog-search/index.js";
 import { startEnvironmentalRefresh } from "./domains/environmental/index.js";
+import "./lib/poeVerificationDiagnostics.js";
 import type * as http from "http";
 
 // ---------------------------------------------------------------------------
