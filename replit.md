@@ -635,6 +635,13 @@ A passing retry means intermittency only, never pre-existing provenance.
 > malformed, unreadable, or unparseable plan/tier data is a hard tier-lock
 > violation. Only an explicit `--allow-no-plan` on an ad-hoc/non-task run may
 > bypass a missing plan.
+>
+> For an assigned task, run `pnpm task:validate -- .local/tasks/<active-plan>.md`.
+> This managed entry point reads the tier from that plan and passes the exact
+> plan path as `TASK_PLAN_FILE` to the selected canonical tier. Do not start a
+> task's registered `test-*` workflow directly: those workflow commands do not
+> carry the active plan path. Ad-hoc checks use
+> `node scripts/run-validation-ad-hoc.mjs <tier>` instead.
 
 `scripts/new-plan.mjs`, `scripts/check-failure-gate.mjs`, and the Failure Gate
 skill contain the detailed lint and remediation rules. `.local/tasks/` is a

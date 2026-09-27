@@ -1,11 +1,19 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { launchTaskValidation } from "../lib/task-validation-launch.mjs";
+import { VALIDATION_COMMANDS } from "../register-validation-commands.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const script = resolve(here, "..", "run-locked-tier.mjs");
@@ -28,10 +36,11 @@ function writePlan(content) {
 /**
  * Run run-locked-tier.mjs with the given args and return { code, stdout, stderr }.
  */
-function run(args) {
+function run(args, { env } = {}) {
   const result = spawnSync(process.execPath, [script, ...args], {
     encoding: "utf8",
     timeout: 15_000,
+    env,
   });
   return {
     code: result.status,
@@ -221,4 +230,82 @@ test("task validation scopes the exact plan without mutating .replit", () => {
     before,
     "launching task validation must not rewrite workflow registration",
   );
+});
+
+test("managed task validation passes the exact plan to its selected registered tier without changing workflow definitions", () => {
+  const dotReplitPath = resolve(here, "..", "..", ".replit");
+  const manifestPath = resolve(here, "..", "register-validation-commands.mjs");
+  const beforeDotReplit = readFileSync(dotReplitPath);
+  const beforeManifest = readFileSync(manifestPath);
+  const beforeCommands = structuredClone(VALIDATION_COMMANDS);
+  const planFile = writePlan(planWithCommand("test-standard"));
+  const fakeBin = join(workDir, "fake-bin");
+  const capturePath = join(workDir, "managed-validation-capture.txt");
+  mkdirSync(fakeBin);
+  const fakeNode = join(fakeBin, "node");
+  writeFileSync(
+    fakeNode,
+    [
+      "#!/bin/sh",
+      "printf 'plan=%s\\n' \"$TASK_PLAN_FILE\" > \"$TASK_VALIDATE_CAPTURE\"",
+      "printf 'args=%s\\n' \"$*\" >> \"$TASK_VALIDATE_CAPTURE\"",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+  chmodSync(fakeNode, 0o755);
+
+  const result = run(["--", planFile], {
+    env: {
+      ...process.env,
+      PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+      TASK_VALIDATE_CAPTURE: capturePath,
+    },
+  });
+
+  assert.equal(result.code, 0, result.stderr);
+  const launched = readFileSync(capturePath, "utf8");
+  assert.match(launched, new RegExp(`^plan=${planFile.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "m"));
+  assert.match(
+    launched,
+    /^args=scripts\/run-with-timeout\.mjs tierStandard -- node scripts\/run-tier\.mjs standard$/m,
+    "the plan-selected canonical test-standard command should be launched",
+  );
+  assert.deepEqual(
+    readFileSync(dotReplitPath),
+    beforeDotReplit,
+    "managed task validation must not rewrite .replit",
+  );
+  assert.deepEqual(
+    readFileSync(manifestPath),
+    beforeManifest,
+    "managed task validation must not rewrite the registered validation command manifest",
+  );
+  assert.deepEqual(
+    VALIDATION_COMMANDS,
+    beforeCommands,
+    "managed task validation must not mutate the registered validation command set",
+  );
+});
+
+test("managed task validation does not launch a tier when the supplied plan is unreadable", () => {
+  const fakeBin = join(workDir, "unreadable-fake-bin");
+  const capturePath = join(workDir, "unreadable-validation-capture.txt");
+  mkdirSync(fakeBin);
+  const fakeNode = join(fakeBin, "node");
+  writeFileSync(fakeNode, "#!/bin/sh\n: > \"$TASK_VALIDATE_CAPTURE\"\n", "utf8");
+  chmodSync(fakeNode, 0o755);
+
+  // Directories are not readable as UTF-8 files on the supported Node runtime.
+  const result = run([workDir], {
+    env: {
+      ...process.env,
+      PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+      TASK_VALIDATE_CAPTURE: capturePath,
+    },
+  });
+
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /cannot read plan file/);
+  assert.throws(() => readFileSync(capturePath), { code: "ENOENT" });
 });
