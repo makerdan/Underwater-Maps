@@ -116,6 +116,16 @@ export function registerSubstrateFeatureGetter(getter: () => number): void {
   _substrateFeatureGetter = getter;
 }
 
+// Sources currently held by OverviewMap's EFH render ref. This lets browser
+// tests distinguish data that reached the canvas renderer from cached queries.
+let _overviewEfhSourcesGetter: (() => string[]) | null = null;
+
+export function registerOverviewEfhSourcesGetter(
+  getter: () => string[],
+): void {
+  _overviewEfhSourcesGetter = getter;
+}
+
 // RAWS popup state setters registered by OverviewMap so e2e tests can open
 // the popover without reverse-engineering canvas hit coordinates.
 let _rawsPopupSetId: ((id: string | null) => void) | null = null;
@@ -640,6 +650,7 @@ export interface BathyTestApi {
   setEfhOverlayEnabled: (enabled: boolean) => void;
   isEfhOverlayEnabled: () => boolean;
   getEfhFeatureCount: (datasetId: string) => number;
+  getOverviewMapEfhSources: () => string[];
   /**
    * Substrate overlay helpers.
    *
@@ -1713,6 +1724,8 @@ export function installTestHelpers(): void {
       const data = getEfhQueryDataForDataset(datasetId);
       return data?.features?.length ?? 0;
     },
+    getOverviewMapEfhSources: () =>
+      _overviewEfhSourcesGetter ? _overviewEfhSourcesGetter() : [],
     getEfhFeatureProperties: (datasetId, index) => {
       if (!datasetId) return null;
       const data = getEfhQueryDataForDataset(datasetId);

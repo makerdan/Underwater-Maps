@@ -144,6 +144,7 @@ import {
   registerRawsPopupHandlers,
   registerRawsCanvasPositionGetter,
   registerSubstrateFeatureGetter,
+  registerOverviewEfhSourcesGetter,
   registerPuzzleTestHandlers,
   markPuzzleBridgeReady,
 } from "@/lib/testHelpers";
@@ -2070,6 +2071,9 @@ export const OverviewMap: React.FC = () => {
   }, [embeddedEfhPolygons]);
   useEffect(() => {
     efhFeaturesRef.current = activeEfhFeatures;
+    registerOverviewEfhSourcesGetter(() =>
+      efhFeaturesRef.current.map((feature) => feature.properties.source ?? ""),
+    );
     dirtyRef.current = true;
   }, [activeEfhFeatures]);
 

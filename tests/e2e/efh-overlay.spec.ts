@@ -3,6 +3,8 @@ import {
   expect,
   type Page,
   waitForAuthenticatedSettingsReady,
+  API_URL,
+  E2E_USER_ID,
 } from "./fixtures";
 
 /**
@@ -476,6 +478,373 @@ test.describe("EFH overlay — Task #314 dataset coverage", () => {
         centerLat: 55.8,
       },
     });
+  });
+});
+
+test.describe("EFH overlay water-type switch — browser regression", () => {
+  test("replaces visible saltwater polygons and detail with freshwater EFH", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const saltwaterId = "thorne-bay";
+    const freshwaterId = "lake-ray-roberts";
+    const saltwaterTerrain = {
+      waterType: "saltwater" as const,
+      minLon: -133.1,
+      maxLon: -132.5,
+      minLat: 55.6,
+      maxLat: 56,
+      centerLon: -132.8,
+      centerLat: 55.8,
+    };
+
+    // Start in a deterministic saltwater session, matching the same API user
+    // the authenticated browser fixture uses. Suppress the simulated-data
+    // confirmation so the automatic freshwater dataset load can complete.
+    await page.request.put(`${API_URL}/api/settings`, {
+      headers: {
+        "x-e2e-user-id": E2E_USER_ID,
+        "x-e2e-bypass-secret": "e2e-playwright-secret",
+      },
+      data: { waterType: "saltwater", colormapTheme: "ocean" },
+    });
+    await page.addInitScript(() => {
+      try {
+        sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+      } catch {}
+      try {
+        const raw = localStorage.getItem("bathyscan:settings");
+        const parsed: { state?: Record<string, unknown>; version?: number } =
+          raw ? JSON.parse(raw) : {};
+        parsed.state = {
+          ...(parsed.state ?? {}),
+          waterType: "saltwater",
+          colormapTheme: "ocean",
+        };
+        localStorage.setItem("bathyscan:settings", JSON.stringify(parsed));
+      } catch {}
+    });
+
+    // Put the selected EFH-capable dataset first in each catalog response.
+    // Thorne Bay is no longer in the production preset list; Lake Ray Roberts
+    // keeps the real terrain and metadata returned by the API.
+    await page.route(
+      (url) => new URL(url).pathname === "/api/datasets",
+      async (route) => {
+        let existing: Array<Record<string, unknown>> = [];
+        try {
+          existing = (await (await route.fetch()).json()) as typeof existing;
+        } catch {
+          // The deterministic target entry below is still enough to exercise
+          // the UI if catalog hydration is unavailable in this test run.
+        }
+        const waterType =
+          new URL(route.request().url()).searchParams.get("waterType") ===
+          "freshwater"
+            ? "freshwater"
+            : "saltwater";
+        const datasetId =
+          waterType === "freshwater" ? freshwaterId : saltwaterId;
+        const previous = existing.find((dataset) => dataset["id"] === datasetId);
+        const fallbackBbox =
+          waterType === "freshwater"
+            ? { minLon: -97.25, minLat: 33.1, maxLon: -96.75, maxLat: 33.7 }
+            : {
+                minLon: saltwaterTerrain.minLon,
+                minLat: saltwaterTerrain.minLat,
+                maxLon: saltwaterTerrain.maxLon,
+                maxLat: saltwaterTerrain.maxLat,
+              };
+        const target: Record<string, unknown> = {
+          ...previous,
+          id: datasetId,
+          name:
+            previous?.["name"] ??
+            (waterType === "freshwater" ? "Lake Ray Roberts" : "Thorne Bay"),
+          description: previous?.["description"] ?? "",
+          waterType,
+          hasEfh: true,
+          minDepth: previous?.["minDepth"] ?? 0,
+          maxDepth: previous?.["maxDepth"] ?? 20,
+          centerLon:
+            previous?.["centerLon"] ??
+            (waterType === "freshwater" ? -97 : saltwaterTerrain.centerLon),
+          centerLat:
+            previous?.["centerLat"] ??
+            (waterType === "freshwater" ? 33.4 : saltwaterTerrain.centerLat),
+          bbox: previous?.["bbox"] ?? fallbackBbox,
+        };
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([
+            target,
+            ...existing.filter((dataset) => dataset["id"] !== datasetId),
+          ]),
+        });
+      },
+    );
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    if (!(await waitForTestHelpers(page))) {
+      test.skip(true, "window.__bathyTest not installed — dev test helpers missing");
+      return;
+    }
+    if (!(await waitForBridge(page))) {
+      test.skip(
+        true,
+        "TestBridge setActiveDatasetId not registered — signed-in shell not mounted",
+      );
+      return;
+    }
+    await waitForAuthenticatedSettingsReady(page);
+
+    await page.evaluate(() => {
+      const api = (
+        window as Window & {
+          __bathyTest?: {
+            setWaterType?: (value: "saltwater" | "freshwater") => void;
+          };
+        }
+      ).__bathyTest;
+      api?.setWaterType?.("saltwater");
+    });
+    await waitForDatasetCatalogReady(page, "saltwater");
+
+    await page.evaluate(
+      ({ id, terrain }) => {
+        const api = (
+          window as Window & {
+            __bathyTest?: {
+              seedCatalogEntry?: (entry: {
+                id: string;
+                hasEfh?: boolean;
+                waterType?: "saltwater" | "freshwater";
+              }) => void;
+              seedTerrain?: (overrides: Record<string, unknown>) => boolean;
+              setActiveDatasetId?: (value: string | null) => boolean;
+            };
+          }
+        ).__bathyTest;
+        api?.seedCatalogEntry?.({
+          id,
+          hasEfh: true,
+          waterType: "saltwater",
+        });
+        api?.seedTerrain?.({ datasetId: id, ...terrain });
+        api?.setActiveDatasetId?.(id);
+      },
+      { id: saltwaterId, terrain: saltwaterTerrain },
+    );
+    await page.waitForFunction(
+      (expectedId) => {
+        const summary = (
+          window as unknown as {
+            __bathyTest?: {
+              getTerrainSummary?: () =>
+                | { datasetId: string | null | undefined }
+                | null;
+            };
+          }
+        ).__bathyTest?.getTerrainSummary?.();
+        return summary?.datasetId === expectedId;
+      },
+      saltwaterId,
+      { timeout: 20_000 },
+    );
+
+    await page.evaluate(() => {
+      const api = (
+        window as unknown as {
+          __bathyTest?: {
+            setOverviewOpen?: (open: boolean) => void;
+            setEfhOverlayEnabled?: (enabled: boolean) => void;
+          };
+        }
+      ).__bathyTest;
+      api?.setOverviewOpen?.(true);
+      api?.setEfhOverlayEnabled?.(true);
+    });
+    await expect(page.locator(".overview-map-header")).toBeVisible({
+      timeout: 10_000,
+    });
+    const gpsFolder = page.getByTestId("overview-map-folder-gps");
+    await expect(gpsFolder).toBeVisible({ timeout: 5_000 });
+    if ((await gpsFolder.getAttribute("aria-expanded")) !== "true") {
+      await gpsFolder.click();
+    }
+    const efhToggle = page.getByTestId("efh-overlay-toggle");
+    await expect(efhToggle).toBeVisible({ timeout: 5_000 });
+    await expect(efhToggle).toHaveAttribute("aria-pressed", "true");
+
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            (id) =>
+              (
+                window as unknown as {
+                  __bathyTest?: { getEfhFeatureCount?: (datasetId: string) => number };
+                }
+              ).__bathyTest?.getEfhFeatureCount?.(id) ?? 0,
+            saltwaterId,
+          ),
+        { timeout: 15_000, intervals: [100, 200, 400, 800] },
+      )
+      .toBeGreaterThan(0);
+    const oldProperties = await page.evaluate(
+      (id) =>
+        (
+          window as unknown as {
+            __bathyTest?: {
+              getEfhFeatureProperties?: (
+                datasetId: string,
+                index: number,
+              ) => { commonName?: string; source?: string } | null;
+            };
+          }
+        ).__bathyTest?.getEfhFeatureProperties?.(id, 0) ?? null,
+      saltwaterId,
+    );
+    expect(oldProperties?.source).toMatch(/NOAA/);
+
+    const getRenderedSources = () =>
+      page.evaluate(
+        () =>
+          (
+            window as unknown as {
+              __bathyTest?: { getOverviewMapEfhSources?: () => string[] };
+            }
+          ).__bathyTest?.getOverviewMapEfhSources?.() ?? [],
+      );
+    await expect
+      .poll(async () => {
+        const sources = await getRenderedSources();
+        return sources.length > 0 && sources.every((source) => /NOAA/.test(source));
+      })
+      .toBe(true);
+
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            (id) =>
+              (
+                window as unknown as {
+                  __bathyTest?: {
+                    openEfhDetailForFeature?: (
+                      datasetId: string,
+                      index: number,
+                    ) => boolean;
+                  };
+                }
+              ).__bathyTest?.openEfhDetailForFeature?.(id, 0) ?? false,
+            saltwaterId,
+          ),
+        { timeout: 5_000, intervals: [200, 400, 800] },
+      )
+      .toBe(true);
+    const detail = page.getByRole("dialog", {
+      name: /^Essential Fish Habitat details for /,
+    });
+    await expect(detail).toBeVisible();
+    await expect(detail).toContainText("↗ NOAA EFH shapefiles");
+
+    // This is the same settings-store action used by the visible water-type
+    // toggle. The application side effect must replace the active dataset
+    // without unmounting the session or disabling EFH.
+    await page.evaluate(() => {
+      (
+        window as unknown as {
+          __bathyTest?: {
+            setWaterType?: (value: "saltwater" | "freshwater") => void;
+          };
+        }
+      ).__bathyTest?.setWaterType?.("freshwater");
+    });
+    await waitForDatasetCatalogReady(page, "freshwater");
+    await page.waitForFunction(
+      (expectedId) => {
+        const summary = (
+          window as unknown as {
+            __bathyTest?: {
+              getTerrainSummary?: () =>
+                | { datasetId: string | null | undefined }
+                | null;
+            };
+          }
+        ).__bathyTest?.getTerrainSummary?.();
+        return summary?.datasetId === expectedId;
+      },
+      freshwaterId,
+      { timeout: 30_000 },
+    );
+
+    await expect(detail).toBeHidden();
+    await expect
+      .poll(async () =>
+        (await getRenderedSources()).some((source) => /NOAA/.test(source)),
+      )
+      .toBe(false);
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            (id) =>
+              (
+                window as unknown as {
+                  __bathyTest?: { getEfhFeatureCount?: (datasetId: string) => number };
+                }
+              ).__bathyTest?.getEfhFeatureCount?.(id) ?? 0,
+            freshwaterId,
+          ),
+        { timeout: 20_000, intervals: [100, 200, 400, 800] },
+      )
+      .toBeGreaterThan(0);
+    await expect
+      .poll(async () => {
+        const sources = await getRenderedSources();
+        return sources.length > 0 && sources.every((source) => source.startsWith("TPWD"));
+      })
+      .toBe(true);
+    await expect(efhToggle).toHaveAttribute("aria-pressed", "true");
+
+    if (oldProperties?.commonName) {
+      const speciesTitles = await page
+        .getByTestId("overlays-tools-panel")
+        .locator('button[title^="Load "], button[title^="Deselect "]')
+        .evaluateAll((buttons) =>
+          buttons.map((button) => button.getAttribute("title") ?? ""),
+        );
+      expect(speciesTitles.some((title) => title.includes(oldProperties.commonName!))).toBe(
+        false,
+      );
+    }
+
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            (id) =>
+              (
+                window as unknown as {
+                  __bathyTest?: {
+                    openEfhDetailForFeature?: (
+                      datasetId: string,
+                      index: number,
+                    ) => boolean;
+                  };
+                }
+              ).__bathyTest?.openEfhDetailForFeature?.(id, 0) ?? false,
+            freshwaterId,
+          ),
+        { timeout: 5_000, intervals: [200, 400, 800] },
+      )
+      .toBe(true);
+    await expect(detail).toBeVisible();
+    await expect(detail).toContainText("Texas Parks & Wildlife — priority habitat; not federal EFH.");
+    await expect(detail).toContainText("↗ TPWD lake page");
+    await expect(detail).not.toContainText("↗ NOAA EFH shapefiles");
   });
 });
 

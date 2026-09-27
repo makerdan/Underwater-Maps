@@ -12,8 +12,10 @@ metadata-table ordering drift and a material run-button regression that caused
 environment startup to launch validation automatically.
 
 **How to apply:** Do not temporarily upsert a registered validation command just
-to inject `TASK_PLAN_FILE`; prefer `scripts/run-locked-tier.mjs`. After any
-necessary validation registration, run the no-op guard and inspect `.replit`.
-Restore the intended complete file through `verifyAndReplaceDotReplit`; never
-edit `.replit` directly. The helper requires `tempFilePath` to be an absolute
-workspace path; a relative candidate path is rejected.
+to inject `TASK_PLAN_FILE`; prefer `scripts/run-locked-tier.mjs`. Clearing a
+temporary validation command can remove its workflow while leaving `Project`
+in parallel mode. After any necessary registration, run the no-op guard and
+inspect `.replit`. Restore the intended complete file through
+`verifyAndReplaceDotReplit`; never edit `.replit` directly. The helper requires
+`tempFilePath` to be an absolute workspace path; a relative candidate path is
+rejected.
