@@ -13,6 +13,7 @@ import {
   findDuplicateCatalogEntries,
   normalizedLakeIdBase,
   applySampleBboxFromStatic,
+  SYNTHETIC_COVERAGE_ACCESS_NOTE,
   type CatalogSeedEntry,
 } from "./catalogSeeder.js";
 import { nceiCoverageForEntry } from "../routes/catalog-saves.js";
@@ -988,6 +989,17 @@ describe("applySampleBboxFromStatic — runtime merge helper", () => {
     expect(merged!.id).toBe("ncei-bag-mosaic-alaska");
     expect(merged!.name).toBe("Test entry ncei-bag-mosaic-alaska");
     expect(merged!.coverageBbox).toEqual(row.coverageBbox);
+  });
+
+  it("restores synthetic coverage provenance from persisted access notes", () => {
+    const row = {
+      ...makeDbRow("fed-usgs-3dep:coverage"),
+      accessNotes: `Discovered via federated search (USGS 3DEP) ${SYNTHETIC_COVERAGE_ACCESS_NOTE}`,
+    };
+
+    const [entry] = applySampleBboxFromStatic([row], []);
+
+    expect(entry!.syntheticCoverage).toBe(true);
   });
 
   it("live EXTRA_CATALOG_ENTRIES: applySampleBboxFromStatic populates sampleBbox for ncei-bag-mosaic-alaska and ncei-dem-global-mosaic", () => {

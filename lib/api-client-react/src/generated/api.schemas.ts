@@ -3112,6 +3112,11 @@ export interface DatasetCatalogEntry {
   coverageBbox: DatasetCatalogEntryCoverageBbox;
   endpointUrl?: string | null;
   accessNotes?: string | null;
+  /** True when coverage was inferred from a coarse service-area heuristic
+  rather than verified against an upstream data footprint. This
+  provenance is persisted for saved federated results.
+   */
+  syntheticCoverage?: boolean;
   description?: string | null;
   /** Comma-separated keyword tags */
   keywords?: string | null;
@@ -5670,4 +5675,3 @@ export type GetTerrainBundlesPresetId202 = {
   ageMs?: number;
   message?: string;
 };
-

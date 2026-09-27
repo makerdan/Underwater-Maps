@@ -27,6 +27,7 @@ import {
   catalogService,
   type CatalogSeedEntry,
 } from "../domains/catalog-search/catalog-service.js";
+import { SYNTHETIC_COVERAGE_ACCESS_NOTE } from "../lib/catalogSeeder.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";
 
 const router = Router();
@@ -71,6 +72,9 @@ export function toCatalogResponse(entry: CatalogSeedEntry, createdAt?: string) {
     coverageBbox: entry.coverageBbox,
     endpointUrl: entry.endpointUrl ?? null,
     accessNotes: entry.accessNotes ?? null,
+    syntheticCoverage:
+      entry.syntheticCoverage === true ||
+      entry.accessNotes?.includes(SYNTHETIC_COVERAGE_ACCESS_NOTE) === true,
     description: entry.description ?? null,
     keywords: entry.keywords ?? null,
     lastUpdated: entry.lastUpdated ?? null,

@@ -20,6 +20,7 @@ import {
 import { logger } from "../../lib/logger.js";
 import type { CatalogSeedEntry } from "./catalog-service.js";
 import type { NormalisedBbox } from "../../lib/bbox.js";
+import { SYNTHETIC_COVERAGE_ACCESS_NOTE } from "../../lib/catalogSeeder.js";
 
 type MaterializedGrids = Awaited<
   ReturnType<typeof import("../../routes/catalog-saves.js")["buildCatalogGrids"]>
@@ -264,6 +265,9 @@ function toCatalogResponse(entry: CatalogSeedEntry, createdAt?: string) {
     coverageBbox: entry.coverageBbox,
     endpointUrl: entry.endpointUrl ?? null,
     accessNotes: entry.accessNotes ?? null,
+    syntheticCoverage:
+      entry.syntheticCoverage === true ||
+      entry.accessNotes?.includes(SYNTHETIC_COVERAGE_ACCESS_NOTE) === true,
     description: entry.description ?? null,
     keywords: entry.keywords ?? null,
     lastUpdated: entry.lastUpdated ?? null,

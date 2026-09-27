@@ -101,6 +101,7 @@ vi.mock("../domains/catalog-search/save-service.js", () => ({
       catalogId: entry.id,
       name: entry.name,
       status: row["status"],
+      catalog: entry,
     }),
   },
 }));
@@ -115,6 +116,8 @@ vi.mock("@clerk/express", () => ({
 const invalidateCatalogCacheMock = vi.hoisted(() => vi.fn());
 vi.mock("../lib/catalogSeeder.js", () => ({
   invalidateCatalogCache: invalidateCatalogCacheMock,
+  SYNTHETIC_COVERAGE_ACCESS_NOTE:
+    "Coverage is estimated from the USGS service area. This exact area may have no 3DEP data, so import can fail.",
   getCatalogEntries: vi.fn(async () => []),
   searchCatalog: vi.fn(async () => []),
 }));
@@ -342,6 +345,33 @@ describe("POST /api/search/federated/save", () => {
     expect(materializeSaveMock).toHaveBeenCalledTimes(1);
     const entryArg = materializeSaveMock.mock.calls[0]?.[2] as { id: string };
     expect(entryArg.id).toBe("fed-portal-mndnr:lake-vermilion");
+  });
+
+  it("persists estimated USGS coverage and returns it with the saved dataset", async () => {
+    const estimatedResult = {
+      ...importableResult,
+      id: "usgs-3dep:coverage",
+      sourceId: "usgs-3dep",
+      sourceLabel: "USGS 3DEP",
+      name: "USGS 3DEP Topobathy DEM (this area)",
+      endpointUrl:
+        "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer",
+      syntheticCoverage: true,
+    };
+    const res = await request(makeApp())
+      .post("/api/search/federated/save")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", "user-1")
+      .send({ result: estimatedResult });
+
+    expect(res.status).toBe(201);
+    expect(res.body.catalog.syntheticCoverage).toBe(true);
+    expect(res.body.catalog.accessNotes).toContain(
+      "Coverage is estimated from the USGS service area",
+    );
+    expect(DB.state.catalog[0]).toMatchObject({
+      accessNotes: expect.stringContaining("Coverage is estimated from the USGS service area"),
+    });
   });
 
   it("derives saltwater for NCEI WCS results", async () => {

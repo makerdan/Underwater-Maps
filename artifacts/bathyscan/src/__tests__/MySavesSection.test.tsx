@@ -596,6 +596,21 @@ describe("MySavesSection — provenance indicators", () => {
     expect(screen.getByTestId("provenance-upload-upload-b")).toHaveTextContent(/upload/i);
     expect(screen.getByTestId("provenance-catalog-save-001")).toHaveTextContent(/catalog/i);
   });
+
+  it("keeps the estimated USGS coverage warning on a saved catalog card", () => {
+    currentMySaves = [{
+      ...SAVE_FOR_UPLOAD_A,
+      catalog: {
+        ...(SAVE_FOR_UPLOAD_A.catalog as Record<string, unknown>),
+        syntheticCoverage: true,
+      },
+    }];
+    renderSection();
+
+    expect(screen.getByTestId("synthetic-coverage-notice-save-001")).toHaveTextContent(
+      "This exact area may have no 3DEP data",
+    );
+  });
 });
 
 describe("MySavesSection — upload rename", () => {

@@ -9402,6 +9402,12 @@ components:
         accessNotes:
           type: string
           nullable: true
+        syntheticCoverage:
+          type: boolean
+          description: |
+            True when coverage was inferred from a coarse service-area heuristic
+            rather than verified against an upstream data footprint. This
+            provenance is persisted for saved federated results.
         description:
           type: string
           nullable: true

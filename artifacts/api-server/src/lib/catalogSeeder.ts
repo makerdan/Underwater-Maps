@@ -22,6 +22,9 @@ import type { CatalogSearchQuery } from "../routes/schemas.js";
 import { ALL_PRESET_DATASETS, NCEI_DATASET_COVERAGES } from "./terrain.js";
 import { logger } from "./logger.js";
 
+export const SYNTHETIC_COVERAGE_ACCESS_NOTE =
+  "Coverage is estimated from the USGS service area. This exact area may have no 3DEP data, so import can fail.";
+
 export interface CatalogSeedEntry {
   id: string;
   name: string;
@@ -40,6 +43,12 @@ export interface CatalogSeedEntry {
   sampleBbox?: { minLon: number; minLat: number; maxLon: number; maxLat: number };
   endpointUrl: string | null;
   accessNotes: string | null;
+  /**
+   * True when coverage was inferred from a coarse service-area heuristic
+   * rather than verified against an upstream data footprint. Federated saves
+   * persist this provenance in accessNotes because it is not a DB column.
+   */
+  syntheticCoverage?: boolean;
   description: string | null;
   keywords: string | null;
   lastUpdated: string | null;
@@ -1975,6 +1984,12 @@ export function applySampleBboxFromStatic(
       continue;
     }
     const entry = parsed.data as unknown as CatalogSeedEntry;
+    if (
+      entry.syntheticCoverage === undefined &&
+      entry.accessNotes?.includes(SYNTHETIC_COVERAGE_ACCESS_NOTE)
+    ) {
+      entry.syntheticCoverage = true;
+    }
     const staticEntry = staticById.get(row.id);
     if (staticEntry?.sampleBbox !== undefined) {
       valid.push({ ...entry, sampleBbox: staticEntry.sampleBbox });

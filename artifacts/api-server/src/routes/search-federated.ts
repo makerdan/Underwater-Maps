@@ -26,6 +26,7 @@ import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 import { validateResponse } from "../middlewares/validateResponse.js";
 import { registerCache } from "../lib/cacheRegistry.js";
 import { catalogService, type CatalogSeedEntry } from "../domains/catalog-search/catalog-service.js";
+import { SYNTHETIC_COVERAGE_ACCESS_NOTE } from "../lib/catalogSeeder.js";
 import { catalogSaveService } from "../domains/catalog-search/save-service.js";
 import {
   AreaRequestContextSchema,
@@ -141,6 +142,7 @@ const FederatedSaveResultSchema = z.object({
     .optional(),
   resolutionMMin: z.number().nullable().optional(),
   resolutionMMax: z.number().nullable().optional(),
+  syntheticCoverage: z.boolean().optional(),
 });
 
 const FederatedSaveBodySchema = z.object({
@@ -199,7 +201,13 @@ router.post(
       resolutionMMax: r.resolutionMMax ?? null,
       coverageBbox,
       endpointUrl,
-      accessNotes: `Discovered via federated search (${r.sourceLabel})`,
+      accessNotes: [
+        `Discovered via federated search (${r.sourceLabel})`,
+        r.syntheticCoverage ? SYNTHETIC_COVERAGE_ACCESS_NOTE : null,
+      ]
+        .filter((note): note is string => note !== null)
+        .join(" "),
+      syntheticCoverage: r.syntheticCoverage === true,
       description: r.description ?? null,
       keywords: `federated,${r.sourceId},bathymetry`,
       lastUpdated: null,

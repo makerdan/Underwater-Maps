@@ -616,6 +616,21 @@ const SaveCard: React.FC<{
           })()}
         </div>
       )}
+      {save.catalog?.syntheticCoverage && (
+        <div
+          data-testid={`synthetic-coverage-notice-${save.id}`}
+          style={{
+            fontSize: "calc(11px * var(--bs-font-scale, 1))",
+            color: "#fbbf24",
+            marginTop: 6,
+            letterSpacing: "0.04em",
+            lineHeight: 1.4,
+          }}
+        >
+          ⚠ Coverage is estimated from the USGS service area. This exact area may
+          have no 3DEP data, so import can fail.
+        </div>
+      )}
       {save.status === "failed" && (
         <>
           {save.errorMessage && (
