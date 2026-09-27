@@ -2301,6 +2301,73 @@ describe("OverviewMap — toolbar zoom preserves geographic registration", () =>
   });
 });
 
+describe("OverviewMap — wheel zoom preserves geographic registration", () => {
+  beforeEach(() => {
+    mockConfig.efhData = undefined;
+    setupStores();
+  });
+
+  it.each([
+    { label: "normal CSS sizing", cssSizeRatio: 1 },
+    { label: "half-size CSS canvas", cssSizeRatio: 0.5 },
+  ])("keeps the off-center cursor location fixed with $label", async ({ cssSizeRatio }) => {
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+    await waitForCameraArrow();
+
+    const canvas = screen.getByTestId("overview-map-canvas") as HTMLCanvasElement;
+    const left = 73;
+    const top = 41;
+    const width = CANVAS_W * cssSizeRatio;
+    const height = CANVAS_H * cssSizeRatio;
+    canvas.getBoundingClientRect = () =>
+      ({
+        left,
+        top,
+        right: left + width,
+        bottom: top + height,
+        width,
+        height,
+        x: left,
+        y: top,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    const cursor = { x: 333, y: 279 };
+    const initial = usePuzzleStore.getState().overviewTransform;
+    expect(initial).not.toBeNull();
+    const grid = makeOverviewGrid();
+    const initialGeo = overviewRenderer.canvasToLonLat(
+      cursor.x,
+      cursor.y,
+      grid,
+      initial!,
+    );
+
+    await act(async () => {
+      fireEvent.wheel(canvas, {
+        deltaY: -120,
+        clientX: left + cursor.x * cssSizeRatio,
+        clientY: top + cursor.y * cssSizeRatio,
+        deltaMode: 0,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    });
+
+    const zoomed = usePuzzleStore.getState().overviewTransform;
+    expect(zoomed).not.toBeNull();
+    const zoomedGeo = overviewRenderer.canvasToLonLat(
+      cursor.x,
+      cursor.y,
+      grid,
+      zoomed!,
+    );
+    expect(zoomedGeo.lon).toBeCloseTo(initialGeo.lon, 6);
+    expect(zoomedGeo.lat).toBeCloseTo(initialGeo.lat, 6);
+  });
+});
+
 describe("OverviewMap — puzzle context actions on a vertically flipped overlap", () => {
   const UNDERLYING_ID = "ds-underlying";
   const TOPMOST_ID = "ds-topmost";
