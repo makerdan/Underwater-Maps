@@ -15,4 +15,5 @@ environment startup to launch validation automatically.
 to inject `TASK_PLAN_FILE`; prefer `scripts/run-locked-tier.mjs`. After any
 necessary validation registration, run the no-op guard and inspect `.replit`.
 Restore the intended complete file through `verifyAndReplaceDotReplit`; never
-edit `.replit` directly.
+edit `.replit` directly. The helper requires `tempFilePath` to be an absolute
+workspace path; a relative candidate path is rejected.

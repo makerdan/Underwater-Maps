@@ -1,6 +1,9 @@
 import { test } from "@playwright/test";
 import { clerkSetup } from "@clerk/testing/playwright";
-import { assertClerkDevelopmentKeys } from "./clerkTestUsers";
+import {
+  assertClerkDevelopmentKeys,
+  cleanupStaleClerkE2ETestUsers,
+} from "./clerkTestUsers";
 import { E2E_API_URL } from "./ports";
 
 /**
@@ -58,6 +61,7 @@ test("api-server liveness: /api/healthz stable after startup", async ({ request 
     // Clerk writes the Development Frontend API URL and testing token into
     // the Playwright project environment for its dependent browser project.
     assertClerkDevelopmentKeys();
+    await cleanupStaleClerkE2ETestUsers();
     await clerkSetup();
   }
 });
