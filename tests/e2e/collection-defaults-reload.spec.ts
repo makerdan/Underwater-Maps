@@ -491,20 +491,15 @@ test.describe("collection default member reload persistence", () => {
         2,
       );
 
-      const createResponse = await request.post(
-        apiUrl("/api/user/collections"),
-        {
-          headers: { ...AUTH_HEADERS, "content-type": "application/json" },
-          data: { name: `Live default reload ${Date.now()}` },
-        },
-      );
+      const createResponse = await request.post(apiUrl("/api/user/collections"), {
+        headers: { ...AUTH_HEADERS, "content-type": "application/json" },
+        data: { name: `Live default reload ${Date.now()}` },
+      });
       expect(
         createResponse.ok(),
         `collection creation failed with ${createResponse.status()}`,
       ).toBeTruthy();
-      const createdCollection = (await createResponse.json()) as {
-        id?: string;
-      };
+      const createdCollection = (await createResponse.json()) as { id?: string };
       expect(createdCollection.id).toBeTruthy();
       collectionId = createdCollection.id!;
 
@@ -563,9 +558,7 @@ test.describe("collection default member reload persistence", () => {
 
       const removed = await getLiveCollection(request, collectionId);
       expect(removed.defaultMemberId).toBeNull();
-      expect(removed.members.map((member) => member.id)).toEqual([
-        firstMemberId,
-      ]);
+      expect(removed.members.map((member) => member.id)).toEqual([firstMemberId]);
 
       await page.reload({ waitUntil: "domcontentloaded" });
       await expect(page.getByTestId("collections-section")).toBeVisible({
@@ -578,9 +571,7 @@ test.describe("collection default member reload persistence", () => {
 
       const finalCollection = await getLiveCollection(request, collectionId);
       expect(finalCollection.defaultMemberId).toBeNull();
-      expect(finalCollection.members.map((member) => member.refId)).toEqual([
-        firstDatasetId,
-      ]);
+      expect(finalCollection.members.map((member) => member.refId)).toEqual([firstDatasetId]);
 
       await page.getByTestId(`btn-load-collection-${collectionId}`).click();
       await expectPrimaryDataset(page, firstDatasetId);
@@ -913,5 +904,107 @@ test.describe("collection default member reload persistence", () => {
     expect(requestUserIds.slice(accountBRequestStart).every((id) => id === "collections-account-b")).toBe(
       true,
     );
+  });
+
+  test("does not reuse collections in dialogs or dataset panels after switching dev-auth accounts", async ({
+    page,
+  }) => {
+    const accountACollections = createCollectionFixtures();
+    const accountBCollections = accountACollections.map((collection) => ({
+      ...collection,
+      id: `${collection.id}-account-b`,
+      name: `Account B ${collection.name}`,
+      members: collection.members.map((member) => ({
+        ...member,
+        id: `${member.id}-account-b`,
+        name: `Account B ${member.name}`,
+      })),
+    }));
+
+    const requestUserIds: string[] = [];
+    await installCollectionRoutes(
+      page,
+      accountACollections,
+      {
+        [E2E_USER_ID]: accountACollections,
+        "collections-account-b": accountBCollections,
+      },
+      requestUserIds,
+    );
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("collections-section")).toBeVisible({ timeout: 12_000 });
+    await expect(page.getByText("Uploaded defaults")).toBeVisible();
+    await expect(page.getByText("Account B Uploaded defaults")).toBeHidden();
+
+    // Open the dialog while account A is active. The dialog has its own
+    // subscription to the shared collections query, so it must not retain
+    // account A's options across the identity transition.
+    await page
+      .getByTestId(`btn-add-to-collection-upload-${UPLOAD_DATASET_IDS[0]}`)
+      .click();
+    const addToCollectionDialog = page.getByTestId("add-to-collection-dialog");
+    await expect(addToCollectionDialog).toBeVisible();
+    await expect(
+      page.getByTestId(`add-to-collection-option-${STANDARD_COLLECTION_ID}`),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId(`add-to-collection-option-${STANDARD_COLLECTION_ID}-account-b`),
+    ).toBeHidden();
+
+    const switchRequestStart = requestUserIds.length;
+    await page.evaluate(() => window.__bathyTest?.setAuthUserId?.(null));
+    await expect(page.getByTestId("collections-section")).toBeHidden({ timeout: 5_000 });
+    await expect(page.getByText("Uploaded defaults")).toBeHidden();
+    await expect(addToCollectionDialog).toBeHidden();
+
+    await page.evaluate(() => window.__bathyTest?.setAuthUserId?.("collections-account-b"));
+    await expect(page.getByTestId("collections-section")).toBeVisible({ timeout: 12_000 });
+    // The signed-in tree was unmounted during sign-out, so the old dialog must
+    // stay closed until the new account explicitly opens it.
+    await expect(addToCollectionDialog).toBeHidden();
+    await page
+      .getByTestId(`btn-add-to-collection-upload-${UPLOAD_DATASET_IDS[0]}`)
+      .click();
+    await expect(addToCollectionDialog).toBeVisible();
+    await expect(
+      page.getByTestId(`add-to-collection-option-${STANDARD_COLLECTION_ID}`),
+    ).toBeHidden();
+    await expect(
+      page.getByTestId(`add-to-collection-option-${STANDARD_COLLECTION_ID}-account-b`),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("collection-row-collection-upload-defaults-account-b"),
+    ).toContainText("Account B Uploaded defaults");
+    await expect(page.getByTestId("collection-row-collection-upload-defaults")).toBeHidden();
+    await expect(
+      page.getByTestId("collection-row-collection-upload-defaults-account-b"),
+    ).toBeVisible();
+
+    await addToCollectionDialog.getByRole("button", { name: "CANCEL" }).click();
+
+    // The dataset panel consumes the same query to resolve collection-scope
+    // offline downloads. Opening account B's collection must resolve its
+    // members and label from account B's data, not from a stale account A
+    // cache entry.
+    await page
+      .getByTestId("btn-download-collection-collection-upload-defaults-account-b")
+      .click();
+    const bulkOfflineDialog = page.getByRole("dialog", { name: "Save all datasets offline" });
+    await expect(bulkOfflineDialog).toBeVisible();
+    await expect(bulkOfflineDialog).toContainText("Account B Uploaded defaults — 2 datasets");
+
+    const postSwitchRequests = requestUserIds.slice(switchRequestStart);
+    expect(postSwitchRequests).toContain("collections-account-b");
+    expect(postSwitchRequests).not.toContain(E2E_USER_ID);
+
+    await expect
+      .poll(() => requestUserIds.at(-1), {
+        timeout: 8_000,
+        intervals: [2_500, 2_500, 2_500],
+      })
+      .toBe("collections-account-b");
+    expect(requestUserIds).toContain(E2E_USER_ID);
+    expect(requestUserIds.at(-1)).toBe("collections-account-b");
   });
 });

@@ -14,3 +14,9 @@ For collection-open assertions, use the collection scope's primary dataset state
 **Why:** The collection flow supports multiple visible members and does not represent a user-uploaded collection load as the single active dataset path.
 
 **How to apply:** Prefer `getCollectionScope().primaryDatasetId` when asserting which member a collection opened, while retaining the terrain summary assertion for ordinary single-dataset loads.
+
+For dev-auth account-switch tests, switching through signed-out unmounts the signed-in application tree, so dialogs hosted inside it close. Reopen the dialog after signing in as the next account before asserting its collection options.
+
+**Why:** Keeping the old dialog mounted is not the app's account-switch contract; treating it as an in-place refresh produces a false failure and misses the actual close-and-reopen path.
+
+**How to apply:** Assert the dialog closes on sign-out, then reopen it under the next identity and verify only that account's collection options and request identity are present.
