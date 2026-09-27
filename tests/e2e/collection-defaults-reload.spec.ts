@@ -213,6 +213,7 @@ async function installCollectionRoutes(
   collections = createCollectionFixtures(),
   collectionsByUser: Record<string, CollectionFixture[]> = {},
   requestedUserIds?: string[],
+  collectionResponseGate?: { userId: string; waitUntilReleased: Promise<void> },
 ): Promise<CollectionFixture[]> {
   await page.route("**/api/user/collections", async (route) => {
     const request = route.request();
@@ -220,6 +221,9 @@ async function installCollectionRoutes(
     if (request.method() === "GET" && pathname.endsWith("/api/user/collections")) {
       const userId = await request.headerValue("x-e2e-user-id");
       requestedUserIds?.push(userId ?? "");
+      if (userId === collectionResponseGate?.userId) {
+        await collectionResponseGate.waitUntilReleased;
+      }
       await route.fulfill({
         status: 200,
         json: collectionsByUser[userId ?? ""] ?? collections,
@@ -802,7 +806,7 @@ test.describe("collection default member reload persistence", () => {
     }
   });
 
-  test("does not reuse collections after switching dev-auth accounts", async ({ page }) => {
+  test("isolates collections across authenticated listener transitions and keeps polling", async ({ page }) => {
     const accountACollections = createCollectionFixtures();
     const accountBCollections = accountACollections.map((collection) => ({
       ...collection,
@@ -816,6 +820,10 @@ test.describe("collection default member reload persistence", () => {
     }));
 
     const requestUserIds: string[] = [];
+    let releaseAccountBResponse!: () => void;
+    const accountBResponseGate = new Promise<void>((resolve) => {
+      releaseAccountBResponse = resolve;
+    });
     await installCollectionRoutes(
       page,
       accountACollections,
@@ -824,6 +832,7 @@ test.describe("collection default member reload persistence", () => {
         "collections-account-b": accountBCollections,
       },
       requestUserIds,
+      { userId: "collections-account-b", waitUntilReleased: accountBResponseGate },
     );
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -831,11 +840,49 @@ test.describe("collection default member reload persistence", () => {
     await expect(page.getByText("Uploaded defaults")).toBeVisible();
     await expect(page.getByText("Account B Uploaded defaults")).toBeHidden();
 
+    await expect
+      .poll(() => page.evaluate(() => window.__bathyTest?.getUserCollectionsCache?.() ?? null))
+      .toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: STANDARD_COLLECTION_ID,
+            name: "Uploaded defaults",
+          }),
+        ]),
+      );
+
+    // This supported E2E harness uses the dev-auth bypass, so this is not a
+    // real Clerk session transition. It still exercises the addListener
+    // callback used by the production cache invalidator.
     await page.evaluate(() => window.__bathyTest?.setAuthUserId?.(null));
     await expect(page.getByTestId("collections-section")).toBeHidden({ timeout: 5_000 });
     await expect(page.getByText("Uploaded defaults")).toBeHidden();
+    await expect
+      .poll(() => page.evaluate(() => window.__bathyTest?.getUserCollectionsCache?.() ?? null))
+      .toBeNull();
 
+    const accountBRequestStart = requestUserIds.length;
     await page.evaluate(() => window.__bathyTest?.setAuthUserId?.("collections-account-b"));
+    try {
+      await expect
+        .poll(() => requestUserIds.slice(accountBRequestStart).length, {
+          timeout: 5_000,
+          intervals: [100, 250, 500, 1_000],
+        })
+        .toBeGreaterThan(0);
+
+      // Hold the new account's first response so the assertion proves account
+      // A's cache has been cleared before account B data can be returned.
+      await expect
+        .poll(() => page.evaluate(() => window.__bathyTest?.getUserCollectionsCache?.() ?? null))
+        .toBeNull();
+      await expect(page.getByText("Uploaded defaults")).toBeHidden();
+      releaseAccountBResponse();
+    } finally {
+      // Avoid leaving a pending route handler if an assertion above fails.
+      releaseAccountBResponse();
+    }
+
     await expect(page.getByTestId("collections-section")).toBeVisible({ timeout: 12_000 });
     await expect(page.getByText("Account B Uploaded defaults")).toBeVisible();
     await expect(page.getByTestId("collection-row-collection-upload-defaults")).toBeHidden();
@@ -844,12 +891,27 @@ test.describe("collection default member reload persistence", () => {
     ).toBeVisible();
 
     await expect
-      .poll(() => requestUserIds.at(-1), {
-        timeout: 8_000,
-        intervals: [2_500, 2_500, 2_500],
+      .poll(() => page.evaluate(() => window.__bathyTest?.getUserCollectionsCache?.() ?? null))
+      .toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: `${STANDARD_COLLECTION_ID}-account-b`,
+            name: "Account B Uploaded defaults",
+          }),
+        ]),
+      );
+
+    await expect
+      .poll(() => requestUserIds.slice(accountBRequestStart).length, {
+        timeout: 10_000,
+        intervals: [2_500, 2_500, 2_500, 2_500],
       })
-      .toBe("collections-account-b");
+      .toBeGreaterThan(1);
     expect(requestUserIds).toContain(E2E_USER_ID);
     expect(requestUserIds.at(-1)).toBe("collections-account-b");
+    expect(requestUserIds.slice(accountBRequestStart)).toContain("collections-account-b");
+    expect(requestUserIds.slice(accountBRequestStart).every((id) => id === "collections-account-b")).toBe(
+      true,
+    );
   });
 });

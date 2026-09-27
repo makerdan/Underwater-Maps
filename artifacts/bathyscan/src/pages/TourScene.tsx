@@ -1039,13 +1039,13 @@ export const TourScene: React.FC<TourSceneProps> = ({
   //       relevant Zustand stores directly and doesn't need a live R3F
   //       raycaster).
   //
-  // Gated to import.meta.env.DEV + VITE_DEV_AUTH_BYPASS so it can never
-  // ship: in a production build, both guards collapse to false and Vite's
-  // dead-code elimination drops the entire branch (along with the
-  // `hostHasWebGL` probe).
+  // Gated to development E2E modes so it can never ship: in a production
+  // build, the DEV guard collapses to false and Vite drops this branch (and
+  // the `hostHasWebGL` probe).
   if (
     import.meta.env.DEV &&
-    import.meta.env.VITE_DEV_AUTH_BYPASS === "1" &&
+    (import.meta.env.VITE_DEV_AUTH_BYPASS === "1" ||
+      import.meta.env.VITE_E2E_TEST_HELPERS === "1") &&
     typeof window !== "undefined"
   ) {
     const search = new URLSearchParams(window.location.search);

@@ -13,6 +13,10 @@ import {
 // injection can never disagree.
 import { E2E_USER_ID } from "./tests/e2e/fixtures";
 
+// The dedicated real-Clerk suite gets its own test-file glob and an actual
+// ClerkProvider. The default suite retains its existing dev-auth bypass.
+const realClerkE2E = process.env["E2E_REAL_CLERK"] === "1";
+
 // ── Stale-port sweep at config-load time ────────────────────────────────────
 // Playwright's webServer manager probes each webServer URL BEFORE spawning the
 // command; when `reuseExistingServer: false` and a stale holder (e.g. an
@@ -37,6 +41,8 @@ if (!process.env["PW_E2E_PORT_SWEEP_DONE"]) {
 export default defineConfig({
   globalSetup: "./tests/e2e/global-setup.ts",
   testDir: "./tests/e2e",
+  testMatch: realClerkE2E ? "**/*.clerk.e2e.ts" : undefined,
+  testIgnore: realClerkE2E ? [] : ["**/*.clerk.e2e.ts"],
   // Layers 1+2: explicit per-test and per-expect timeouts from the shared
   // budget config (tests/timeout-guard/budgets.json) — no silent framework
   // defaults. Layer 3 (per-file budget) lives in tests/e2e/fixtures.ts;
@@ -116,10 +122,9 @@ export default defineConfig({
       },
     },
   ],
-  // Start both the api-server (with dev-only auth bypass enabled) and the
-  // bathyscan frontend (with the corresponding header-injection bypass).
-  // The frontend proxies `/api/*` to the api-server so the React app can
-  // exercise real auth-gated routes end-to-end.
+  // The default suite uses the dev-auth bypass. In real-Clerk mode only the
+  // client bypass is disabled; the test stubs app API responses so temporary
+  // Clerk users never create approval or application-data rows in the DB.
   webServer: [
     {
       // ORDERING CONTRACT: Playwright's webServer manager starts these
@@ -162,9 +167,10 @@ export default defineConfig({
       stderr: "pipe",
     },
     {
-      // VITE_DEV_AUTH_BYPASS=1 makes devAuth.ts stub out Clerk and inject the
-      // `x-e2e-user-id` header on every /api/* fetch. This is dev-build-only
-      // (gated on import.meta.env.DEV) so it cannot ship to production.
+      // VITE_DEV_AUTH_BYPASS=1 stubs Clerk and injects the x-e2e user header.
+      // The real-Clerk suite instead sets VITE_E2E_TEST_HELPERS=1 to expose
+      // cache snapshots and retain the headless-WebGL fallback without
+      // replacing the real ClerkProvider.
       // With this set, canvas-gated specs (drift-planner, slack-tide,
       // gps-trail, smoke, currents) render the authenticated UI and assert
       // instead of skipping on "canvas not visible".
@@ -173,7 +179,7 @@ export default defineConfig({
       // run suffix / E2E_USER_ID env var), so a secondary suite on its own
       // ports uses its own settings rows and cannot clobber a concurrently
       // running suite's state.
-      command: `PORT=${E2E_WEB_PORT} BASE_PATH=/ VITE_DEV_AUTH_BYPASS=1 VITE_E2E_PRESERVE_BUFFER=1 VITE_E2E_USER_ID=${E2E_USER_ID} VITE_E2E_BYPASS_SECRET=e2e-playwright-secret E2E_API_SERVER_URL=${E2E_API_URL} pnpm --filter @workspace/bathyscan run dev`,
+      command: `PORT=${E2E_WEB_PORT} BASE_PATH=/ VITE_DEV_AUTH_BYPASS=${realClerkE2E ? "0" : "1"} VITE_E2E_TEST_HELPERS=${realClerkE2E ? "1" : "0"} VITE_E2E_PRESERVE_BUFFER=1 VITE_E2E_USER_ID=${E2E_USER_ID} VITE_E2E_BYPASS_SECRET=e2e-playwright-secret E2E_API_SERVER_URL=${E2E_API_URL} pnpm --filter @workspace/bathyscan run dev`,
       url: E2E_WEB_URL,
       reuseExistingServer: false,
       timeout: 60_000,

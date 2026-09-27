@@ -7,6 +7,8 @@
  * `import.meta.env.VITE_SITE_STATUS` is known to TypeScript.
  */
 interface ImportMetaEnv {
+  /** Explicit dev-only helpers for the isolated real-Clerk Playwright suite. */
+  readonly VITE_E2E_TEST_HELPERS?: string;
   /**
    * Site-status gate: `"closed"` shows the closed-for-testing banner and
    * disables sign-ups (see `src/lib/siteStatus.ts`). Absent or any other

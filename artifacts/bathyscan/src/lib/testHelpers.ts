@@ -4,11 +4,11 @@
  * Clerk-authenticated 3D canvas + raycaster pipeline.
  *
  * Hard gates (defense in depth):
- *   1. The call site in `main.tsx` is wrapped in
- *      `import.meta.env.DEV && import.meta.env.VITE_DEV_AUTH_BYPASS === "1"`,
+ *   1. The call site in `main.tsx` is wrapped in `import.meta.env.DEV` and
+ *      requires either the E2E auth bypass or the explicit real-Clerk E2E flag,
  *      which Vite statically replaces in production builds so the entire
  *      module — and `window.__bathyTest` with it — is tree-shaken away.
- *   2. `installTestHelpers()` itself re-checks both flags at runtime and
+ *   2. `installTestHelpers()` itself re-checks the development and E2E flags and
  *      throws in `import.meta.env.PROD` so any accidental call in a
  *      production bundle crashes loudly instead of silently exposing the
  *      forge-auth-headers back door.
@@ -37,6 +37,7 @@ import { runMarkerDelete, type DeleteMarkerMutation } from "./markerActions";
 import {
   deleteMarkersId,
   getGetMarkersQueryKey,
+  getGetUserCollectionsQueryKey,
   getGetDatasetsIdTerrainQueryKey,
   getGetDatasetsQueryKey,
   getGetEfhQueryKey,
@@ -695,6 +696,13 @@ export interface BathyTestApi {
   /** Switch the dev-only bypass identity without reloading the page. */
   setAuthUserId: (userId: string | null) => void;
   /**
+   * Return the user-collections query data currently held by React Query.
+   * This is intentionally a small, serialisable snapshot so E2E tests can
+   * assert that the Clerk listener cleared the previous account's cache
+   * before the next account's collection response is rendered.
+   */
+  getUserCollectionsCache: () => Array<{ id: string; name: string }> | null;
+  /**
    * Zone-colour isolation helpers.
    *
    * The zoneOverlayStore maintains independent four-slot colour palettes for
@@ -984,7 +992,12 @@ export function installTestHelpers(): void {
     );
   }
   if (!import.meta.env.DEV) return;
-  if (import.meta.env.VITE_DEV_AUTH_BYPASS !== "1") return;
+  if (
+    import.meta.env.VITE_DEV_AUTH_BYPASS !== "1" &&
+    import.meta.env.VITE_E2E_TEST_HELPERS !== "1"
+  ) {
+    return;
+  }
   if (typeof window === "undefined") return;
 
   const buildDepthProfileTerrainMenuItems = (
@@ -1694,6 +1707,12 @@ export function installTestHelpers(): void {
     },
     setAuthUserId: (userId) => {
       setBypassUserId(userId);
+    },
+    getUserCollectionsCache: () => {
+      const collections = queryClient.getQueryData<DatasetCollection[]>(
+        getGetUserCollectionsQueryKey(),
+      );
+      return collections?.map(({ id, name }) => ({ id, name })) ?? null;
     },
     getZoneSlotColor: (waterType, slot) => {
       const state = useZoneOverlayStore.getState();

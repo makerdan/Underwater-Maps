@@ -63,7 +63,8 @@ if (import.meta.env.PROD) {
 // See `lib/testHelpers.ts` header for the full defense-in-depth story.
 if (
   import.meta.env.DEV &&
-  import.meta.env.VITE_DEV_AUTH_BYPASS === "1"
+  (import.meta.env.VITE_DEV_AUTH_BYPASS === "1" ||
+    import.meta.env.VITE_E2E_TEST_HELPERS === "1")
 ) {
   void import("./lib/testHelpers").then(({ installTestHelpers }) => {
     installTestHelpers();
