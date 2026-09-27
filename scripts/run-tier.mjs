@@ -36,6 +36,7 @@ import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getValidationSteps, getStepsForTier } from "./validation-steps.mjs";
 import { runTierLockDryRun } from "./lib/tier-lock-check.mjs";
+import { cleanStaleValidationLocks } from "./clean-stale-validation-locks.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -111,6 +112,39 @@ if (!isStepMode) {
   // checkTierLock() itself calls process.exit(1) on a TIER-LOCK VIOLATION,
   // so reaching this point means the check passed (or gracefully degraded).
   if (checkTierOnly) process.exit(0);
+  if (tier === "fast") reclaimOrphanedLocksBeforeFastTier();
+}
+
+/**
+ * Clear lock files left by a validation wrapper that is no longer running
+ * before the fast tier reaches its first resource-backed step. The cleanup
+ * implementation performs its own atomic generation and staleness checks, so
+ * a live holder's lock remains protected even if it races this preflight.
+ *
+ * A lock-directory read failure is fatal: continuing would make the fast tier
+ * indistinguishable from a run that successfully checked for orphaned locks.
+ */
+function reclaimOrphanedLocksBeforeFastTier() {
+  const lockDir = process.env.VALIDATION_LOCK_FILE
+    ? dirname(resolve(process.env.VALIDATION_LOCK_FILE))
+    : resolve(root, ".local");
+  try {
+    const result = cleanStaleValidationLocks(lockDir, {
+      log: (message) => console.log(`[run-tier] ${message}`),
+      errorLog: (message) => console.error(`[run-tier] ${message}`),
+    });
+    if (result.removed.length > 0) {
+      console.log(
+        `[run-tier] fast-tier lock preflight reclaimed ${result.removed.length} orphaned lock(s)`,
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(
+      `[run-tier] fast-tier lock preflight failed; refusing to start validation: ${message}`,
+    );
+    process.exit(1);
+  }
 }
 
 /**

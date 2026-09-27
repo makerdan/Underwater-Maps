@@ -16,7 +16,8 @@
  * concurrent-validation interference the lock exists to prevent.
  *
  * Rules (lock file format: line 1 = holder pid, line 2 = acquire ms epoch):
- *   - holder pid parses and is alive          → KEEP (never break a live lock)
+ *   - holder pid parses and is alive          → KEEP (never break a live lock,
+ *     even if a concurrent reader sees the file before its second line lands)
  *   - holder pid parses and is dead           → REMOVE
  *   - holder pid unparsable, mtime recent     → KEEP (in-flight write / unknown
  *     writer; validation-lock.mjs's own stale-heartbeat reclaim covers it)
@@ -71,22 +72,15 @@ export function pidAlive(pid) {
  * Staleness predicate shared between the outside-mutex screening pass and
  * the inside-mutex re-verification in reclaimStaleLock(): a lock is stale
  * when its recorded holder pid is provably dead, or its pid is unreadable
- * and the file has not been touched for UNPARSABLE_STALE_MS.
+ * and the file has not been touched for UNPARSABLE_STALE_MS. A live PID is
+ * retained even when the acquire-time line is malformed: lock creation and
+ * writing are separate filesystem operations, and cleanup must not unlink a
+ * live holder's pathname between them.
  */
 function isStaleLockInfo({ pid, mtimeMs }, now) {
   const pidParses = Number.isInteger(pid) && pid > 0;
   if (pidParses) return !pidAlive(pid);
   return now - mtimeMs > UNPARSABLE_STALE_MS;
-}
-
-/**
- * Lock files have a two-line format: holder PID, then acquire-time epoch.
- * A missing or non-numeric acquire time is malformed regardless of PID
- * liveness and must be reclaimed.
- */
-function isMalformedLock(raw) {
-  const acquireLine = raw.split("\n")[1]?.trim();
-  return !acquireLine || Number.isNaN(Number(acquireLine));
 }
 
 /**
@@ -142,7 +136,7 @@ export function cleanStaleValidationLocks(dir, opts = {}) {
         continue; // lock released/vanished between readdir and read — done
       }
 
-      if (!isMalformedLock(raw) && !isStaleLockInfo({ pid: holderPid, mtimeMs }, now)) {
+      if (!isStaleLockInfo({ pid: holderPid, mtimeMs }, now)) {
         kept.push(name);
         log(
           Number.isInteger(holderPid) && holderPid > 0
@@ -161,8 +155,7 @@ export function cleanStaleValidationLocks(dir, opts = {}) {
       const outcome = reclaimStaleLock(path, {
         expectedRaw: raw,
         now,
-        isStillStale: (fresh, recheckNow) =>
-          isMalformedLock(fresh.raw) || isStaleLockInfo(fresh, recheckNow),
+        isStillStale: (fresh, recheckNow) => isStaleLockInfo(fresh, recheckNow),
         mutexTimeoutMs: opts.mutexTimeoutMs,
       });
       if (outcome === "reclaimed") {

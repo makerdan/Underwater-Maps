@@ -19,6 +19,7 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
+import { getValidationSteps } from "../validation-steps.mjs";
 
 import {
   cleanStaleValidationLocks,
@@ -36,6 +37,25 @@ function writeLock(dir, name, contents) {
   const path = join(dir, name);
   writeFileSync(path, contents);
   return path;
+}
+
+function runFastTier(lockFile) {
+  const fastSteps = getValidationSteps("test").filter((step) => step.tiers.includes("fast"));
+  const args = [
+    join(process.cwd(), "scripts", "run-tier.mjs"),
+    "fast",
+    "--allow-no-plan",
+    ...fastSteps.flatMap((step) => ["--skip", step.name]),
+  ];
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([key]) => key !== "TASK_PLAN_FILE" && !key.startsWith("VALIDATION_LOCK_HELD_PID"),
+    ),
+  );
+  return spawnSync(process.execPath, args, {
+    encoding: "utf8",
+    env: { ...env, VALIDATION_LOCK_FILE: lockFile },
+  });
 }
 
 /** A pid guaranteed dead: spawn a trivial node child and wait for it to exit. */
@@ -92,6 +112,48 @@ test("removes a lock whose recorded holder pid is dead", () => {
   }
 });
 
+test("fast-tier startup reclaims an orphaned per-resource lock before waiting", () => {
+  const dir = makeDir();
+  try {
+    const path = writeLock(
+      dir,
+      "validation-lock-codegen.lock",
+      `${deadPid()}\n${Date.now()}\n`,
+    );
+
+    const result = runFastTier(path);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /fast-tier lock preflight reclaimed 1 orphaned lock/);
+    assert.ok(!existsSync(path), "fast-tier startup must reclaim the orphaned lock");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("fast-tier startup preserves a live per-resource lock", () => {
+  const dir = makeDir();
+  try {
+    const path = writeLock(
+      dir,
+      "validation-lock-codegen.lock",
+      `${process.pid}\n${Date.now()}\n`,
+    );
+
+    const result = runFastTier(path);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(existsSync(path), "fast-tier startup must preserve a live holder's lock");
+    assert.equal(
+      readFileSync(path, "utf8").split("\n")[0],
+      String(process.pid),
+      "fast-tier startup must not change the live holder",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("keeps an unparsable lock file that is recent (possible in-flight write)", () => {
   const dir = makeDir();
   try {
@@ -107,16 +169,16 @@ test("keeps an unparsable lock file that is recent (possible in-flight write)", 
   }
 });
 
-test("reclaims a lock missing its acquire-time line even when its pid is alive", () => {
+test("keeps a lock missing its acquire-time line while its pid is alive", () => {
   const dir = makeDir();
   try {
     const path = writeLock(dir, "validation-lock-codegen.lock", `${process.pid}\n`);
 
     const { removed, kept } = cleanStaleValidationLocks(dir, silent);
 
-    assert.deepEqual(removed, ["validation-lock-codegen.lock"]);
-    assert.deepEqual(kept, []);
-    assert.ok(!existsSync(path));
+    assert.deepEqual(removed, []);
+    assert.deepEqual(kept, ["validation-lock-codegen.lock"]);
+    assert.ok(existsSync(path), "live holder's partially written lock must survive cleanup");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
