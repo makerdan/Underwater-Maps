@@ -34,3 +34,4 @@
 - [Playwright route glob vs query strings](playwright-route-glob-query.md) — append * when route matching must include query strings.
 - [Reference image decode fallback](reference-image-decode-fallback.md) — preserve HTMLImageElement decode fallback when createImageBitmap rejects valid images.
 - [EFH browser fixture hydration](efh-browser-fixture-hydration.md) — bridge-seeded EFH catalog state can be overwritten by settings/API hydration; seed after hydration and document authenticated-shell gates.
+- [Direct auth-router test context](direct-auth-router-test-context.md) — tests mounting requireAuth without clerkMiddleware must mock getAuth explicitly for the unauthenticated branch.
