@@ -857,6 +857,14 @@ export interface BathyTestApi {
     waterType?: "saltwater" | "freshwater";
   }) => void;
   /**
+   * Readiness of the datasets-catalog query for a water type. E2E fixtures
+   * wait for the server response to settle before seeding, so an in-flight
+   * catalog hydration cannot overwrite their deterministic cache entry.
+   */
+  getDatasetCatalogQueryStatus: (
+    waterType: "saltwater" | "freshwater",
+  ) => { isFetched: boolean; isFetching: boolean };
+  /**
    * Snapshot of the upscale cache (IndexedDB entries + in-memory entries).
    * E2E tests use this to verify that a Poe upscale result was cached and
    * that the cache size stays within expected bounds during long sessions.
@@ -1156,6 +1164,23 @@ export function installTestHelpers(): void {
     },
   ];
 
+  const getEfhQueryDataForDataset = (
+    datasetId: string,
+  ): EfhFeatureCollection | undefined => {
+    const queryKey = getGetEfhQueryKey({ datasetId });
+    return queryClient
+      .getQueriesData<EfhFeatureCollection>({ queryKey })
+      .map(([key, data]) => ({
+        data,
+        updatedAt: queryClient.getQueryState(key)?.dataUpdatedAt ?? 0,
+      }))
+      .filter(
+        ({ data }) =>
+          Array.isArray(data?.features) && data.features.length > 0,
+      )
+      .sort((a, b) => b.updatedAt - a.updatedAt)[0]?.data;
+  };
+
   window.__bathyTest = {
     showContextMenu: (x, y, items) =>
       useContextMenuStore.getState().show(x, y, items),
@@ -1213,6 +1238,14 @@ export function installTestHelpers(): void {
         bbox: { minLon: -1, minLat: -1, maxLon: 1, maxLat: 1 },
       };
       queryClient.setQueryData(key, [...without, synthetic]);
+    },
+    getDatasetCatalogQueryStatus: (waterType) => {
+      const key = getGetDatasetsQueryKey({ waterType });
+      const state = queryClient.getQueryState(key);
+      return {
+        isFetched: state?.status === "success",
+        isFetching: state?.fetchStatus === "fetching",
+      };
     },
     getUpscaleCacheInfo: async () => {
       const idb = await getUpscaleCacheInfo();
@@ -1677,22 +1710,16 @@ export function installTestHelpers(): void {
     isEfhOverlayEnabled: () => useUiStore.getState().efhOverlayEnabled,
     getEfhFeatureCount: (datasetId) => {
       if (!datasetId) return 0;
-      const data = queryClient.getQueryData<EfhFeatureCollection>(
-        getGetEfhQueryKey({ datasetId }),
-      );
+      const data = getEfhQueryDataForDataset(datasetId);
       return data?.features?.length ?? 0;
     },
     getEfhFeatureProperties: (datasetId, index) => {
       if (!datasetId) return null;
-      const data = queryClient.getQueryData<EfhFeatureCollection>(
-        getGetEfhQueryKey({ datasetId }),
-      );
+      const data = getEfhQueryDataForDataset(datasetId);
       return (data?.features?.[index]?.properties as EfhSpeciesProperties | undefined) ?? null;
     },
     openEfhDetailForFeature: (datasetId, index) => {
-      const data = queryClient.getQueryData<EfhFeatureCollection>(
-        getGetEfhQueryKey({ datasetId }),
-      );
+      const data = getEfhQueryDataForDataset(datasetId);
       const props = data?.features?.[index]?.properties;
       if (!props) return false;
       if (!props.species || !props.commonName || !props.fmp || !props.depthRangeM || !props.habitatDescription) return false;

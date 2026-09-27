@@ -8,11 +8,18 @@ initial settings and catalog-query hydration cycle. A browser test can have a
 correct intercepted response and still not render EFH controls if it seeds
 before that cycle settles.
 
-**Why:** The authenticated shell restores water type and active dataset while
-the test bridge is also mutating those values, so the visible dataset and the
-query cache can temporarily disagree.
+Authenticated EFH browser fixtures also need to expand panel-collapse state;
+the overview-map EFH toggle lives in the GPS folder, not the View folder. EFH
+polygon queries include selected-species parameters, so cache probes must
+match by dataset-key prefix rather than assume an unparameterized exact key.
 
-**How to apply:** Wait for the authenticated shell and active dataset to settle,
-then seed the relevant catalog cache again before asserting EFH controls. Keep
-an explicit environment-gate skip for runs where the signed-in EFH control is
-not rendered, and update the e2e skip audit/baseline with the same change.
+**Why:** Settings and catalog hydration can replace an early seed; collapsed
+controls are inert even when their DOM nodes exist; and UI polygon responses
+are stored under species-specific query keys. These conditions previously
+looked like unavailable EFH data and were hidden by a skip.
+
+**How to apply:** Wait for authenticated settings and the target catalog query,
+then seed the catalog and select the dataset. Expand test panels before
+navigation, open the GPS folder for map controls, and inspect EFH cache entries
+by dataset prefix. Keep auth/bridge readiness gates, but treat missing EFH
+controls after deterministic setup as a regression rather than skipping it.

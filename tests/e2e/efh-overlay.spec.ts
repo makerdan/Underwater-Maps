@@ -1,4 +1,9 @@
-import { test, expect, type Page } from "./fixtures";
+import {
+  test,
+  expect,
+  type Page,
+  waitForAuthenticatedSettingsReady,
+} from "./fixtures";
 
 /**
  * EFH overlay end-to-end coverage (Task #319).
@@ -67,6 +72,28 @@ async function waitForBridge(page: Page): Promise<boolean> {
     .catch(() => false);
 }
 
+async function waitForDatasetCatalogReady(
+  page: Page,
+  waterType: "saltwater" | "freshwater",
+): Promise<void> {
+  await page.waitForFunction(
+    (expectedWaterType) => {
+      const status = (
+        window as Window & {
+          __bathyTest?: {
+            getDatasetCatalogQueryStatus?: (
+              value: "saltwater" | "freshwater",
+            ) => { isFetched: boolean; isFetching: boolean };
+          };
+        }
+      ).__bathyTest?.getDatasetCatalogQueryStatus?.(expectedWaterType);
+      return status?.isFetched === true && status.isFetching === false;
+    },
+    waterType,
+    { timeout: 15_000 },
+  );
+}
+
 interface CasePlan {
   waterType: "saltwater" | "freshwater";
   datasetId: string;
@@ -98,50 +125,58 @@ interface CasePlan {
 }
 
 async function runEfhCase(page: Page, plan: CasePlan): Promise<void> {
-  // For datasets removed from PRESET_DATASETS (e.g. Thorne Bay), intercept
-  // every /api/datasets catalog response and inject a synthetic entry with
-  // hasEfh:true.  This must be set up BEFORE page.goto() to catch the
-  // initial catalog fetch.  Without this, the real server response (which
-  // doesn't include the removed dataset) overwrites our seedCatalogEntry
-  // call, causing the EFH toggle to remain hidden.
-  if (plan.terrainSeed) {
-    const { datasetId, waterType, terrainSeed } = plan;
-    await page.route(
-      (url) => new URL(url).pathname === "/api/datasets",
-      async (route) => {
-        const response = await route.fetch();
-        let existing: Array<Record<string, unknown>> = [];
-        try {
-          existing = (await response.json()) as typeof existing;
-        } catch {
-          // malformed — just continue with empty
-        }
-        const without = existing.filter((d) => d["id"] !== datasetId);
-        const synthetic: Record<string, unknown> = {
-          id: datasetId,
-          name: datasetId,
-          description: "",
-          waterType,
-          hasEfh: true,
-          minDepth: 0,
-          maxDepth: 20,
-          centerLon: terrainSeed.centerLon,
-          centerLat: terrainSeed.centerLat,
-          bbox: {
-            minLon: terrainSeed.minLon,
-            minLat: terrainSeed.minLat,
-            maxLon: terrainSeed.maxLon,
-            maxLat: terrainSeed.maxLat,
-          },
-        };
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify([...without, synthetic]),
-        });
-      },
-    );
-  }
+  // Keep the tested dataset marked as EFH-capable in every catalog response,
+  // including the first response received during authenticated boot. Preserve
+  // real catalog metadata when available; only use synthetic bounds for the
+  // terrain-seeded dataset that is absent from the server catalog.
+  const { datasetId, waterType, terrainSeed } = plan;
+  await page.route(
+    (url) => new URL(url).pathname === "/api/datasets",
+    async (route) => {
+      const response = await route.fetch();
+      let existing: Array<Record<string, unknown>> = [];
+      try {
+        existing = (await response.json()) as typeof existing;
+      } catch {
+        // malformed — continue with the deterministic tested entry
+      }
+      const previous = existing.find((dataset) => dataset["id"] === datasetId);
+      const synthetic: Record<string, unknown> = {
+        ...previous,
+        id: datasetId,
+        name: previous?.["name"] ?? datasetId,
+        description: previous?.["description"] ?? "",
+        waterType,
+        hasEfh: true,
+        minDepth: previous?.["minDepth"] ?? 0,
+        maxDepth: previous?.["maxDepth"] ?? 20,
+        centerLon: terrainSeed?.centerLon ?? previous?.["centerLon"] ?? 0,
+        centerLat: terrainSeed?.centerLat ?? previous?.["centerLat"] ?? 0,
+        bbox:
+          terrainSeed !== undefined
+            ? {
+                minLon: terrainSeed.minLon,
+                minLat: terrainSeed.minLat,
+                maxLon: terrainSeed.maxLon,
+                maxLat: terrainSeed.maxLat,
+              }
+            : previous?.["bbox"] ?? {
+                minLon: -1,
+                minLat: -1,
+                maxLon: 1,
+                maxLat: 1,
+              },
+      };
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          ...existing.filter((dataset) => dataset["id"] !== datasetId),
+          synthetic,
+        ]),
+      });
+    },
+  );
 
   // domcontentloaded (not networkidle): the bathyscan home keeps long-lived
   // requests open (terrain warm-up, EFH fetch, /api/me, etc.), so
@@ -160,92 +195,43 @@ async function runEfhCase(page: Page, plan: CasePlan): Promise<void> {
     );
     return;
   }
+  await waitForAuthenticatedSettingsReady(page);
 
-  // For datasets removed from PRESET_DATASETS (e.g. Thorne Bay), pre-seed
-  // the React Query catalog and terrain caches BEFORE setWaterType fires.
-  // This is critical ordering: setWaterType triggers useWaterTypeSideEffects
-  // which calls setActiveDatasetId, which in turn fires useGetDatasets and
-  // useGetDatasetsIdTerrain queries.  If those queries find data already in
-  // the cache, they skip the network fetch (returning our synthetic seed)
-  // instead of hitting /api/datasets/:id/terrain → 404.
-  if (plan.terrainSeed) {
-    await page.evaluate(
-      ({ id, seed, wt }) => {
-        const api = (
-          window as unknown as {
-            __bathyTest?: {
-              seedCatalogEntry?: (entry: {
-                id: string;
-                hasEfh?: boolean;
-                waterType?: "saltwater" | "freshwater";
-              }) => void;
-              seedTerrain?: (overrides: Record<string, unknown>) => boolean;
-            };
-          }
-        ).__bathyTest;
-        // 1. Seed catalog so hasEfh=true is visible to OverviewMap+EfhZoneLayer
-        api?.seedCatalogEntry?.({ id, hasEfh: true, waterType: wt });
-        // 2. Seed terrain+RQ cache so terrain-sync resolves without a fetch
-        api?.seedTerrain?.({ datasetId: id, ...seed });
-      },
-      { id: plan.datasetId, seed: plan.terrainSeed, wt: plan.waterType },
-    );
-  }
+  // Set the target type, then wait for its initial catalog response before
+  // writing the bridge seed. Otherwise the response can race with
+  // seedCatalogEntry and replace hasEfh=true with the server's stale value.
+  await page.evaluate((wt) => {
+    (
+      window as Window & {
+        __bathyTest?: {
+          setWaterType?: (value: "saltwater" | "freshwater") => void;
+        };
+      }
+    ).__bathyTest?.setWaterType?.(wt);
+  }, plan.waterType);
+  await waitForDatasetCatalogReady(page, plan.waterType);
 
-  // Switch water type first; useWaterTypeSideEffects will auto-load the
-  // first preset of that type. We override the choice immediately after so
-  // the dataset under test is what ends up active.
   await page.evaluate(
-    ({ wt, id }) => {
+    ({ id, seed, wt }) => {
       const api = (
-        window as unknown as {
+        window as Window & {
           __bathyTest?: {
-            setWaterType?: (wt: "saltwater" | "freshwater") => void;
-            setActiveDatasetId?: (id: string | null) => boolean;
+            seedCatalogEntry?: (entry: {
+              id: string;
+              hasEfh?: boolean;
+              waterType?: "saltwater" | "freshwater";
+            }) => void;
+            seedTerrain?: (overrides: Record<string, unknown>) => boolean;
+            setActiveDatasetId?: (value: string | null) => boolean;
           };
         }
       ).__bathyTest;
-      api?.setWaterType?.(wt as "saltwater" | "freshwater");
-      api?.setActiveDatasetId?.(id as string);
+      api?.seedCatalogEntry?.({ id, hasEfh: true, waterType: wt });
+      if (seed) api?.seedTerrain?.({ datasetId: id, ...seed });
+      api?.setActiveDatasetId?.(id);
     },
-    { wt: plan.waterType, id: plan.datasetId },
+    { id: plan.datasetId, seed: plan.terrainSeed, wt: plan.waterType },
   );
-
-  // The useWaterTypeSideEffects useEffect runs on the next render and may
-  // re-set the active dataset to its auto-pick. Give React a tick to flush
-  // that side-effect, then force the dataset back to the one we care about.
-  await page.waitForTimeout(50);
-  await page.evaluate(
-    ({ id }) => {
-      (
-        window as unknown as {
-          __bathyTest?: { setActiveDatasetId?: (id: string | null) => boolean };
-        }
-      ).__bathyTest?.setActiveDatasetId?.(id as string);
-    },
-    { id: plan.datasetId },
-  );
-
-  // If a terrainSeed is provided, inject it directly via the test bridge so
-  // the terrain-sync poll resolves immediately without a network round-trip.
-  // This is required for datasets removed from PRESET_DATASETS (e.g. Thorne
-  // Bay) whose terrain can't be fetched from NCEI in E2E.  seedTerrain also
-  // pre-populates the React Query cache so useActiveDatasetSync's
-  // useGetDatasetsIdTerrain query returns our seed instead of fetching live.
-  if (plan.terrainSeed) {
-    await page.evaluate(
-      ({ id, seed }) => {
-        (
-          window as unknown as {
-            __bathyTest?: {
-              seedTerrain?: (overrides: Record<string, unknown>) => boolean;
-            };
-          }
-        ).__bathyTest?.seedTerrain?.({ datasetId: id, ...seed });
-      },
-      { id: plan.datasetId, seed: plan.terrainSeed },
-    );
-  }
 
   // Wait for useActiveDatasetSync to fetch terrain + overview for the target
   // dataset and commit them — terrainStore.overviewGrid's datasetId is the
@@ -301,33 +287,20 @@ async function runEfhCase(page: Page, plan: CasePlan): Promise<void> {
   await expect(page.locator(".overview-map-header")).toBeVisible({
     timeout: 10_000,
   });
-  const viewFolder = page.getByTestId("overview-map-folder-view");
-  await expect(viewFolder).toBeVisible({ timeout: 5_000 });
-  if ((await viewFolder.getAttribute("aria-expanded")) !== "true") {
-    await viewFolder.click();
+  const gpsFolder = page.getByTestId("overview-map-folder-gps");
+  await expect(gpsFolder).toBeVisible({ timeout: 5_000 });
+  if ((await gpsFolder.getAttribute("aria-expanded")) !== "true") {
+    await gpsFolder.click();
   }
+  await expect(page.getByTestId("overview-gps-menu")).toBeVisible();
 
-  // The 🐟 EFH toggle button in the Overview Map header is only rendered
+  // The 🐟 EFH toggle button is in the GPS folder and is only rendered
   // when the active dataset's `hasEfh` flag is true — so finding it at all
   // is itself a guard that the new dataset was recognised as EFH-bearing.
   // aria-pressed mirrors `efhOverlayEnabled` from uiStore.
   // Use data-testid for a stable locator that survives layout changes.
   const efhToggle = page.getByTestId("efh-overlay-toggle");
-  // The EFH toggle is only rendered when the dataset's hasEfh flag is true.
-  // Skip gracefully when the toggle is absent — this means the dataset is not
-  // recognised as EFH-bearing in this environment (e.g. api-server seeded with
-  // a subset of the full EFH shapefile database).
-  const efhToggleVisible = await efhToggle
-    .waitFor({ state: "visible", timeout: 5_000 })
-    .then(() => true)
-    .catch(() => false);
-  if (!efhToggleVisible) {
-    test.skip(
-      true,
-      `EFH toggle not found for ${plan.datasetId} — dataset may lack hasEfh=true in this environment`,
-    );
-    return;
-  }
+  await expect(efhToggle).toBeVisible({ timeout: 5_000 });
   await expect(efhToggle).toHaveAttribute("aria-pressed", "false");
 
   // Enable the overlay and confirm the same button now reports pressed —
@@ -466,6 +439,10 @@ async function runEfhCase(page: Page, plan: CasePlan): Promise<void> {
 }
 
 test.describe("EFH overlay — Task #314 dataset coverage", () => {
+  test.beforeEach(async ({ resetPanelCollapse }) => {
+    void resetPanelCollapse;
+  });
+
   test("Lake Ray Roberts (TPWD) — overview paints polygons and detail panel shows the TPWD disclaimer", async ({
     page,
   }) => {
@@ -503,6 +480,10 @@ test.describe("EFH overlay — Task #314 dataset coverage", () => {
 });
 
 test.describe("EFH species selection — browser regression", () => {
+  test.beforeEach(async ({ resetPanelCollapse }) => {
+    void resetPanelCollapse;
+  });
+
   test("limits the active pair and clears it when switching datasets", async ({
     page,
   }) => {
@@ -617,54 +598,22 @@ test.describe("EFH species selection — browser regression", () => {
       );
       return;
     }
+    await waitForAuthenticatedSettingsReady(page);
 
-    await page.evaluate(
-      ({ thorne }) => {
-        const api = (
-          window as unknown as {
-            __bathyTest?: {
-              seedCatalogEntry?: (entry: {
-                id: string;
-                hasEfh?: boolean;
-                waterType?: "saltwater" | "freshwater";
-              }) => void;
-              seedTerrain?: (overrides: Record<string, unknown>) => boolean;
-              setWaterType?: (value: "saltwater" | "freshwater") => void;
-              setActiveDatasetId?: (id: string | null) => boolean;
-            };
-          }
-        ).__bathyTest;
-        api?.seedCatalogEntry?.({
-          id: "thorne-bay",
-          hasEfh: true,
-          waterType: "saltwater",
-        });
-        api?.seedCatalogEntry?.({
-          id: "thorne-bay",
-          hasEfh: true,
-          waterType: "freshwater",
-        });
-        api?.seedCatalogEntry?.({
-          id: "glacier-bay",
-          hasEfh: true,
-          waterType: "saltwater",
-        });
-        api?.seedCatalogEntry?.({
-          id: "glacier-bay",
-          hasEfh: true,
-          waterType: "freshwater",
-        });
-        api?.seedTerrain?.({ datasetId: "thorne-bay", ...thorne });
-        api?.setWaterType?.("saltwater");
-        api?.setActiveDatasetId?.("thorne-bay");
-      },
-      { thorne: thorneTerrain },
-    );
+    await page.evaluate(() => {
+      (
+        window as Window & {
+          __bathyTest?: {
+            setWaterType?: (value: "saltwater" | "freshwater") => void;
+          };
+        }
+      ).__bathyTest?.setWaterType?.("saltwater");
+    });
+    await waitForDatasetCatalogReady(page, "saltwater");
 
-    await page.waitForTimeout(50);
     await page.evaluate(() => {
       const api = (
-        window as unknown as {
+        window as Window & {
           __bathyTest?: {
             seedCatalogEntry?: (entry: {
               id: string;
@@ -676,9 +625,13 @@ test.describe("EFH species selection — browser regression", () => {
           };
         }
       ).__bathyTest;
-      api?.setWaterType?.("saltwater");
       api?.seedCatalogEntry?.({
         id: "thorne-bay",
+        hasEfh: true,
+        waterType: "saltwater",
+      });
+      api?.seedCatalogEntry?.({
+        id: "glacier-bay",
         hasEfh: true,
         waterType: "saltwater",
       });
@@ -710,41 +663,13 @@ test.describe("EFH species selection — browser regression", () => {
         { timeout: 20_000, intervals: [100, 200, 400, 800] },
       )
       .toBe("thorne-bay");
-    await page.evaluate(() => {
-      (
-        window as unknown as {
-          __bathyTest?: {
-            seedCatalogEntry?: (entry: {
-              id: string;
-              hasEfh?: boolean;
-              waterType?: "saltwater" | "freshwater";
-            }) => void;
-          };
-        }
-      ).__bathyTest?.seedCatalogEntry?.({
-        id: "thorne-bay",
-        hasEfh: true,
-        waterType: "saltwater",
-      });
-    });
-    await page.waitForTimeout(100);
 
     const overlays = page.getByTestId("overlays-tools-panel");
     await expect(overlays).toBeVisible({ timeout: 10_000 });
     const efhToggle = overlays.getByRole("button", {
       name: /ESSENTIAL FISH HABITAT/,
     });
-    const efhToggleVisible = await efhToggle
-      .waitFor({ state: "visible", timeout: 10_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (!efhToggleVisible) {
-      test.skip(
-        true,
-        "EFH controls were not surfaced for the seeded authenticated dataset",
-      );
-      return;
-    }
+    await expect(efhToggle).toBeVisible({ timeout: 5_000 });
     if ((await efhToggle.getAttribute("aria-pressed")) !== "true") {
       await efhToggle.click();
     }
@@ -753,20 +678,39 @@ test.describe("EFH species selection — browser regression", () => {
       'button[title^="Load "], button[title^="Deselect "]',
     );
     await expect.poll(() => speciesButtons.count(), { timeout: 15_000 }).toBeGreaterThan(2);
-    const activeButtons = overlays.locator('button[aria-pressed="true"]');
+    const activeButtons = overlays.locator(
+      'button[title^="Load "][aria-pressed="true"], button[title^="Deselect "][aria-pressed="true"]',
+    );
     await expect(activeButtons).toHaveCount(2);
 
-    const inactiveButtons = overlays.locator('button[aria-pressed="false"]');
+    const inactiveButtons = overlays.locator(
+      'button[title^="Load "][aria-pressed="false"], button[title^="Deselect "][aria-pressed="false"]',
+    );
     const thirdSpecies = inactiveButtons.first();
     await expect(thirdSpecies).toHaveAttribute("aria-disabled", "true");
 
-    const firstSpecies = activeButtons.first();
+    const firstSpeciesTitle = await activeButtons.first().getAttribute("title");
+    const thirdSpeciesTitle = await thirdSpecies.getAttribute("title");
+    const firstSpeciesName = firstSpeciesTitle?.replace(/^Deselect /, "");
+    const thirdSpeciesName = thirdSpeciesTitle?.replace(
+      /^Deselect a species before loading /,
+      "",
+    );
+    expect(firstSpeciesName).toBeTruthy();
+    expect(thirdSpeciesName).toBeTruthy();
+    const speciesButton = (name: string) =>
+      overlays.locator(
+        `button[title="Load ${name}"], button[title="Deselect ${name}"], button[title="Deselect a species before loading ${name}"]`,
+      );
+    const firstSpecies = speciesButton(firstSpeciesName!);
+    const nextSpecies = speciesButton(thirdSpeciesName!);
+
     await firstSpecies.click();
-    await expect(thirdSpecies).toHaveAttribute("aria-disabled", "false");
-    await thirdSpecies.click();
+    await expect(nextSpecies).toHaveAttribute("aria-disabled", "false");
+    await nextSpecies.click();
     await expect(activeButtons).toHaveCount(2);
     await expect(firstSpecies).toHaveAttribute("aria-pressed", "false");
-    await expect(thirdSpecies).toHaveAttribute("aria-pressed", "true");
+    await expect(nextSpecies).toHaveAttribute("aria-pressed", "true");
 
     await expect
       .poll(
@@ -826,14 +770,6 @@ test.describe("EFH species selection — browser regression", () => {
       });
       api?.setActiveDatasetId?.("glacier-bay");
     });
-    await page.waitForTimeout(50);
-    await page.evaluate(() => {
-      (
-        window as unknown as {
-          __bathyTest?: { setActiveDatasetId?: (id: string | null) => boolean };
-        }
-      ).__bathyTest?.setActiveDatasetId?.("glacier-bay");
-    });
     await expect
       .poll(
         () =>
@@ -868,7 +804,7 @@ test.describe("EFH species selection — browser regression", () => {
         { timeout: 15_000, intervals: [100, 200, 400, 800] },
       )
       .toBeGreaterThan(0);
-    await expect(overlays.locator('button[aria-pressed="true"]')).toHaveCount(2);
+    await expect(activeButtons).toHaveCount(2);
     await expect(overlays.getByText("Load species (2/2)")).toBeVisible();
     await expect(
       overlays.locator('button[title*="Yelloweye Rockfish"]'),

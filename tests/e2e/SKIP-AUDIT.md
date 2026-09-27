@@ -1,10 +1,16 @@
 # E2E conditional-skip audit
 
-Last audited: 2026-09-07. The static call-site baseline is **241**:
-`node scripts/check-skip-count.mjs` finds 0 static unit skips and 241
+Last audited: 2026-09-27. The static call-site baseline is **239**:
+`node scripts/check-skip-count.mjs` finds 0 static unit skips and 239
 conditional `test.skip(` sites under `tests/e2e/`. Runtime GitHub-runner skips
 are measured separately in `runtime-skip-baseline.json`; they must never be
 used to raise this source-level baseline.
+
+Baseline updated 2026-09-27 to 239: `efh-overlay.spec.ts` waits for initial
+server-settings and dataset-catalog hydration, resets collapsed panels, and
+asserts that EFH controls render instead of skipping when they do not. The
+pair-limit, pair-change, dataset-switch, polygon, and detail assertions now run
+in the authenticated fixture.
 
 Baseline updated 2026-08-22 to 238: `coordinate-search.spec.ts` added two
 explicit FIND DATA visibility gates ("user is not signed in or app did not
