@@ -5,6 +5,7 @@
 - [Zustand no-selector crash](zustand-no-selector-crash.md) — always use per-field selectors in React 18 Concurrent Mode.
 - [TS project refs need rebuild after codegen](ts-project-refs-codegen.md) — codegen must be followed by typecheck:libs before consuming generated types.
 - [Running long test suites](long-test-runs.md) — bathyscan unit is long-running; use the registered validation workflow, not a shell background job.
+- [Focused Playwright runs](focused-playwright-runs.md) — verify Playwright filters reach the runner; nested E2E scripts may run a broader set than intended.
 - [Serialized heavy test suites](test-heavy-serialized.md) — unit, palette, and e2e heavy validation must remain serialized.
 - [Replit proxy needs native WS ping](replit-proxy-ws-ping.md) — only native opcode-0x9 frames keep the mTLS preview proxy alive.
 - [Health probe must use /api/healthz](health-probe-routing.md) — root-relative probes hit the SPA fallback; only /api reaches the API server.
