@@ -30,6 +30,7 @@
 - [Validated .replit line endings](replit-config-line-endings.md) — normalize replacement candidates to LF before validated replacement.
 - [Validation upserts can mutate Project](validation-upsert-reorders-dot-replit.md) — task-specific validation upserts may alter the run button; avoid or restore via validated replacement.
 - [Current dependency-audit baseline](unit-tier-baseline-2026-08.md) — dependency audit signatures need fresh isolated evidence before reassignment.
+- [Baseline catalog time snapshots](baseline-catalog-time-snapshots.md) — pinned historical `asOf` tests need a matching catalog snapshot, not the live catalog date/status.
 - [Skill mirror sync + foreign commits](skill-mirror-sync-check.md) — stale custom-skill mirrors fail tiers; cite foreign merge provenance in drift reasons.
 - [Validation workflow boot storm](validation-workflow-boot-storm.md) — stop extra validation workflows and orphaned boot groups before retrying a locked run.
 - [Playwright route glob vs query strings](playwright-route-glob-query.md) — append * when route matching must include query strings.

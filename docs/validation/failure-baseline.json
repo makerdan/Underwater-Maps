@@ -1,6 +1,6 @@
 {
   "catalogVersion": 1,
-  "catalogDate": "2026-08-30",
+  "catalogDate": "2026-09-27",
   "entries": [
     {
       "id": "BASE-E2E-PUZZLE-POLL",
@@ -162,25 +162,31 @@
         ],
         "observations": [
           { "date": "2026-08-25", "outcome": "fail", "command": "overviewMap.componentIntegration.test.ts", "result": "The geographic transform assertion failed 3/3 with dLon unchanged." },
-          { "date": "2026-08-25", "outcome": "fail", "command": "reproduction of Overview wheel zoom scenario", "result": "The rAF republish path did not publish a changed transform for the fixed-pixel translation." }
+          { "date": "2026-08-25", "outcome": "fail", "command": "reproduction of Overview wheel zoom scenario", "result": "The rAF republish path did not publish a changed transform for the fixed-pixel translation." },
+          { "date": "2026-09-27", "outcome": "pass", "command": "pnpm --filter @workspace/bathyscan exec vitest run src/__tests__/overviewMap.componentIntegration.test.ts -t \"re-publishes smaller dLon after zooming in\"", "result": "The isolated fixed 50px puzzle-offset scenario passed (1 passed, 31 skipped); dLon decreased after wheel zoom, confirming geographic offsets republish from the current zoom transform." }
         ],
-        "authoritative": true,
-        "summary": "This is the one confirmed product defect in the recent merge-regression audit and must not be treated as a harmless test baseline."
+        "authoritative": false,
+        "summary": "The August audit confirmed a stale geographic offset after wheel zoom; the current fixed-pixel integration scenario now passes and verifies that the published dLon changes with the zoom transform."
       },
       "ownership": {
         "owner": "BathyScan Overview map",
-        "rationale": "The zoom refresh trigger and geographic persistence contract require a product fix before cross-device placement is trusted."
+        "rationale": "BathyScan Overview owners maintain and re-verify this geographic-placement contract when the zoom path changes."
       },
       "firstVerifiedDate": "2026-08-25",
-      "lastVerifiedDate": "2026-08-25",
+      "lastVerifiedDate": "2026-09-27",
       "affectedTiers": ["standard"],
       "reviewDeadline": "2026-09-15",
-      "status": "active",
+      "status": "resolved",
       "statusHistory": [
-        { "status": "active", "date": "2026-08-25", "note": "Confirmed independently in the merge-regression audit." }
+        { "status": "active", "date": "2026-08-25", "note": "Confirmed independently in the merge-regression audit." },
+        { "status": "resolved", "date": "2026-09-27", "note": "The current targeted wheel-zoom integration test passed; the fixed-pixel offset published a smaller dLon after zoom." }
       ],
       "repositoryReferences": ["artifacts/bathyscan/src/components/OverviewMap.tsx", "artifacts/bathyscan/src/__tests__/overviewMap.componentIntegration.test.ts"],
-      "resolution": null
+      "resolution": {
+        "date": "2026-09-27",
+        "summary": "The Overview Map geographic transform publication after wheel zoom is verified working against current code.",
+        "evidence": "The isolated component integration test passed with a fixed 50px puzzle translation and confirmed dLon decreases after wheel zoom."
+      }
     },
     {
       "id": "BASE-SIDEBAR-CHEVRON-CONTRACT",

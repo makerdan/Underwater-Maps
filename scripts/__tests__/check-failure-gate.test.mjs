@@ -174,6 +174,19 @@ describe("new-plan baseline ownership", () => {
 });
 
 describe("catalog-aware plan reference validation", () => {
+  const historicalAsOf = "2026-08-30";
+  const historicalCatalog = JSON.parse(
+    readFileSync(
+      resolve(__dirname, "..", "..", "docs", "validation", "failure-baseline.json"),
+      "utf8",
+    ),
+  );
+  historicalCatalog.catalogDate = historicalAsOf;
+
+  function historicalCatalogOptions() {
+    return { catalog: historicalCatalog, asOf: historicalAsOf };
+  }
+
   function planWithBaseline(line) {
     return [
       "# Catalog-aware task",
@@ -192,7 +205,7 @@ describe("catalog-aware plan reference validation", () => {
     assert.deepEqual(
       validatePlanBaselineReferences(
         planWithBaseline("- **Ignored baseline:** `BASE-RAW-PNPM-AUDIT` — exact catalog signature."),
-        { asOf: "2026-08-30" },
+        historicalCatalogOptions(),
       ),
       [],
     );
@@ -201,8 +214,8 @@ describe("catalog-aware plan reference validation", () => {
   it("accepts an active ID with one explicit owned-repair declaration", () => {
     assert.deepEqual(
       validatePlanBaselineReferences(
-        planWithBaseline("- **Owned baseline repair:** `BASE-OVERVIEW-ZOOM-GEO` — this task must fix it."),
-        { asOf: "2026-08-30" },
+        planWithBaseline("- **Owned baseline repair:** `BASE-RAW-PNPM-AUDIT` — this task must fix it."),
+        historicalCatalogOptions(),
       ),
       [],
     );
@@ -218,7 +231,7 @@ describe("catalog-aware plan reference validation", () => {
     for (const [line, expected] of cases) {
       assert.match(
         validatePlanBaselineReferences(planWithBaseline(line), {
-          asOf: "2026-08-30",
+          ...historicalCatalogOptions(),
         }).join("\n"),
         expected,
       );
@@ -231,7 +244,7 @@ describe("catalog-aware plan reference validation", () => {
       "# Catalog-aware task\n\nObserved BASE-RAW-PNPM-AUDIT while exploring.",
     );
     assert.match(
-      validatePlanBaselineReferences(content, { asOf: "2026-08-30" }).join("\n"),
+      validatePlanBaselineReferences(content, historicalCatalogOptions()).join("\n"),
       /must appear in "## Pre-existing failures to ignore"/,
     );
   });
