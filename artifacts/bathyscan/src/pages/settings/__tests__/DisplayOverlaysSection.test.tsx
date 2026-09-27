@@ -15,7 +15,16 @@ import { render, screen, fireEvent } from "@testing-library/react";
 const h = vi.hoisted(() => {
   const resetSection = vi.fn();
   const setDefaultHabitatSpecies = vi.fn();
-  return { resetSection, setDefaultHabitatSpecies };
+  const efhSpeciesPreferences: Record<string, string[]> = {};
+  const clearEfhSpeciesPreference = vi.fn((datasetId: string) => {
+    delete efhSpeciesPreferences[datasetId];
+  });
+  return {
+    resetSection,
+    setDefaultHabitatSpecies,
+    efhSpeciesPreferences,
+    clearEfhSpeciesPreference,
+  };
 });
 
 vi.mock("@/lib/settingsStore", async (importOriginal) => {
@@ -68,6 +77,8 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     setHabitatOverlayIntensity: vi.fn(),
     defaultHabitatSpecies: "",
     setDefaultHabitatSpecies: h.setDefaultHabitatSpecies,
+    efhSpeciesPreferences: h.efhSpeciesPreferences,
+    clearEfhSpeciesPreference: h.clearEfhSpeciesPreference,
     syncedSnapshot: null,
     lastSyncedAt: null,
     resetSection: h.resetSection,
@@ -106,6 +117,10 @@ describe("DisplayOverlaysSection", () => {
   beforeEach(() => {
     h.resetSection.mockClear();
     h.setDefaultHabitatSpecies.mockClear();
+    h.clearEfhSpeciesPreference.mockClear();
+    for (const datasetId of Object.keys(h.efhSpeciesPreferences)) {
+      delete h.efhSpeciesPreferences[datasetId];
+    }
   });
 
   it("renders without crashing", () => {
@@ -166,6 +181,33 @@ describe("DisplayOverlaysSection", () => {
   it("does NOT render a reset button (withReset=false)", () => {
     render(<DisplayOverlaysSection />);
     expect(screen.queryByTestId("reset-section-hud-btn")).not.toBeInTheDocument();
+  });
+
+  it("lists remembered EFH pairs by dataset and clears only the selected pair", () => {
+    h.efhSpeciesPreferences["dataset-a"] = ["Pacific Halibut", "Pacific Cod"];
+    h.efhSpeciesPreferences["dataset-b"] = ["Sablefish"];
+    const view = render(<DisplayOverlaysSection />);
+
+    expect(screen.getByText("Pacific Halibut · Pacific Cod")).toBeInTheDocument();
+    expect(screen.getByText("Sablefish")).toBeInTheDocument();
+    expect(screen.getByTestId("efh-preference-dataset-dataset-a")).toHaveTextContent("dataset-a");
+    expect(screen.getByTestId("efh-preference-dataset-dataset-b")).toHaveTextContent("dataset-b");
+
+    fireEvent.click(screen.getByRole("button", {
+      name: "Forget saved EFH pair for dataset dataset-a",
+    }));
+
+    expect(h.clearEfhSpeciesPreference).toHaveBeenCalledExactlyOnceWith("dataset-a");
+    view.rerender(<DisplayOverlaysSection />);
+    expect(screen.queryByTestId("efh-preference-row-dataset-a")).not.toBeInTheDocument();
+    expect(screen.getByTestId("efh-preference-row-dataset-b")).toBeInTheDocument();
+  });
+
+  it("shows an empty state when no remembered EFH pairs exist", () => {
+    render(<DisplayOverlaysSection />);
+    expect(screen.getByTestId("remembered-efh-pairs-empty")).toHaveTextContent(
+      "No remembered EFH pairs.",
+    );
   });
 
   describe("accessibility semantics", () => {

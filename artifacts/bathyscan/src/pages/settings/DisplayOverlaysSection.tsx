@@ -11,6 +11,9 @@ import { ZoneColourSwatches } from "./components/ZoneColourSwatches";
 
 export function DisplayOverlaysSection() {
   const s = useSettingsStore(useShallow((s) => s));
+  const rememberedEfhPairs = Object.entries(s.efhSpeciesPreferences ?? {})
+    .filter(([, species]) => Array.isArray(species) && species.some((name) => name.trim()))
+    .sort(([datasetA], [datasetB]) => datasetA.localeCompare(datasetB));
   // MOBILE-ONLY: Show Grid Lines and Show Markers are relocated to the
   // dedicated "2D Chart" section on phones — hide them here to avoid
   // duplicating the controls. Desktop renders them here unchanged.
@@ -125,6 +128,61 @@ export function DisplayOverlaysSection() {
           onChange={(v) => s.setHabitatOverlayIntensity(clampSlider(v, 0, 1, DEFAULT_SETTINGS.habitatOverlayIntensity))}
           sublabel="Default strength of the amber habitat tint on terrain"
         />
+      </div>
+      <div style={S.card} data-testid="remembered-efh-pairs">
+        <h3 style={S.cardHeader}>REMEMBERED EFH PAIRS</h3>
+        <div style={{ ...S.sublabel, padding: "10px 16px 4px" }}>
+          Saved per dataset. Clearing a pair returns future sessions to the first two available species.
+        </div>
+        {rememberedEfhPairs.length === 0 ? (
+          <div
+            data-testid="remembered-efh-pairs-empty"
+            style={{ ...S.row, justifyContent: "flex-start", color: "#94a3b8" }}
+          >
+            No remembered EFH pairs.
+          </div>
+        ) : (
+          rememberedEfhPairs.map(([datasetId, species]) => (
+            <div
+              key={datasetId}
+              data-testid={`efh-preference-row-${datasetId}`}
+              style={{ ...S.row, alignItems: "flex-start" }}
+            >
+              <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+                <div style={S.label}>Dataset ID</div>
+                <div
+                  data-testid={`efh-preference-dataset-${datasetId}`}
+                  style={{ ...S.sublabel, overflowWrap: "anywhere" }}
+                >
+                  {datasetId}
+                </div>
+                <div style={{ ...S.sublabel, color: "#cbd5e1" }}>
+                  {species.filter((name) => name.trim()).join(" · ")}
+                </div>
+              </div>
+              <button
+                type="button"
+                data-testid={`clear-efh-pair-${datasetId}`}
+                aria-label={`Forget saved EFH pair for dataset ${datasetId}`}
+                onClick={() => s.clearEfhSpeciesPreference(datasetId)}
+                style={{
+                  background: "rgba(248,113,113,0.06)",
+                  border: "1px solid rgba(248,113,113,0.35)",
+                  borderRadius: 4,
+                  color: "#fca5a5",
+                  cursor: "pointer",
+                  fontFamily: FONT,
+                  fontSize: "calc(9px * var(--bs-font-scale, 1))",
+                  letterSpacing: "0.08em",
+                  padding: "5px 8px",
+                  flexShrink: 0,
+                }}
+              >
+                Forget pair
+              </button>
+            </div>
+          ))
+        )}
       </div>
       <ZoneColourSwatches />
       <AdvancedDisclosure testId="habitat-advanced">
