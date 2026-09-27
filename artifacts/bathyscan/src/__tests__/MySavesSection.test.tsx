@@ -383,6 +383,36 @@ describe("MySavesSection — visibility", () => {
     ).toBeInTheDocument();
   });
 
+  it("inspects a ready catalog save without loading it into the viewer", () => {
+    currentMySaves = [SAVE_FOR_UPLOAD_A];
+    renderSection();
+
+    fireEvent.click(screen.getByTestId("btn-inspect-save-save-001"));
+
+    expect(screen.getByTestId("dataset-inspection-dialog")).toBeInTheDocument();
+    expect(screen.getByTestId("dataset-inspection-title")).toHaveTextContent("Some Catalog Dataset");
+    expect(screen.getByTestId("dataset-inspection-source-label")).toHaveTextContent("NOAA");
+    expect(screen.getByTestId("dataset-inspection-id")).toHaveTextContent("upload-a");
+    expect(screen.getByText("Load into viewer")).toBeInTheDocument();
+    expect(mocks.onLoadCatalogSave).not.toHaveBeenCalled();
+    expect(mocks.onLoadUserDataset).not.toHaveBeenCalled();
+  });
+
+  it("inspects an owned upload without invoking its load action", () => {
+    currentUserDatasets = [UPLOAD_A];
+    renderSection();
+
+    fireEvent.click(screen.getByTestId("btn-inspect-upload-upload-a"));
+
+    expect(screen.getByTestId("dataset-inspection-dialog")).toBeInTheDocument();
+    expect(screen.getByTestId("dataset-inspection-title")).toHaveTextContent("Tolstoi Sonar Survey");
+    expect(screen.getByTestId("dataset-inspection-source-label")).toHaveTextContent("Uploaded by you");
+    expect(screen.getByTestId("dataset-inspection-bounds")).toHaveTextContent("Unknown / unavailable");
+    expect(screen.getByTestId("btn-user-dataset-upload-a")).toBeInTheDocument();
+    expect(mocks.onLoadUserDataset).not.toHaveBeenCalled();
+    expect(mocks.onLoadCatalogSave).not.toHaveBeenCalled();
+  });
+
   it("shows durable oversized upload states after leaving Find Data", () => {
     currentGcsJobs = [
       {

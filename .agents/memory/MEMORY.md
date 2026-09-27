@@ -36,3 +36,4 @@
 - [Reference image decode fallback](reference-image-decode-fallback.md) — preserve HTMLImageElement decode fallback when createImageBitmap rejects valid images.
 - [EFH browser fixture hydration](efh-browser-fixture-hydration.md) — settle settings/catalog, expand panels, open the GPS folder, and inspect species-parameterized EFH cache entries.
 - [Direct auth-router test context](direct-auth-router-test-context.md) — tests mounting requireAuth without clerkMiddleware must mock getAuth explicitly for the unauthenticated branch.
+- [Task-tier lock in validation runs](validation-task-lock.md) — managed validation runs need the assigned plan path explicitly supplied as TASK_PLAN_FILE.

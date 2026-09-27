@@ -72,6 +72,7 @@ import { useOfflineScopeStore } from "@/lib/offlineScopeStore";
 import { OVERLAY_Z } from "@/lib/overlayScale";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { clearUploadSession, loadUploadSession, saveUploadSession, type SavedUploadSession } from "@/lib/uploadSession";
+import { DatasetInspectionDialog } from "@/components/DatasetInspectionDialog";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -412,6 +413,8 @@ const SaveCard: React.FC<{
   const [editValue, setEditValue] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
+  const [inspectionOpen, setInspectionOpen] = useState(false);
+  const inspectionTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const startEdit = useCallback(() => {
     setEditValue(displayName);
@@ -566,6 +569,16 @@ const SaveCard: React.FC<{
           <span style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.1em", textTransform: "uppercase", color: statusColor }}>
             {save.status}
           </span>
+          <button
+            type="button"
+            ref={inspectionTriggerRef}
+            data-testid={`btn-inspect-save-${save.id}`}
+            aria-label={`Inspect saved dataset ${displayName}`}
+            onClick={() => setInspectionOpen(true)}
+            style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "3px 10px", background: "rgba(116,211,194,0.08)", border: "1px solid rgba(116,211,194,0.3)", borderRadius: 3, color: "#a6ded6", cursor: "pointer", letterSpacing: "0.1em", textTransform: "uppercase" }}
+          >
+            Inspect
+          </button>
           <ViewscreenTooltip label="Open this dataset in the viewer" side="top">
             <button
               onClick={() => onLoadUserDataset(save)}
@@ -614,6 +627,16 @@ const SaveCard: React.FC<{
               </ViewscreenTooltip>
             );
           })()}
+          <DatasetInspectionDialog
+            open={inspectionOpen}
+            onOpenChange={setInspectionOpen}
+            returnFocusRef={inspectionTriggerRef}
+            datasetId={save.datasetId}
+            datasetName={displayName}
+            datasetSource="owned"
+            sourceLabel={save.catalog?.sourceAgency ?? "Catalog source not listed"}
+            bounds={save.terrainBbox ?? save.catalog?.coverageBbox ?? null}
+          />
         </div>
       )}
       {save.catalog?.syntheticCoverage && (
@@ -681,6 +704,8 @@ const UploadCard: React.FC<{
   const [editValue, setEditValue] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
+  const [inspectionOpen, setInspectionOpen] = useState(false);
+  const inspectionTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const startEdit = useCallback(() => {
     setEditValue(dataset.name); setRenameError(null); setEditing(true);
@@ -791,6 +816,16 @@ const UploadCard: React.FC<{
         <ErrorMessage data-testid={`rename-upload-error-${dataset.id}`} message={renameError} style={{ marginTop: 6, fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#fca5a5" }} />
       )}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <button
+          type="button"
+          ref={inspectionTriggerRef}
+          data-testid={`btn-inspect-upload-${dataset.id}`}
+          aria-label={`Inspect uploaded dataset ${dataset.name}`}
+          onClick={() => setInspectionOpen(true)}
+          style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "3px 10px", background: "rgba(116,211,194,0.08)", border: "1px solid rgba(116,211,194,0.3)", borderRadius: 3, color: "#a6ded6", cursor: "pointer", letterSpacing: "0.1em", textTransform: "uppercase" }}
+        >
+          Inspect
+        </button>
         <ViewscreenTooltip label="Open this dataset in the viewer" side="top">
           <button
             onClick={() => onLoad(dataset.id)}
@@ -840,6 +875,16 @@ const UploadCard: React.FC<{
             >{isAlreadyInView ? "IN VIEW" : "ADD"}</button>
           </ViewscreenTooltip>
         )}
+        <DatasetInspectionDialog
+          open={inspectionOpen}
+          onOpenChange={setInspectionOpen}
+          returnFocusRef={inspectionTriggerRef}
+          datasetId={dataset.id}
+          datasetName={dataset.name}
+          datasetSource="owned"
+          sourceLabel="Uploaded by you"
+          bounds={dataset.bbox ?? null}
+        />
       </div>
     </div>
   );

@@ -312,6 +312,23 @@ describe("FindDataPanel — catalog ADD button", () => {
     expect(
       screen.queryByTestId(`catalog-add-to-view-${NON_PRESET_ENTRY.id}`),
     ).toBeNull();
+    expect(
+      screen.queryByTestId(`catalog-inspect-${NON_PRESET_ENTRY.id}`),
+    ).toBeNull();
+  });
+
+  it("opens public dataset inspection without loading or changing the current view", () => {
+    renderPanel();
+
+    fireEvent.click(screen.getByTestId(`catalog-inspect-${PRESET_ENTRY.id}`));
+
+    expect(screen.getByTestId("dataset-inspection-dialog")).toBeInTheDocument();
+    expect(screen.getByTestId("dataset-inspection-title")).toHaveTextContent(PRESET_ENTRY.name);
+    expect(screen.getByTestId("dataset-inspection-source-label")).toHaveTextContent("NOAA");
+    expect(screen.getByTestId("dataset-inspection-bounds")).toHaveTextContent("Unknown / unavailable");
+    expect(requestDatasetSwitch).not.toHaveBeenCalled();
+    expect(contextMocks.setPendingExternalUserDatasetId).not.toHaveBeenCalled();
+    expect(screen.getByText("Load")).toBeInTheDocument();
   });
 
   it("clicking ADD calls addSelected(presetId, 'preset') on the terrain store", () => {

@@ -58,6 +58,7 @@ import { OVERLAY_Z } from "@/lib/overlayScale";
 import { CatalogResultFilters } from "@/components/CatalogResultFilters";
 import { filterCatalogResults, EMPTY_CATALOG_RESULT_FILTERS, type CatalogResultFilters as CatalogFilters } from "@/lib/catalogResultFilters";
 import { MySavesSection } from "@/components/MySavesSection";
+import { DatasetInspectionDialog } from "@/components/DatasetInspectionDialog";
 
 
 // ---------------------------------------------------------------------------
@@ -441,6 +442,8 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
   const color = DATA_TYPE_COLORS[entry.dataType] ?? "#e2e8f0";
   const isIntertidal = INTERTIDAL_CATALOG_IDS.has(entry.id);
   const [offlineModalOpen, setOfflineModalOpen] = useState(false);
+  const [inspectionOpen, setInspectionOpen] = useState(false);
+  const inspectionTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   return (
     <div style={CARD}>
@@ -529,6 +532,28 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
       )}
 
       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        {presetId && (
+          <button
+            type="button"
+            ref={inspectionTriggerRef}
+            data-testid={`catalog-inspect-${entry.id}`}
+            aria-label={`Inspect dataset ${entry.name}`}
+            onClick={() => setInspectionOpen(true)}
+            style={{
+              fontSize: "calc(12px * var(--bs-font-scale, 1))",
+              padding: "3px 10px",
+              background: "rgba(116,211,194,0.08)",
+              border: "1px solid rgba(116,211,194,0.3)",
+              borderRadius: 3,
+              color: "#a6ded6",
+              cursor: "pointer",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+            }}
+          >
+            Inspect
+          </button>
+        )}
         {presetId && hasPrimary && (
           <ViewscreenTooltip
             label={
@@ -647,6 +672,19 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
               : null,
           }}
           onClose={() => setOfflineModalOpen(false)}
+        />
+      )}
+
+      {presetId && (
+        <DatasetInspectionDialog
+          open={inspectionOpen}
+          onOpenChange={setInspectionOpen}
+          returnFocusRef={inspectionTriggerRef}
+          datasetId={presetId}
+          datasetName={entry.name}
+          datasetSource="public"
+          sourceLabel={entry.sourceAgency || "Source not listed"}
+          bounds={entry.coverageBbox ?? null}
         />
       )}
 
