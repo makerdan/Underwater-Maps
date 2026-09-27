@@ -26,6 +26,7 @@ import { renderWithProviders } from "./setup";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useCameraStore } from "@/lib/cameraStore";
+import { useSpecialCollectionStore } from "@/lib/specialCollectionStore";
 import type { TerrainData } from "@workspace/api-client-react";
 
 // ---------------------------------------------------------------------------
@@ -58,6 +59,7 @@ const makeApiClientMock = vi.hoisted(() => {
       has(_t, p) { return typeof p !== "symbol"; },
     });
 });
+const referenceImageFetchMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/context", () => ({
   useAppState: () => ({ setDatasetId: vi.fn(), setTerrain: vi.fn(), terrain: null }),
@@ -69,6 +71,7 @@ vi.mock("@/lib/simulatedDataStore", () => ({
 
 vi.mock("@workspace/api-client-react", () =>
   makeApiClientMock({
+    getUserCollectionsIdBackground: referenceImageFetchMock,
     useGetMarkers: () => ({ data: [] }),
     getGetMarkersQueryKey: (p: unknown) => ["markers", p],
     useGetTrails: () => ({ data: [], refetch: vi.fn() }),
@@ -121,6 +124,7 @@ function setupNoGridState() {
   useTerrainStore.setState({
     visibleDatasets: [makeVisibleDatasetNoGrid()],
     primaryDatasetId: "fail-ds",
+    collectionScopeId: null,
     overviewGrid: null,
     activeGrid: null,
   });
@@ -138,6 +142,12 @@ function setupNoGridState() {
     heading: 0,
     cameraDepth: 0,
     cameraAltitude: 0,
+  });
+
+  useSpecialCollectionStore.setState({
+    active: null,
+    bgImageLoadingCollectionId: null,
+    bgImageUnavailableCollectionId: null,
   });
 }
 
@@ -160,10 +170,51 @@ describe("OverviewMap — error-state UX: hint link + retry loop", () => {
 
   beforeEach(() => {
     setupNoGridState();
+    referenceImageFetchMock.mockReset();
+    referenceImageFetchMock.mockRejectedValue(new Error("temporarily unavailable"));
     // Spy on Date.now so we can advance the stale-fetch clock without
     // real delays, while leaving requestAnimationFrame unpatched.
     initialNow = Date.now();
     nowSpy = vi.spyOn(Date, "now").mockReturnValue(initialNow);
+  });
+
+  it("explains an unavailable reference image and retries its selected collection", async () => {
+    useTerrainStore.setState({ collectionScopeId: "retry-collection" });
+    useSpecialCollectionStore.setState({
+      active: {
+        collectionId: "retry-collection",
+        name: "Retry collection",
+        bgImage: null,
+        bgImageW: 0,
+        bgImageH: 0,
+        bgOpacity: 0.5,
+        bgGeoAnchors: null,
+        layoutRevisions: [],
+        activeRevisionId: null,
+      },
+      bgImageUnavailableCollectionId: "retry-collection",
+    });
+
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+
+    const unavailable = document.querySelector('[data-testid="overview-reference-image-unavailable"]');
+    expect(unavailable?.textContent).toMatch(/Reference image unavailable/i);
+    const retry = document.querySelector<HTMLButtonElement>(
+      '[data-testid="overview-reference-image-retry"]',
+    );
+    expect(retry).not.toBeNull();
+
+    await act(async () => {
+      fireEvent.click(retry!);
+    });
+
+    await waitFor(() => {
+      expect(referenceImageFetchMock).toHaveBeenCalledWith("retry-collection");
+      expect(useSpecialCollectionStore.getState().bgImageLoadingCollectionId).toBeNull();
+      expect(useSpecialCollectionStore.getState().bgImageUnavailableCollectionId).toBe("retry-collection");
+    });
   });
 
   afterEach(() => {

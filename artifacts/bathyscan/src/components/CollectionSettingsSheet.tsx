@@ -302,7 +302,7 @@ export const CollectionSettingsSheet: React.FC<{
       await deleteUserCollectionsIdBackground(collection.id);
       setPreviewFromBlob(null);
       setImageLoadState("none");
-      await useSpecialCollectionStore.getState().reloadBgImage(collection.id);
+        await useSpecialCollectionStore.getState().reloadBgImage(collection.id, false);
       await invalidate();
     } catch {
       setError("Could not remove the image.");

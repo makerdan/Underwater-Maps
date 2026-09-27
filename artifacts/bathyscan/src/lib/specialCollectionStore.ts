@@ -63,6 +63,8 @@ interface SpecialCollectionStore {
   active: ActiveSpecialCollection | null;
   /** Collection whose authenticated reference image is currently loading. */
   bgImageLoadingCollectionId: string | null;
+  /** Collection whose saved authenticated reference image could not be loaded. */
+  bgImageUnavailableCollectionId: string | null;
   pendingRestore: PendingRestore | null;
   /** Bumped when puzzle mode should turn on even without a revision. */
   pendingPuzzleOn: number;
@@ -84,7 +86,7 @@ interface SpecialCollectionStore {
   appendRevision: (collectionId: string, revision: LayoutRevision) => void;
   removeRevision: (collectionId: string, revisionId: string) => void;
   /** Reload the background image (after upload/delete in the settings sheet). */
-  reloadBgImage: (collectionId: string) => Promise<void>;
+  reloadBgImage: (collectionId: string, imageExpected?: boolean) => Promise<void>;
   /**
    * Sign-out isolation: drop the active collection (per-account server data,
    * including the decoded background image) and any queued restore so the
@@ -184,6 +186,7 @@ function closeImageBitmap(image: CanvasImageSource | null): void {
 export const useSpecialCollectionStore = create<SpecialCollectionStore>((set, get) => ({
   active: null,
   bgImageLoadingCollectionId: null,
+  bgImageUnavailableCollectionId: null,
   pendingRestore: null,
   pendingPuzzleOn: 0,
   geoLayout: null,
@@ -200,6 +203,7 @@ export const useSpecialCollectionStore = create<SpecialCollectionStore>((set, ge
     set({
       active: null,
       bgImageLoadingCollectionId: meta?.bgImageKey ? collection.id : null,
+      bgImageUnavailableCollectionId: null,
       pendingRestore: null,
       geoLayout: null,
       unresolvedMemberNames: [],
@@ -213,6 +217,7 @@ export const useSpecialCollectionStore = create<SpecialCollectionStore>((set, ge
     }
     set({
       bgImageLoadingCollectionId: null,
+      bgImageUnavailableCollectionId: meta?.bgImageKey && !loaded ? collection.id : null,
       unresolvedMemberNames: [...unresolvedMemberNames],
     });
     const revisions = meta?.layoutRevisions ?? [];
@@ -251,6 +256,7 @@ export const useSpecialCollectionStore = create<SpecialCollectionStore>((set, ge
     set({
       active: null,
       bgImageLoadingCollectionId: null,
+      bgImageUnavailableCollectionId: null,
       pendingRestore: null,
       geoLayout: null,
       unresolvedMemberNames: [],
@@ -263,6 +269,7 @@ export const useSpecialCollectionStore = create<SpecialCollectionStore>((set, ge
     set({
       active: null,
       bgImageLoadingCollectionId: null,
+      bgImageUnavailableCollectionId: null,
       pendingRestore: null,
       pendingPuzzleOn: 0,
       geoLayout: null,
@@ -345,10 +352,13 @@ export const useSpecialCollectionStore = create<SpecialCollectionStore>((set, ge
         : {},
     ),
 
-  reloadBgImage: async (collectionId) => {
+  reloadBgImage: async (collectionId, imageExpected = true) => {
     const gen = activationGen;
     if (get().active?.collectionId === collectionId) {
-      set({ bgImageLoadingCollectionId: collectionId });
+      set({
+        bgImageLoadingCollectionId: collectionId,
+        bgImageUnavailableCollectionId: null,
+      });
     }
     const loaded = await loadBgImage(collectionId);
     // Discard if sign-out/deactivate/re-activation happened mid-fetch; the
@@ -371,6 +381,8 @@ export const useSpecialCollectionStore = create<SpecialCollectionStore>((set, ge
               };
             })(),
             bgImageLoadingCollectionId: null,
+            bgImageUnavailableCollectionId:
+              imageExpected && !loaded ? collectionId : null,
           }
         : {},
     );

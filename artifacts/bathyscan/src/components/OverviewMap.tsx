@@ -1337,10 +1337,17 @@ export const OverviewMap: React.FC = () => {
   // --- Special collection (reference-image puzzle assembly) ----------------
   const spcActive = useSpecialCollectionStore((s) => s.active);
   const spcImageLoadingCollectionId = useSpecialCollectionStore((s) => s.bgImageLoadingCollectionId);
+  const spcImageUnavailableCollectionId = useSpecialCollectionStore(
+    (s) => s.bgImageUnavailableCollectionId,
+  );
   const spcPendingRestore = useSpecialCollectionStore((s) => s.pendingRestore);
   const spcPendingPuzzleOn = useSpecialCollectionStore((s) => s.pendingPuzzleOn);
   const referenceImageLoading =
     collectionScopeId !== null && spcImageLoadingCollectionId === collectionScopeId;
+  const referenceImageUnavailable =
+    collectionScopeId !== null &&
+    spcActive?.collectionId === collectionScopeId &&
+    spcImageUnavailableCollectionId === collectionScopeId;
   const referenceImageCannotBePlaced =
     Boolean(spcActive?.bgImage) &&
     !hasValidBgGeoAnchorPair(spcActive?.bgGeoAnchors) &&
@@ -4921,6 +4928,56 @@ export const OverviewMap: React.FC = () => {
           }}
         >
           Loading reference image…
+        </div>
+      )}
+
+      {referenceImageUnavailable && spcActive && !referenceImageLoading && (
+        <div
+          data-testid="overview-reference-image-unavailable"
+          role="status"
+          aria-live="polite"
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: 62,
+            transform: "translateX(-50%)",
+            zIndex: 42,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            maxWidth: "min(560px, calc(100% - 32px))",
+            padding: "7px 10px",
+            border: "1px solid rgba(251,191,36,0.5)",
+            borderRadius: 4,
+            background: "rgba(69, 26, 3, 0.92)",
+            color: "#fde68a",
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: "calc(11px * var(--bs-font-scale, 1))",
+          }}
+        >
+          <span>Reference image unavailable.</span>
+          <button
+            type="button"
+            data-testid="overview-reference-image-retry"
+            aria-label="Retry reference image"
+            onClick={() => {
+              void useSpecialCollectionStore
+                .getState()
+                .reloadBgImage(spcActive.collectionId);
+            }}
+            style={{
+              background: "rgba(251,191,36,0.08)",
+              border: "1px solid rgba(251,191,36,0.5)",
+              borderRadius: 3,
+              color: "#fde68a",
+              cursor: "pointer",
+              font: "inherit",
+              padding: "2px 6px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Try again
+          </button>
         </div>
       )}
 

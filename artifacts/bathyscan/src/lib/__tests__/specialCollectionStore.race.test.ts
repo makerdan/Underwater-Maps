@@ -13,8 +13,9 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const deferredFetch = vi.hoisted(() => {
   const state: {
     resolvers: Array<(blob: Blob) => void>;
+    rejecters: Array<(reason?: unknown) => void>;
     calls: string[];
-  } = { resolvers: [], calls: [] };
+  } = { resolvers: [], rejecters: [], calls: [] };
   return state;
 });
 const bitmapClose = vi.hoisted(() => vi.fn());
@@ -22,8 +23,9 @@ const bitmapClose = vi.hoisted(() => vi.fn());
 vi.mock("@workspace/api-client-react", () => ({
   getUserCollectionsIdBackground: vi.fn((collectionId: string) => {
     deferredFetch.calls.push(collectionId);
-    return new Promise<Blob>((resolve) => {
+    return new Promise<Blob>((resolve, reject) => {
       deferredFetch.resolvers.push(resolve);
+      deferredFetch.rejecters.push(reject);
     });
   }),
 }));
@@ -36,6 +38,7 @@ import type { DatasetCollection } from "@workspace/api-client-react";
 // jsdom lacks createImageBitmap; make the decode path resolve deterministically.
 beforeEach(() => {
   deferredFetch.resolvers.length = 0;
+  deferredFetch.rejecters.length = 0;
   deferredFetch.calls.length = 0;
   (globalThis as Record<string, unknown>).createImageBitmap = vi.fn(async () => ({
     width: 640,
@@ -46,6 +49,7 @@ beforeEach(() => {
   useSpecialCollectionStore.setState({
     active: null,
     bgImageLoadingCollectionId: null,
+    bgImageUnavailableCollectionId: null,
     pendingRestore: null,
     pendingPuzzleOn: 0,
   });
@@ -76,6 +80,55 @@ function makeCollection(id: string, withImage = true): DatasetCollection {
 }
 
 describe("specialCollectionStore — in-flight activation races", () => {
+  it("keeps a failed reference image retryable until a later request succeeds", async () => {
+    const activation = useSpecialCollectionStore
+      .getState()
+      .activateForPuzzle(makeCollection("col-retry"));
+    deferredFetch.rejecters[0]!(new Error("temporarily unavailable"));
+    await activation;
+
+    expect(useSpecialCollectionStore.getState().active?.bgImage).toBeNull();
+    expect(useSpecialCollectionStore.getState().bgImageUnavailableCollectionId).toBe("col-retry");
+    expect(useSpecialCollectionStore.getState().bgImageLoadingCollectionId).toBeNull();
+
+    const failedRetry = useSpecialCollectionStore.getState().reloadBgImage("col-retry");
+    expect(useSpecialCollectionStore.getState().bgImageLoadingCollectionId).toBe("col-retry");
+    expect(useSpecialCollectionStore.getState().bgImageUnavailableCollectionId).toBeNull();
+    deferredFetch.rejecters[1]!(new Error("still unavailable"));
+    await failedRetry;
+
+    expect(useSpecialCollectionStore.getState().bgImageUnavailableCollectionId).toBe("col-retry");
+    expect(useSpecialCollectionStore.getState().bgImageLoadingCollectionId).toBeNull();
+
+    const successfulRetry = useSpecialCollectionStore.getState().reloadBgImage("col-retry");
+    deferredFetch.resolvers[2]!(new Blob(["recovered"], { type: "image/png" }));
+    await successfulRetry;
+
+    expect(useSpecialCollectionStore.getState().active?.bgImage).not.toBeNull();
+    expect(useSpecialCollectionStore.getState().bgImageUnavailableCollectionId).toBeNull();
+    expect(useSpecialCollectionStore.getState().bgImageLoadingCollectionId).toBeNull();
+  });
+
+  it("clears the previous unavailable image state when switching collections", async () => {
+    const firstActivation = useSpecialCollectionStore
+      .getState()
+      .activateForPuzzle(makeCollection("col-first"));
+    deferredFetch.rejecters[0]!(new Error("temporarily unavailable"));
+    await firstActivation;
+    expect(useSpecialCollectionStore.getState().bgImageUnavailableCollectionId).toBe("col-first");
+
+    const secondActivation = useSpecialCollectionStore
+      .getState()
+      .activateForPuzzle(makeCollection("col-second"));
+    expect(useSpecialCollectionStore.getState().bgImageUnavailableCollectionId).toBeNull();
+    expect(useSpecialCollectionStore.getState().bgImageLoadingCollectionId).toBe("col-second");
+    deferredFetch.rejecters[1]!(new Error("temporarily unavailable"));
+    await secondActivation;
+
+    expect(useSpecialCollectionStore.getState().bgImageUnavailableCollectionId).toBe("col-second");
+    expect(useSpecialCollectionStore.getState().active?.collectionId).toBe("col-second");
+  });
+
   it("sign-out during the background-image fetch discards the stale activation entirely", async () => {
     const store = useSpecialCollectionStore.getState();
     const activation = store.activateForPuzzle(makeCollection("col-1"));

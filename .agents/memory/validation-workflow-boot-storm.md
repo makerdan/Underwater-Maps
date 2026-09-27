@@ -5,13 +5,11 @@ description: Environment restart autostarts every configured validation workflow
 
 # Validation workflow boot storm
 
-**Status (2026-08-18): root cause FIXED.** The storm was caused by the "Project" run-button workflow listing every validation workflow as a parallel `workflow.run` task; it fired on every environment restart. The Project workflow is now a single no-op `echo` and stale task-specific workflows were deleted. If the storm recurs, check whether `workflow.run` tasks crept back into the run-button workflow in `.replit` (edit via temp file + `verifyAndReplaceDotReplit`, direct edits are blocked).
+**Rule:** Keep the "Project" run-button workflow to one sequential `shell.exec` no-op. A `workflow.run` task can launch validation on startup, and parallel tasks can queue unnecessary runs on the global lock.
 
-**Rule (if it recurs):** After an environment restart, autostarted validation workflows all queue on the `global` validation lock. Before running your own tier: `stopWorkflow` each extraneous validation workflow, then check `ps` for orphaned boot-time holders (detached pgids from ~boot time still holding `global`/`unit-cpu` locks) and kill their pgids. `stopWorkflow` alone does NOT reliably kill the detached process groups.
+**Why:** A previous boot storm and orphaned process group blocked intended validation for hours; stopping a workflow alone did not reliably stop its detached process.
 
-**Why:** A boot storm serialized hours of unneeded runs behind one lock and an orphaned boot tree kept holding `global` even after its workflows were "stopped", deadlocking the intended tier run.
-
-**How to apply:** When a tier run sits at "another validation step holds the lock" for minutes, list workflows + `ps aux | grep -E "validation-lock|run-tier"`; stop extras, kill orphan pgids, re-check lock files in `.local/`.
+**How to apply:** Run `node scripts/check-runbutton-noop.mjs` before and after changing validation registrations. Treat an existing violation as unrelated unless the current task caused it. If the tier waits on a lock, inspect workflows, `ps aux | grep -E "validation-lock|run-tier"`, and lock files under `.local/`; stop extras and clear confirmed orphan process groups. Repair `.replit` only when in scope, through validated replacement, never direct editing.
 
 ## Related: test:unit fail-fast hides artifact suites
 
