@@ -5,7 +5,7 @@ import {
   canvasToLonLat,
   lonLatToCanvas,
 } from "../../artifacts/bathyscan/src/lib/overviewRenderer/transforms";
-import type { TerrainData } from "@workspace/api-client-react";
+import type { DatasetCollection, TerrainData } from "@workspace/api-client-react";
 
 const AUTH_HEADERS = {
   "x-e2e-user-id": E2E_USER_ID,
@@ -279,6 +279,23 @@ async function createReadyAnchoredSpecialCollection(
   return { collectionId, datasetId };
 }
 
+async function saveCollectionLayout(
+  request: import("@playwright/test").APIRequestContext,
+  collectionId: string,
+  datasetId: string,
+  transform: { tx: number; ty: number; angleDeg: number },
+): Promise<void> {
+  const response = await request.post(apiUrl(`/api/user/collections/${collectionId}/layout`), {
+    headers: { ...AUTH_HEADERS, "content-type": "application/json" },
+    data: {
+      name: "Rapid-switch regression",
+      tiles: [{ datasetId, ...transform, locked: false }],
+      groups: [],
+    },
+  });
+  expect(response.status()).toBe(201);
+}
+
 test.describe("Special collection reference-image anchors", () => {
   test("replaces the reference image and geographic transform when switching collections", async ({
     page,
@@ -422,6 +439,224 @@ test.describe("Special collection reference-image anchors", () => {
       if (collectionBDatasetId) {
         await request
           .delete(apiUrl(`/api/user/datasets/${collectionBDatasetId}`), { headers: AUTH_HEADERS })
+          .catch(() => {});
+      }
+    }
+  });
+
+  test("keeps the final saved layout when an earlier image response finishes last", async ({
+    page,
+    request,
+  }) => {
+    const suffix = Date.now();
+    const collectionNames = [
+      `Rapid switch A ${suffix}`,
+      `Rapid switch B ${suffix}`,
+      `Rapid switch C ${suffix}`,
+    ];
+    const configs = [
+      {
+        minLon: -0.8,
+        anchors: { a: { lon: "-0.8", lat: "0.8" }, b: { lon: "0.8", lat: "-0.8" } },
+        transform: { tx: 101, ty: -11, angleDeg: 11 },
+      },
+      {
+        minLon: 3.2,
+        anchors: { a: { lon: "3.2", lat: "0.7" }, b: { lon: "4.2", lat: "-0.7" } },
+        transform: { tx: 202, ty: -22, angleDeg: 22 },
+      },
+      {
+        minLon: 7.2,
+        anchors: { a: { lon: "7.2", lat: "0.6" }, b: { lon: "8.2", lat: "-0.6" } },
+        transform: { tx: 303, ty: -33, angleDeg: 33 },
+      },
+    ] as const;
+    const seeded: Array<{ collectionId: string; datasetId: string }> = [];
+    const delayedImagePath = () =>
+      `/api/user/collections/${seeded[0]?.collectionId ?? ""}/background`;
+    let releaseDelayedImage!: () => void;
+    const delayedImageGate = new Promise<void>((resolve) => {
+      releaseDelayedImage = resolve;
+    });
+    let notifyDelayedImageStarted!: () => void;
+    const delayedImageStarted = new Promise<void>((resolve) => {
+      notifyDelayedImageStarted = resolve;
+    });
+    let delayedImageWasRequested = false;
+    let delayedImageHeld = false;
+    let delayedImageFinished: Promise<void> | null = null;
+    let routeInstalled = false;
+
+    try {
+      for (const [index, name] of collectionNames.entries()) {
+        const config = configs[index]!;
+        const collection = await createReadyAnchoredSpecialCollection(page, request, name, {
+          activate: false,
+          minLon: config.minLon,
+          anchors: config.anchors,
+        });
+        seeded.push(collection);
+        await saveCollectionLayout(
+          request,
+          collection.collectionId,
+          collection.datasetId,
+          config.transform,
+        );
+      }
+
+      // Reload the persisted special metadata so the saved revisions are the
+      // same records the collection activation flow reads for a user.
+      await page.goto("/");
+      await expect(page.getByTestId("collections-section")).toBeVisible({ timeout: 12_000 });
+      const collectionResponse = await request.get(apiUrl("/api/user/collections"), {
+        headers: AUTH_HEADERS,
+      });
+      expect(collectionResponse.ok()).toBeTruthy();
+      const collections = await collectionResponse.json() as DatasetCollection[];
+      const collectionById = new Map(collections.map((collection) => [collection.id, collection]));
+      const collectionRecords = seeded.map(({ collectionId }) => {
+        const collection = collectionById.get(collectionId);
+        if (!collection) throw new Error(`Collection ${collectionId} was not returned by the API.`);
+        return collection;
+      });
+
+      const activateWithTestBridge = async (
+        collection: DatasetCollection,
+        datasetId: string,
+      ): Promise<void> => {
+        const activated = await page.evaluate(
+          ({ collection: collectionToActivate, datasetId: memberId }) =>
+            window.__bathyTest?.activateSpecialCollectionForTest(
+              collectionToActivate,
+              [memberId],
+            ) ?? false,
+          { collection, datasetId },
+        );
+        expect(activated).toBe(true);
+      };
+
+      const firstCollection = seeded[0]!;
+      const firstImagePath = delayedImagePath();
+      await page.route(`**${firstImagePath}`, async (route) => {
+        if (route.request().method() !== "GET" || delayedImageHeld) {
+          await route.continue();
+          return;
+        }
+        delayedImageHeld = true;
+        delayedImageWasRequested = true;
+        notifyDelayedImageStarted();
+        await delayedImageGate;
+        await route.continue();
+      });
+      routeInstalled = true;
+      delayedImageFinished = page.waitForEvent(
+        "requestfinished",
+        (browserRequest) =>
+          browserRequest.url().includes(firstImagePath) &&
+          browserRequest.method() === "GET",
+      ).then(() => undefined);
+
+      // This dev-only bridge follows the same store handoff as the UI while
+      // bypassing its in-flight activation mutex, so A can remain pending as
+      // the real browser activates B and then C.
+      await activateWithTestBridge(collectionRecords[0]!, firstCollection.datasetId);
+      await delayedImageStarted;
+      await page.waitForFunction(
+        (collectionId) =>
+          window.__bathyTest?.getCollectionScope?.().collectionId === collectionId,
+        firstCollection.collectionId,
+        { timeout: 5_000 },
+      );
+
+      const secondCollection = seeded[1]!;
+      await activateWithTestBridge(collectionRecords[1]!, secondCollection.datasetId);
+      await page.waitForFunction(
+        (collectionId) =>
+          window.__bathyTest?.getCollectionScope?.().collectionId === collectionId,
+        secondCollection.collectionId,
+        { timeout: 5_000 },
+      );
+
+      const finalCollection = seeded[2]!;
+      const finalConfig = configs[2]!;
+      await activateWithTestBridge(collectionRecords[2]!, finalCollection.datasetId);
+      await page.waitForFunction(
+        ({ collectionId, datasetId, tx }) => {
+          const overlay = window.__bathyTest?.getActiveSpecialCollectionOverlay?.();
+          const scope = window.__bathyTest?.getCollectionScope?.();
+          const transform = window.__bathyTest?.getPuzzleTransform?.(datasetId);
+          return Boolean(
+            overlay?.imageReady &&
+              overlay.collectionId === collectionId &&
+              scope?.collectionId === collectionId &&
+              scope.datasetIds?.includes(datasetId) &&
+              scope.loadedDatasetIds.includes(datasetId) &&
+              transform?.tx === tx,
+          );
+        },
+        {
+          collectionId: finalCollection.collectionId,
+          datasetId: finalCollection.datasetId,
+          tx: finalConfig.transform.tx,
+        },
+        { timeout: 20_000 },
+      );
+
+      const assertFinalCollectionOwnsLayout = async () => {
+        const overlay = await readLiveOverlay(page);
+        expect(overlay).not.toBeNull();
+        expect(overlay!.imageReady).toBe(true);
+        expect(overlay!.collectionId).toBe(finalCollection.collectionId);
+        expect(overlay!.anchors).toEqual([
+          { imgX: 0, imgY: 0, lon: 7.2, lat: 0.6 },
+          { imgX: 1, imgY: 1, lon: 8.2, lat: -0.6 },
+        ]);
+        expect(overlay!.grid.minLon).toBeCloseTo(finalConfig.minLon, 5);
+
+        const state = await page.evaluate((datasetId) => ({
+          scope: window.__bathyTest?.getCollectionScope?.() ?? null,
+          transform: window.__bathyTest?.getPuzzleTransform?.(datasetId) ?? null,
+          overview: window.__bathyTest?.getCollectionOverviewSnapshot?.() ?? null,
+        }), finalCollection.datasetId);
+        expect(state.scope?.collectionId).toBe(finalCollection.collectionId);
+        expect(state.scope?.primaryDatasetId).toBe(finalCollection.datasetId);
+        expect(state.scope?.datasetIds).toContain(finalCollection.datasetId);
+        expect(state.scope?.loadedDatasetIds).toContain(finalCollection.datasetId);
+        expect(state.transform).toMatchObject(finalConfig.transform);
+        expect(
+          state.overview?.tiles.find((tile) => tile.datasetId === finalCollection.datasetId)
+            ?.transform,
+        ).toMatchObject(finalConfig.transform);
+      };
+
+      await assertFinalCollectionOwnsLayout();
+
+      // Let A's authenticated image response finish only after C has fully
+      // restored. A stale activation must not replace C's overlay or layout.
+      releaseDelayedImage();
+      await delayedImageFinished;
+      await page.waitForTimeout(300);
+      await assertFinalCollectionOwnsLayout();
+      expect(delayedImageWasRequested).toBe(true);
+    } finally {
+      releaseDelayedImage();
+      if (delayedImageWasRequested && delayedImageFinished) {
+        await Promise.race([
+          delayedImageFinished.catch(() => undefined),
+          page.waitForTimeout(5_000),
+        ]);
+      }
+      if (routeInstalled) {
+        await page.unroute(`**${delayedImagePath()}`).catch(() => {});
+      }
+      for (const { collectionId } of seeded) {
+        await request
+          .delete(apiUrl(`/api/user/collections/${collectionId}`), { headers: AUTH_HEADERS })
+          .catch(() => {});
+      }
+      for (const { datasetId } of seeded) {
+        await request
+          .delete(apiUrl(`/api/user/datasets/${datasetId}`), { headers: AUTH_HEADERS })
           .catch(() => {});
       }
     }

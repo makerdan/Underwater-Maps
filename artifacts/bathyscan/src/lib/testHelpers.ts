@@ -42,6 +42,7 @@ import {
   getGetEfhQueryKey,
   getGetSubstrateQueryKey,
   type DatasetMeta,
+  type DatasetCollection,
   type Marker,
   type TerrainData,
   type EfhFeatureCollection,
@@ -278,6 +279,16 @@ export interface BathyTestApi {
     | null;
   setOverviewOpen: (open: boolean) => void;
   isOverviewOpen: () => boolean;
+  /**
+   * Start the same collection scope, tile activation, Overview, and special
+   * collection store handoff as CollectionsSection without its UI-level
+   * single-activation guard. This lets browser tests hold one activation's
+   * image request while a newer collection wins.
+   */
+  activateSpecialCollectionForTest: (
+    collection: DatasetCollection,
+    datasetIds: string[],
+  ) => boolean;
   getPendingDropIn: () => { worldX: number; worldZ: number } | null;
   clearPendingDropIn: () => void;
   /** Whether the Marker form panel is currently open. */
@@ -1316,6 +1327,16 @@ export function installTestHelpers(): void {
     },
     setOverviewOpen: (open) => useUiStore.getState().setOverviewOpen(open),
     isOverviewOpen: () => useUiStore.getState().overviewOpen,
+    activateSpecialCollectionForTest: (collection, datasetIds) => {
+      if (datasetIds.length === 0) return false;
+      useTerrainStore.getState().setCollectionScope(collection.id, datasetIds);
+      useTerrainStore.getState().activateCollection(
+        datasetIds.map((datasetId) => ({ datasetId, source: "user" as const })),
+      );
+      useUiStore.getState().setOverviewOpen(true);
+      void useSpecialCollectionStore.getState().activateForPuzzle(collection);
+      return true;
+    },
     getPendingDropIn: () => useUiStore.getState().pendingDropIn,
     clearPendingDropIn: () => useUiStore.getState().clearPendingDropIn(),
     isMarkerFormOpen: () => useUiStore.getState().markerFormOpen,
