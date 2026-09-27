@@ -7,7 +7,7 @@
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 
 const authorizedFetchMock = vi.fn<(...args: unknown[]) => Promise<Response>>();
 const toastMock = vi.fn();
@@ -199,6 +199,119 @@ describe("AdminPanel — pending approvals badge after batch actions", () => {
 });
 
 describe("AdminPanel — Poe verification health", () => {
+  it("refreshes the snapshot in place and shows loading until the new values arrive", async () => {
+    mockRoutes([]);
+    const fallbackRoutes = authorizedFetchMock.getMockImplementation();
+    let diagnosticsRequests = 0;
+    let finishRefresh: ((response: Response) => void) | undefined;
+    const refreshedDiagnostics = {
+      windowMs: 30 * 60 * 1000,
+      generatedAt: "2026-09-27T13:00:00.000Z",
+      count: 2,
+      providerDetail: "provider secret must not be shown",
+      rows: [
+        {
+          route: "models",
+          code: "model_registry_unavailable",
+          count: 7,
+          lastOccurredAt: "2026-09-27T12:59:00.000Z",
+        },
+        {
+          route: "query",
+          code: "model_unavailable",
+          count: 4,
+          lastOccurredAt: "2026-09-27T12:58:00.000Z",
+        },
+      ],
+    };
+
+    authorizedFetchMock.mockImplementation(async (...args: unknown[]) => {
+      const url = String(args[0]);
+      if (url.includes("poe-verification")) {
+        diagnosticsRequests += 1;
+        if (diagnosticsRequests === 1) return jsonResponse(200, POE_DIAGNOSTICS);
+        return new Promise<Response>((resolve) => {
+          finishRefresh = resolve;
+        });
+      }
+      return fallbackRoutes!(...args);
+    });
+
+    render(<AdminPanel />);
+
+    expect(await screen.findByText("model_unavailable")).toBeInTheDocument();
+    const refreshButton = screen.getByTestId("poe-verification-refresh");
+    fireEvent.click(refreshButton);
+
+    await waitFor(() => expect(diagnosticsRequests).toBe(2));
+    expect(screen.getByTestId("poe-verification-loading")).toHaveTextContent(
+      "Loading verification diagnostics…",
+    );
+    expect(screen.getByTestId("poe-verification-refresh")).toBeDisabled();
+    expect(screen.queryByRole("table", { name: "Poe verification diagnostics" })).toBeNull();
+
+    expect(finishRefresh).toBeDefined();
+    await act(async () => {
+      finishRefresh!(jsonResponse(200, refreshedDiagnostics));
+    });
+
+    expect(await screen.findByText("model_registry_unavailable")).toBeInTheDocument();
+    const diagnosticsTable = screen.getByRole("table", { name: "Poe verification diagnostics" });
+    expect(diagnosticsTable).toHaveTextContent("models");
+    expect(diagnosticsTable).toHaveTextContent("model_registry_unavailable");
+    expect(diagnosticsTable).toHaveTextContent("7");
+    expect(diagnosticsTable).toHaveTextContent(
+      new Date(refreshedDiagnostics.rows[0]!.lastOccurredAt).toLocaleString(),
+    );
+    expect(screen.getByTestId("poe-verification-window")).toHaveTextContent(
+      "2 active diagnostics · 30 minutes window",
+    );
+    expect(screen.queryByText(/provider secret/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps empty and unavailable safeguards when a refresh changes the response", async () => {
+    mockRoutes([]);
+    const fallbackRoutes = authorizedFetchMock.getMockImplementation();
+    const refreshedResponses: Response[] = [
+      jsonResponse(200, POE_DIAGNOSTICS),
+      jsonResponse(200, {
+        ...POE_DIAGNOSTICS,
+        windowMs: 60 * 60 * 1000,
+        count: 0,
+        rows: [],
+      }),
+      jsonResponse(503, {
+        error: "provider secret should not be shown",
+      }),
+    ];
+    let diagnosticsRequests = 0;
+
+    authorizedFetchMock.mockImplementation(async (...args: unknown[]) => {
+      const url = String(args[0]);
+      if (url.includes("poe-verification")) {
+        return refreshedResponses[diagnosticsRequests++]!;
+      }
+      return fallbackRoutes!(...args);
+    });
+
+    render(<AdminPanel />);
+
+    expect(await screen.findByText("model_unavailable")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("poe-verification-refresh"));
+    expect(await screen.findByTestId("poe-verification-empty")).toHaveTextContent(
+      "No verification failures recorded in the active diagnostic window.",
+    );
+    expect(screen.getByText("Counters expire after 60 minutes.")).toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Poe verification diagnostics" })).toBeNull();
+
+    fireEvent.click(screen.getByTestId("poe-verification-refresh"));
+    expect(await screen.findByTestId("poe-verification-unavailable")).toHaveTextContent(
+      "Verification diagnostics are temporarily unavailable.",
+    );
+    expect(screen.queryByText(/provider secret/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId("poe-verification-retry")).toBeInTheDocument();
+  });
+
   it("shows a clear empty state when the short-lived window has expired", async () => {
     mockRoutes([]);
     authorizedFetchMock.mockImplementation(async (...args: unknown[]) => {

@@ -310,7 +310,37 @@ function PoeVerificationCard() {
     <div style={{ ...S.card, marginTop: 12 }} data-testid="poe-verification-card">
       <div style={S.cardTitle}>Poe Verification Health</div>
 
-      {state === "loading" && <div style={{ ...S.skeleton, width: "65%" }} />}
+      <button
+        data-testid={state === "error" ? "poe-verification-retry" : "poe-verification-refresh"}
+        aria-label={
+          state === "loading"
+            ? "Refreshing Poe verification diagnostics"
+            : "Refresh Poe verification diagnostics"
+        }
+        onClick={() => void load()}
+        disabled={state === "loading"}
+        style={{
+          ...S.cardTitle,
+          background: "none",
+          border: "1px solid rgba(0,229,255,0.25)",
+          borderRadius: 3,
+          padding: "5px 10px",
+          marginTop: 10,
+          cursor: state === "loading" ? "wait" : "pointer",
+          opacity: state === "loading" ? 0.5 : 1,
+        }}
+      >
+        {state === "loading" ? "REFRESHING…" : state === "error" ? "RETRY" : "REFRESH"}
+      </button>
+
+      {state === "loading" && (
+        <>
+          <div role="status" aria-live="polite" data-testid="poe-verification-loading" style={S.note}>
+            Loading verification diagnostics…
+          </div>
+          <div style={{ ...S.skeleton, width: "65%" }} />
+        </>
+      )}
 
       {state === "empty" && diagnostics && (
         <>
@@ -374,28 +404,11 @@ function PoeVerificationCard() {
       )}
 
       {state === "error" && (
-        <>
-          <ErrorMessage
-            data-testid="poe-verification-unavailable"
-            message="Verification diagnostics are temporarily unavailable."
-            style={S.error}
-          />
-          <button
-            data-testid="poe-verification-retry"
-            onClick={() => void load()}
-            style={{
-              ...S.cardTitle,
-              background: "none",
-              border: "1px solid rgba(0,229,255,0.25)",
-              borderRadius: 3,
-              padding: "5px 10px",
-              marginTop: 10,
-              cursor: "pointer",
-            }}
-          >
-            RETRY
-          </button>
-        </>
+        <ErrorMessage
+          data-testid="poe-verification-unavailable"
+          message="Verification diagnostics are temporarily unavailable."
+          style={S.error}
+        />
       )}
     </div>
   );
