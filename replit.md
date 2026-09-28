@@ -603,6 +603,33 @@ validation with `nohup`, `setsid`, background shells, or one-off port clones.
 > **HARD GATE — applies before writing any plan.**
 > Read `.agents/skills/failure-gate/SKILL.md` now if you have not already done so this session.
 
+
+### Progress checkpoints
+
+- Before a batch of work, briefly say what you will do and why. Tool-call activity
+  and programmatic in-progress/completion summaries already show individual
+  operations; do not narrate every file read, command, or tool call.
+- Give a new checkpoint when a meaningful phase changes or a long inspection,
+  implementation, review, wait, retry, or validation run would otherwise leave
+  the user without context. State what has actually finished, what is running
+  or blocking progress, and the next meaningful check. During waits, report new
+  evidence or a changed next step, not repeated elapsed-time messages or an
+  unverified completion estimate.
+- Before validation, name the task plan's locked tier (`test-fast`,
+  `test-standard`, `test-standard-plus`, or `test-heavy`). Report its observed
+  result separately from the platform's completion validation, which may run
+  broader checks. Never widen the task tier to explain away a failure. For a
+  retry, distinguish an intermittent pass from a proven pre-existing failure:
+  only matching active catalog evidence or Failure Gate's two-factor provenance
+  permits the latter.
+- If discussing remote CI, keep it separate from local and completion checks.
+  Name the inspected revision/run when available; mark missing evidence unknown.
+  A workflow file or check name alone proves neither that CI ran, passed, nor
+  that it is required for merging. Do not trigger remote runs for a status update.
+- At the end, give the verified outcome and any unresolved blocker or next step.
+  Never describe pending checks, an in-progress completion run, or a passing
+  retry as final success.
+
 ### Failure Gate checklist
 
 Before writing a plan, read the Failure Gate skill, scan relevant memory, the
