@@ -147,7 +147,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 8,
     marginBottom: 10,
     color: "#74d3c2",
-    fontSize: 11,
+    fontSize: "calc(11px * var(--bs-font-scale, 1))",
     fontWeight: 700,
     letterSpacing: ".16em",
     textTransform: "uppercase",
@@ -165,7 +165,7 @@ const styles: Record<string, CSSProperties> = {
     maxWidth: 720,
     marginTop: 10,
     color: "#9fb8bb",
-    fontSize: 13,
+    fontSize: "calc(13px * var(--bs-font-scale, 1))",
     lineHeight: 1.55,
   },
   identity: {
@@ -184,7 +184,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 999,
     color: "#a6ded6",
     background: "rgba(116, 211, 194, .09)",
-    fontSize: 11,
+    fontSize: "calc(11px * var(--bs-font-scale, 1))",
     fontWeight: 700,
     letterSpacing: ".08em",
     textTransform: "uppercase",
@@ -193,7 +193,7 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     color: "#76979d",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-    fontSize: 11,
+    fontSize: "calc(11px * var(--bs-font-scale, 1))",
     overflowWrap: "anywhere",
   },
   body: {
@@ -218,14 +218,14 @@ const styles: Record<string, CSSProperties> = {
   },
   sectionLabel: {
     color: "#c9e0df",
-    fontSize: 11,
+    fontSize: "calc(11px * var(--bs-font-scale, 1))",
     fontWeight: 700,
     letterSpacing: ".15em",
     textTransform: "uppercase",
   },
   sectionNote: {
     color: "#718e94",
-    fontSize: 11,
+    fontSize: "calc(11px * var(--bs-font-scale, 1))",
     textAlign: "right",
   },
   grid: {
@@ -242,7 +242,7 @@ const styles: Record<string, CSSProperties> = {
   evidenceLabel: {
     marginBottom: 6,
     color: "#719198",
-    fontSize: 10,
+    fontSize: "calc(10px * var(--bs-font-scale, 1))",
     fontWeight: 700,
     letterSpacing: ".11em",
     lineHeight: 1.35,
@@ -250,7 +250,7 @@ const styles: Record<string, CSSProperties> = {
   },
   evidenceValue: {
     color: "#e2efec",
-    fontSize: 14,
+    fontSize: "calc(14px * var(--bs-font-scale, 1))",
     fontWeight: 650,
     lineHeight: 1.35,
     overflowWrap: "anywhere",
@@ -278,7 +278,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 7,
     marginBottom: 9,
     color: "#87a5a9",
-    fontSize: 10,
+    fontSize: "calc(10px * var(--bs-font-scale, 1))",
     fontWeight: 700,
     letterSpacing: ".13em",
     textTransform: "uppercase",
@@ -287,14 +287,14 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 9,
-    fontSize: 17,
+    fontSize: "calc(17px * var(--bs-font-scale, 1))",
     fontWeight: 750,
     letterSpacing: "-.01em",
   },
   qualifier: {
     marginTop: 8,
     color: "#8aa3a7",
-    fontSize: 11,
+    fontSize: "calc(11px * var(--bs-font-scale, 1))",
     lineHeight: 1.45,
   },
   findingList: {
@@ -313,13 +313,13 @@ const styles: Record<string, CSSProperties> = {
   },
   findingTitle: {
     marginBottom: 3,
-    fontSize: 12,
+    fontSize: "calc(12px * var(--bs-font-scale, 1))",
     fontWeight: 700,
     letterSpacing: ".04em",
   },
   findingMessage: {
     color: "#b5c9ca",
-    fontSize: 12,
+    fontSize: "calc(12px * var(--bs-font-scale, 1))",
     lineHeight: 1.5,
   },
   nextStep: {
@@ -327,13 +327,13 @@ const styles: Record<string, CSSProperties> = {
     paddingTop: 8,
     borderTop: "1px solid rgba(210, 230, 226, .1)",
     color: "#d9c28b",
-    fontSize: 11,
+    fontSize: "calc(11px * var(--bs-font-scale, 1))",
     lineHeight: 1.45,
   },
   empty: {
     padding: "15px 16px",
     color: "#80999d",
-    fontSize: 12,
+    fontSize: "calc(12px * var(--bs-font-scale, 1))",
     fontStyle: "italic",
   },
   footer: {
@@ -351,7 +351,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 7,
     color: "#06212a",
     background: "#74d3c2",
-    fontSize: 11,
+    fontSize: "calc(11px * var(--bs-font-scale, 1))",
     fontWeight: 800,
     letterSpacing: ".12em",
     textTransform: "uppercase",
@@ -439,7 +439,7 @@ const ErrorState: FC<{ source: "public" | "owned"; error: unknown; onRetry: () =
               type="button"
               data-testid="button-retry-dataset-inspection"
               onClick={onRetry}
-              style={{ marginTop: 11, padding: "7px 11px", border: "1px solid rgba(116,211,194,.3)", borderRadius: 6, background: "rgba(116,211,194,.08)", color: "#a6ded6", fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", cursor: "pointer" }}
+              style={{ marginTop: 11, padding: "7px 11px", border: "1px solid rgba(116,211,194,.3)", borderRadius: 6, background: "rgba(116,211,194,.08)", color: "#a6ded6", fontSize: "calc(11px * var(--bs-font-scale, 1))", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", cursor: "pointer" }}
             >
               Retry audit
             </button>
@@ -486,7 +486,7 @@ const FindingGroup: FC<{
                   {finding.evidence && Object.keys(finding.evidence).length > 0 && (
                     <div data-testid={`dataset-inspection-finding-evidence-${severity}-${index}`} style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
                       {Object.entries(finding.evidence).map(([key, value]) => (
-                        <span key={key} style={{ color: "#90acad", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 10 }}>
+                         <span key={key} style={{ color: "#90acad", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "calc(10px * var(--bs-font-scale, 1))" }}>
                           {key}: <strong style={{ color: "#c4d9d6", fontWeight: 600 }}>{value === null ? UNKNOWN : String(value)}</strong>
                         </span>
                       ))}
@@ -780,7 +780,7 @@ export const DatasetInspectionDialog: FC<DatasetInspectionDialogProps> = ({
         </div>
 
         <DialogFooter style={styles.footer}>
-          <div style={{ display: "flex", alignItems: "center", gap: 7, color: "#789498", fontSize: 11 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, color: "#789498", fontSize: "calc(11px * var(--bs-font-scale, 1))" }}>
             <Ruler size={13} aria-hidden="true" />
             Audit facts are bounded and read-only.
           </div>
