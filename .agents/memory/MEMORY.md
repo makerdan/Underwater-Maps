@@ -40,3 +40,4 @@
 - [Task-tier lock in validation runs](validation-task-lock.md) — managed validation runs need the assigned plan path explicitly supplied as TASK_PLAN_FILE.
 - [Orval Zod catalog detection](orval-zod-catalog-detection.md) — set the installed Zod major explicitly in Orval; catalog-based auto-detection may emit incompatible code.
 - [Incomplete pnpm install diagnosis](incomplete-pnpm-install.md) — fail early on missing declared test links; avoid installing packages from inside concurrent validation.
+- [Isolated task checkout freshness](isolated-task-checkout-freshness.md) — merged fixes may not appear in an active task checkout; compare against main-repl/main before retrying.

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, expectTypeOf } from "vitest";
 import {
   PostMarkersBody,
   postMarkersBodyLabelMax,
@@ -23,6 +23,7 @@ import {
   PostRouteBodySchema,
   RouteIdParamSchema,
   PatchRouteBodySchema,
+  PoeClassifyBody,
   GetDatasetsIdTerrainQueryParams,
   PostDatasetsUploadBody,
   GetUserDatasetsIdTerrainResponse,
@@ -56,6 +57,61 @@ describe("generated OpenAPI contract", () => {
       { position: 1, hex: "#283593" },
     ]);
     expect(GetUserDatasetsIdTerrainResponse.safeParse({ datasetId: "x" }).success).toBe(false);
+  });
+});
+
+type PoeClassifyBodyOutput = ReturnType<typeof PoeClassifyBody.parse>;
+
+// ---------------------------------------------------------------------------
+// Generated Poe classification request contract
+// ---------------------------------------------------------------------------
+
+describe("PoeClassifyBody", () => {
+  it("preserves the generated output type for classification fields", () => {
+    expectTypeOf<PoeClassifyBodyOutput>().toEqualTypeOf<{
+      gridBase64: string;
+      waterType: "saltwater" | "freshwater";
+      datasetId?: string;
+      gridHash?: string;
+      depths32?: number[];
+      depthsFull?: number[];
+      widthFull?: number;
+      heightFull?: number;
+    }>();
+  });
+
+  it("accepts the required image and defaults waterType", () => {
+    const result = PoeClassifyBody.safeParse({
+      gridBase64: "data:image/png;base64,AA==",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.waterType).toBe("saltwater");
+  });
+
+  it("enforces the image format and exact fallback-grid length", () => {
+    const base = { gridBase64: "data:image/jpeg;base64,AA==" };
+    expect(PoeClassifyBody.safeParse({ ...base, gridBase64: "data:image/gif;base64,AA==" }).success).toBe(false);
+    expect(PoeClassifyBody.safeParse({
+      ...base,
+      depths32: Array.from({ length: 1024 }, () => 1),
+    }).success).toBe(true);
+    expect(PoeClassifyBody.safeParse({
+      ...base,
+      depths32: Array.from({ length: 1023 }, () => 1),
+    }).success).toBe(false);
+  });
+
+  it("enforces the declared full-grid dimension bounds", () => {
+    const base = { gridBase64: "data:image/png;base64,AA==" };
+    for (const dimension of [1, 512]) {
+      expect(PoeClassifyBody.safeParse({ ...base, widthFull: dimension }).success).toBe(true);
+      expect(PoeClassifyBody.safeParse({ ...base, heightFull: dimension }).success).toBe(true);
+    }
+    for (const dimension of [0, 513]) {
+      expect(PoeClassifyBody.safeParse({ ...base, widthFull: dimension }).success).toBe(false);
+      expect(PoeClassifyBody.safeParse({ ...base, heightFull: dimension }).success).toBe(false);
+    }
   });
 });
 
