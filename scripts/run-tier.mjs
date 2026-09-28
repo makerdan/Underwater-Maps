@@ -37,6 +37,7 @@ import { fileURLToPath } from "node:url";
 import { getValidationSteps, getStepsForTier } from "./validation-steps.mjs";
 import { runTierLockDryRun } from "./lib/tier-lock-check.mjs";
 import { cleanStaleValidationLocks } from "./clean-stale-validation-locks.mjs";
+import { checkTestDependencies } from "./lib/check-test-dependencies.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -112,6 +113,12 @@ if (!isStepMode) {
   // checkTierLock() itself calls process.exit(1) on a TIER-LOCK VIOLATION,
   // so reaching this point means the check passed (or gracefully degraded).
   if (checkTierOnly) process.exit(0);
+  try {
+    checkTestDependencies(root);
+  } catch (error) {
+    console.error(`[run-tier] dependency preflight failed: ${error.message}`);
+    process.exit(1);
+  }
   if (tier === "fast") reclaimOrphanedLocksBeforeFastTier();
 }
 
