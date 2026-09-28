@@ -1,6 +1,6 @@
 {
   "catalogVersion": 1,
-  "catalogDate": "2026-09-27",
+  "catalogDate": "2026-09-28",
   "entries": [
     {
       "id": "BASE-E2E-PUZZLE-POLL",
@@ -163,17 +163,18 @@
         "observations": [
           { "date": "2026-08-25", "outcome": "fail", "command": "overviewMap.componentIntegration.test.ts", "result": "The geographic transform assertion failed 3/3 with dLon unchanged." },
           { "date": "2026-08-25", "outcome": "fail", "command": "reproduction of Overview wheel zoom scenario", "result": "The rAF republish path did not publish a changed transform for the fixed-pixel translation." },
-          { "date": "2026-09-27", "outcome": "pass", "command": "pnpm --filter @workspace/bathyscan exec vitest run src/__tests__/overviewMap.componentIntegration.test.ts -t \"re-publishes smaller dLon after zooming in\"", "result": "The isolated fixed 50px puzzle-offset scenario passed (1 passed, 31 skipped); dLon decreased after wheel zoom, confirming geographic offsets republish from the current zoom transform." }
+          { "date": "2026-09-27", "outcome": "pass", "command": "pnpm --filter @workspace/bathyscan exec vitest run src/__tests__/overviewMap.componentIntegration.test.ts -t \"re-publishes smaller dLon after zooming in\"", "result": "The isolated fixed 50px puzzle-offset scenario passed (1 passed, 31 skipped); dLon decreased after wheel zoom, confirming geographic offsets republish from the current zoom transform." },
+          { "date": "2026-09-28", "outcome": "pass", "command": "pnpm --filter @workspace/bathyscan exec vitest run src/__tests__/overviewMap.componentIntegration.test.ts -t 're-publishes smaller dLon after zooming in'", "result": "Independent re-verification of the fixed 50px puzzle-offset wheel-zoom scenario passed (1 passed, 33 skipped); the test asserts the published dLon after zoom is smaller than before." }
         ],
         "authoritative": false,
-        "summary": "The August audit confirmed a stale geographic offset after wheel zoom; the current fixed-pixel integration scenario now passes and verifies that the published dLon changes with the zoom transform."
+        "summary": "The August audit confirmed a stale geographic offset after wheel zoom; independent September 27 and 28 fixed-pixel integration runs pass and verify that the published dLon changes with the zoom transform."
       },
       "ownership": {
         "owner": "BathyScan Overview map",
         "rationale": "BathyScan Overview owners maintain and re-verify this geographic-placement contract when the zoom path changes."
       },
       "firstVerifiedDate": "2026-08-25",
-      "lastVerifiedDate": "2026-09-27",
+      "lastVerifiedDate": "2026-09-28",
       "affectedTiers": ["standard"],
       "reviewDeadline": "2026-09-15",
       "status": "resolved",
@@ -185,7 +186,7 @@
       "resolution": {
         "date": "2026-09-27",
         "summary": "The Overview Map geographic transform publication after wheel zoom is verified working against current code.",
-        "evidence": "The isolated component integration test passed with a fixed 50px puzzle translation and confirmed dLon decreases after wheel zoom."
+        "evidence": "The isolated component integration test passed on 2026-09-27 and again on 2026-09-28 with a fixed 50px puzzle translation, confirming dLon decreases after wheel zoom."
       }
     },
     {
