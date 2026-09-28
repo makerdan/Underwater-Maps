@@ -23,7 +23,41 @@ import {
   PostRouteBodySchema,
   RouteIdParamSchema,
   PatchRouteBodySchema,
+  GetDatasetsIdTerrainQueryParams,
+  PostDatasetsUploadBody,
+  GetUserDatasetsIdTerrainResponse,
+  getSettingsResponseCustomStopsDefault,
+  getSettingsResponsePanelCollapseDefault,
 } from "../index.js";
+
+// Generator compatibility: these defaults, names and parse rules come from
+// OpenAPI, not handwritten schemas. Keep them covered across Orval upgrades.
+describe("generated OpenAPI contract", () => {
+  it("retains query parameter names, coercion, bounds and defaults", () => {
+    expect(GetDatasetsIdTerrainQueryParams.parse({})).toEqual({ resolution: 256 });
+    expect(GetDatasetsIdTerrainQueryParams.parse({ resolution: "32" })).toEqual({ resolution: 32 });
+    expect(GetDatasetsIdTerrainQueryParams.safeParse({ resolution: "513" }).success).toBe(false);
+    expect(GetDatasetsIdTerrainQueryParams.safeParse({ Resolution: "32" }).success).toBe(true);
+  });
+
+  it("retains enum and numeric defaults for multipart bodies", () => {
+    const parsed = PostDatasetsUploadBody.parse({ file: new File(["x"], "depth.csv") });
+    expect(parsed.resolution).toBe(256);
+    expect(parsed.pdfDepthUnit).toBe("feet");
+    expect(PostDatasetsUploadBody.safeParse({ file: new File(["x"], "depth.csv"), pdfDepthUnit: "fathoms" }).success).toBe(false);
+  });
+
+  it("preserves object and array defaults and required response fields", () => {
+    expect(getSettingsResponsePanelCollapseDefault).toEqual({});
+    expect(getSettingsResponseCustomStopsDefault).toEqual([
+      { position: 0, hex: "#00e5ff" },
+      { position: 0.3, hex: "#0d47a1" },
+      { position: 0.65, hex: "#1a237e" },
+      { position: 1, hex: "#283593" },
+    ]);
+    expect(GetUserDatasetsIdTerrainResponse.safeParse({ datasetId: "x" }).success).toBe(false);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // PostMarkersBody

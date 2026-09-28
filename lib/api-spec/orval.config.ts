@@ -82,6 +82,9 @@ export default defineConfig({
       prettier: true,
       override: {
         zod: {
+          // This workspace uses Zod 3. Orval's auto-detection sees the
+          // workspace catalog specifier instead of the installed version.
+          version: 3,
           coerce: {
             query: ['boolean', 'number', 'string'],
             param: ['boolean', 'number', 'string'],
