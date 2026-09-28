@@ -3,18 +3,34 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { parseReplitWorkflows } from "../check-runbutton-noop.mjs";
+import { CANONICAL_RUN_BUTTON_COMMAND, parseReplitWorkflows } from "../check-runbutton-noop.mjs";
 import { VALIDATION_COMMANDS } from "../register-validation-commands.mjs";
 import { getValidationSteps } from "../validation-steps.mjs";
 
 const root = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const read = (relativePath) => readFileSync(resolve(root, relativePath), "utf8");
 
-test(".replit spends no workflow slots on duplicate validation jobs", () => {
+test(".replit keeps Project isolated from the four registered validation workflows", () => {
   const { runButton, workflows } = parseReplitWorkflows(read(".replit"));
+  const tierCommands = VALIDATION_COMMANDS.filter(({ budgetKey }) => budgetKey !== null);
   assert.equal(runButton, "Project");
-  assert.deepEqual(workflows.map(({ name }) => name), ["Project"]);
-  assert.deepEqual(workflows[0].tasks, [{ task: "shell.exec" }]);
+  assert.deepEqual(
+    workflows.map(({ name }) => name).sort(),
+    ["Project", ...tierCommands.map(({ name }) => name)].sort(),
+    "no duplicate or unregistered workflows should consume slots",
+  );
+  const project = workflows.find(({ name }) => name === runButton);
+  assert.equal(project.mode, "sequential");
+  assert.deepEqual(project.tasks, [
+    { task: "shell.exec", args: CANONICAL_RUN_BUTTON_COMMAND },
+  ]);
+  for (const { name, command } of tierCommands) {
+    assert.deepEqual(
+      workflows.find((workflow) => workflow.name === name).tasks,
+      [{ task: "shell.exec", args: command }],
+      `${name} must run its registered command without launching other workflows`,
+    );
+  }
 });
 
 test("validation manifest is the exact five-command registration contract", () => {
