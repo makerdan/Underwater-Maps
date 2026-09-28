@@ -83,15 +83,17 @@ overrides:
   brace-expansion@5: '^5.0.8'
   # tar@7: path traversal / arbitrary file write
   tar@7: '^7.5.21'
-  # fast-uri: prototype pollution
-  fast-uri: '^3.1.4'
+  # Browserslist <=4.28.6: unbounded query cache and custom-stats crash.
+  browserslist: '^4.28.7'
+  # fast-uri <3.1.6: prototype pollution and URL host confusion / SSRF.
+  fast-uri: '^3.1.6'
   # body-parser: ReDoS in content-type parsing
   body-parser: '^2.3.0'
   # js-yaml <=4.1.1: quadratic DoS in merge-key via orval; build-only exposure.
-  # js-yaml 4.3.0: quadratic CPU in !!omap (GHSA-5p4m-2wfm-xmqj, CVE-2026-59870);
-  # patched in 4.3.1. Keyed as js-yaml@4 to stay in the 4.x series and avoid
+  # js-yaml <4.3.2: quadratic CPU in !!omap and empty merge sources;
+  # patched in 4.3.2. Keyed as js-yaml@4 to stay in the 4.x series and avoid
   # v5.x which breaks orval ESM imports (see memory: js-yaml-override-breaks-orval).
-  js-yaml@4: '4.3.1'
+  js-yaml@4: '4.3.2'
   # esbuild <0.28.1: arbitrary file read on dev server (GHSA-g7r4-m6w7-qqqr);
   # applied here for non-vite paths (api-server direct dep handled in its package.json).
   esbuild@<0.28.1: '^0.28.1'
