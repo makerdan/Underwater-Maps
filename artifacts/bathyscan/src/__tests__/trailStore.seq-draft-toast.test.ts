@@ -68,8 +68,9 @@ describe("trailStore — seq counter monotonicity", () => {
     resetStore();
     resetSessionStorage();
     mockToast.mockClear();
-    // Seed startedAt so saveDraft is exercised
-    useTrailStore.setState({ startedAt: Date.now() });
+    // Sequence tests deliberately have no active recording: the separate
+    // draft-checkpoint tests exercise persistence. Serializing a growing
+    // 10,000-point draft every 10 additions obscures the seq invariant.
   });
 
   it("assigns unique, incrementing seq values for the first batch of points", () => {
@@ -86,6 +87,7 @@ describe("trailStore — seq counter monotonicity", () => {
 
   it("seq keeps incrementing past the ring-buffer cap (no duplicates)", () => {
     const { addPoint } = useTrailStore.getState();
+    expect(useTrailStore.getState().startedAt).toBeNull();
 
     // Fill buffer to max + 5 extra (causing 5 evictions)
     const total = MAX_TRAIL_POINTS + 5;
@@ -98,6 +100,8 @@ describe("trailStore — seq counter monotonicity", () => {
 
     // The last point should have seq = total - 1 (not MAX_TRAIL_POINTS)
     expect(pts[MAX_TRAIL_POINTS - 1]!.seq).toBe(total - 1);
+    expect(useTrailStore.getState().isOverflowing).toBe(true);
+    expect(sessionStorage.getItem("bathyscan-trail-draft")).toBeNull();
 
     // All seq values in the buffer must be unique and strictly increasing
     const seqs = pts.map((p) => p.seq);

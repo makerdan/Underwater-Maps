@@ -46,9 +46,12 @@ describe("dynamic 3D scene chunk recovery", () => {
     expect(deleteCache).toHaveBeenCalledWith("bathyscan-v-current-app-assets");
   });
 
+  // This is a real lazy-import smoke check (not a mocked module). The scene's
+  // dependency graph is large and may take longer than a normal unit assertion
+  // to transform when the full suite is running concurrently.
   it("resolves the current TourScene module normally", async () => {
     const loaded = await loadTourScene();
     expect(loaded.default).toBeTypeOf("function");
     expect(sessionStorage.getItem(SCENE_CHUNK_RECOVERY_KEY)).toBeNull();
-  });
+  }, 45_000);
 });

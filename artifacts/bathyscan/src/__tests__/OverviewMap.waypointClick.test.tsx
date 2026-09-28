@@ -18,7 +18,7 @@
  *      so the dispatched lon/lat matches the click position on the map.
  */
 import React from "react";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { fireEvent, screen, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderWithProviders } from "./setup";
@@ -64,6 +64,17 @@ vi.mock("@/lib/context", () => ({
 
 vi.mock("@/lib/simulatedDataStore", () => ({
   requestDatasetSwitch: vi.fn(),
+}));
+
+// Waypoint dispatch does not depend on heatmap enhancement. Keep the render
+// loop from scheduling real fetches while these canvas interactions run.
+vi.mock("@/hooks/useUpscaledHeatmap", () => ({
+  useUpscaledHeatmap: () => ({
+    isUpscaling: false,
+    upscaledBitmap: null,
+    requestUpscaleIfNeeded: vi.fn(),
+    invalidate: vi.fn(),
+  }),
 }));
 
 vi.mock("@workspace/api-client-react", () =>
@@ -212,6 +223,10 @@ function makeOverviewGrid() {
 }
 
 describe("OverviewMap — waypoint mode click dispatches correct lat/lon", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   beforeEach(() => {
     Object.defineProperty(window, "innerWidth",  { value: CANVAS_W, configurable: true });
     Object.defineProperty(window, "innerHeight", { value: CANVAS_H, configurable: true });
