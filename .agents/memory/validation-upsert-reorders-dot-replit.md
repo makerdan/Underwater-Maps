@@ -6,6 +6,9 @@ description: Why temporary task-locked validation command changes can alter .rep
 `setValidationCommand` may reorder workflow metadata and may also reattach the
 validation workflow to the `Project` run button, switching `Project` to parallel
 mode even when only one validation command was upserted.
+Restoring the validation command after a run does not undo the run-button
+mutation; the active tier can fail its run-button guard before it reaches
+later steps.
 
 **Why:** Temporary task-locked validation upserts have produced both harmless
 metadata-table ordering drift and a material run-button regression that caused

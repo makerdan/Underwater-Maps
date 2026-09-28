@@ -1,10 +1,15 @@
 # E2E conditional-skip audit
 
-Last audited: 2026-09-28. The static call-site baseline is **241**:
-`node scripts/check-skip-count.mjs` finds 0 static unit skips and 241
+Last audited: 2026-09-28. The static call-site baseline is **239**:
+`node scripts/check-skip-count.mjs` finds 0 static unit skips and 239
 conditional `test.skip(` sites under `tests/e2e/`. Runtime GitHub-runner skips
 are measured separately in `runtime-skip-baseline.json`; they must never be
 used to raise this source-level baseline.
+
+Baseline reduced 2026-09-28 from 241 to 239: the real-upload offline-reload
+check now asserts service-worker registration and page control instead of
+skipping on either failure. Both are prerequisites for the offline behavior
+under test, so a failure must remain visible.
 
 Baseline updated 2026-09-28 to 241: the EFH water-type-switch browser
 regression adds two explicit readiness gates. Missing `window.__bathyTest`

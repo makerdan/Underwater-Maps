@@ -627,18 +627,12 @@ test.describe("Save Offline full-download flow", () => {
         await navigator.serviceWorker.ready;
         return true;
       });
-      if (!registered) {
-        test.skip(true, "The browser could not register the offline service worker");
-        return;
-      }
+      expect(registered, "offline reload requires a registered service worker").toBe(true);
       await page.reload({ waitUntil: "domcontentloaded" });
       const controlled = await page.evaluate(
         () => "serviceWorker" in navigator && navigator.serviceWorker.controller !== null,
       );
-      if (!controlled) {
-        test.skip(true, "The browser could not obtain a controlling offline service worker after reload");
-        return;
-      }
+      expect(controlled, "offline reload requires a controlling service worker").toBe(true);
 
       const explore = page.getByRole("button", { name: "Explore", exact: true });
       if (await explore.isVisible({ timeout: 10_000 }).catch(() => false)) {
