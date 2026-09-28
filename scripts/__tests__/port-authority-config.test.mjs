@@ -25,8 +25,10 @@ test(".replit keeps Project isolated from the four registered validation workflo
     { task: "shell.exec", args: CANONICAL_RUN_BUTTON_COMMAND },
   ]);
   for (const { name, command } of tierCommands) {
+    const workflow = workflows.find((candidate) => candidate.name === name);
+    assert.equal(workflow.isValidation, true, `${name} must be registered as a validation check`);
     assert.deepEqual(
-      workflows.find((workflow) => workflow.name === name).tasks,
+      workflow.tasks,
       [{ task: "shell.exec", args: command }],
       `${name} must run its registered command without launching other workflows`,
     );

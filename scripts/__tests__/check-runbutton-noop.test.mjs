@@ -124,6 +124,54 @@ args = "echo ok"
     assert.equal(workflows.length, 1);
     assert.equal(workflows[0].name, "MyProject");
     assert.equal(workflows[0].tasks.length, 1);
+    assert.equal(workflows[0].isValidation, false);
+  });
+
+  it("associates metadata with the named workflow regardless of table order", () => {
+    const content = `[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "sequential"
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo ready"
+
+[[workflows.workflow]]
+name = "test-fast"
+[workflows.workflow.metadata]
+isValidation = true
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node test-fast"
+
+[[workflows.workflow]]
+name = "test-heavy"
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node test-heavy"
+[workflows.workflow.metadata]
+isValidation = false
+`;
+    const { workflows } = parseReplitWorkflows(content);
+    assert.equal(workflows.find(({ name }) => name === "Project").isValidation, undefined);
+    assert.equal(workflows.find(({ name }) => name === "test-fast").isValidation, true);
+    assert.equal(workflows.find(({ name }) => name === "test-heavy").isValidation, false);
+    assert.equal(workflows.find(({ name }) => name === "test-heavy").tasks[0].args, "node test-heavy");
+  });
+
+  it("does not accept metadata outside the workflow metadata table", () => {
+    const content = `[[workflows.workflow]]
+name = "test-fast"
+isValidation = true
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node test-fast"
+[workflows.workflow.other]
+isValidation = true
+`;
+    assert.equal(parseReplitWorkflows(content).workflows[0].isValidation, undefined);
   });
 });
 

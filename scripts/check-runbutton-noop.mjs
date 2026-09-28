@@ -47,7 +47,8 @@ export const CANONICAL_RUN_BUTTON_COMMAND = "echo BathyScan environment ready.";
  *     runButton: string,          // value of workflows.runButton
  *     workflows: Array<{
  *       name: string,
- *       tasks: Array<{ task: string }>
+ *       isValidation?: boolean,
+ *       tasks: Array<{ task: string, args: string }>
  *     }>
  *   }
  *
@@ -65,11 +66,13 @@ export function parseReplitWorkflows(content) {
   // Section header patterns
   const WORKFLOW_HEADER = /^\s*\[\[workflows\.workflow\]\]\s*$/;
   const TASKS_HEADER = /^\s*\[\[workflows\.workflow\.tasks\]\]\s*$/;
+  const METADATA_HEADER = /^\s*\[workflows\.workflow\.metadata\]\s*$/;
   const WORKFLOWS_SECTION = /^\s*\[workflows\]\s*$/;
-  const OTHER_SECTION = /^\s*\[(?!workflows\b)[^\]]+\]\s*$/;
+  const OTHER_SECTION = /^\s*\[[^\[\]]+\]\s*$/;
 
   let inWorkflowsSection = false;
   let inTasksBlock = false;
+  let inMetadataBlock = false;
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
@@ -80,14 +83,23 @@ export function parseReplitWorkflows(content) {
       workflows.push(currentWorkflow);
       inWorkflowsSection = false;
       inTasksBlock = false;
+      inMetadataBlock = false;
       continue;
     }
 
     if (TASKS_HEADER.test(rawLine)) {
       inTasksBlock = true;
+      inMetadataBlock = false;
       if (currentWorkflow) {
         currentWorkflow.tasks.push({ task: "", args: "" });
       }
+      continue;
+    }
+
+    if (METADATA_HEADER.test(rawLine)) {
+      inWorkflowsSection = false;
+      inTasksBlock = false;
+      inMetadataBlock = currentWorkflow !== null;
       continue;
     }
 
@@ -95,6 +107,7 @@ export function parseReplitWorkflows(content) {
       inWorkflowsSection = true;
       currentWorkflow = null;
       inTasksBlock = false;
+      inMetadataBlock = false;
       continue;
     }
 
@@ -105,9 +118,12 @@ export function parseReplitWorkflows(content) {
       if (/^\s*\[workflows\.workflow\b/.test(rawLine)) {
         // sub-table of the current workflow — stay in currentWorkflow context
         inTasksBlock = false;
+        inMetadataBlock = false;
       } else {
         inWorkflowsSection = false;
         inTasksBlock = false;
+        inMetadataBlock = false;
+        currentWorkflow = null;
       }
       continue;
     }
@@ -123,12 +139,18 @@ export function parseReplitWorkflows(content) {
       continue;
     }
 
-    if (currentWorkflow && !inTasksBlock && key === "name") {
+    if (currentWorkflow && inMetadataBlock && key === "isValidation") {
+      currentWorkflow.isValidation = rawValue.trim() === "true" ? true
+        : rawValue.trim() === "false" ? false : undefined;
+      continue;
+    }
+
+    if (currentWorkflow && !inTasksBlock && !inMetadataBlock && key === "name") {
       currentWorkflow.name = value;
       continue;
     }
 
-    if (currentWorkflow && !inTasksBlock && key === "mode") {
+    if (currentWorkflow && !inTasksBlock && !inMetadataBlock && key === "mode") {
       currentWorkflow.mode = value;
       continue;
     }
