@@ -1270,23 +1270,14 @@ describe("renderIntertidalBand — deep-water cells and null-MHW early exit", ()
 // ---------------------------------------------------------------------------
 // buildHeatmapBitmap — topography / land-cell rendering
 //
-// When a topography array is supplied, cells with topography[dataIdx] > 0 must
-// be rendered as flat grey (120, 120, 120) to match the 3D shader land colour.
-// Cells with topography ≤ 0 (water) must use the colourmap as normal.
-// Null / NaN depth values must still render as the NO_DATA colour even when a
-// topography array is present (the null check comes first in the loop).
+// Land and survey gaps use the caller's configured opaque no-data colour;
+// valid water depths use the colourmap. The South-first data rows are flipped
+// to North-up canvas rows.
 // ---------------------------------------------------------------------------
 
-// Precompute the expected no-data RGBA bytes for assertions.
-// NO_DATA_COLOR = { r: 0.75, g: 0.75, b: 0.75 }  (linear sRGB)
-// linearToSRGBByte(0.75) ≈ round(1.055 * 0.75^(1/2.4) - 0.055) * 255
-function expectedNoDataByte(): number {
-  const c = 0.75;
-  const s = 1.055 * Math.pow(c, 1.0 / 2.4) - 0.055;
-  return Math.max(0, Math.min(255, Math.round(s * 255)));
-}
-
-describe("buildHeatmapBitmap — topography array: land cells rendered as grey", () => {
+describe("buildHeatmapBitmap — topography and survey gaps", () => {
+  const nodataColor = "#7b91ab";
+  const nodataPixel = [123, 145, 171, 255];
   beforeEach(() => {
     usePaletteStore.getState().reset();
     vi.restoreAllMocks();
@@ -1306,7 +1297,7 @@ describe("buildHeatmapBitmap — topography array: land cells rendered as grey",
    *   dataIdx 2 → topo  5 → LAND  (row=0,col=0, i=0)
    *   dataIdx 3 → topo  8 → LAND  (row=0,col=1, i=4)
    */
-  it("land cells (topography > 0) are fully transparent (alpha = 0) so they cannot occlude other datasets", () => {
+  it("land cells (topography > 0) use the configured opaque no-data colour", () => {
     const W = 2;
     const H = 2;
     const depths = [10, 20, 30, 40];
@@ -1314,19 +1305,17 @@ describe("buildHeatmapBitmap — topography array: land cells rendered as grey",
     const topography = [0, 0, 5, 8];
 
     const { capturedImageDatas, createElementSpy } = setupCanvasMock();
-    buildHeatmapBitmap(grid, "ocean", topography);
+    buildHeatmapBitmap(grid, "ocean", topography, true, nodataColor);
     createElementSpy.mockRestore();
 
     expect(capturedImageDatas.length).toBe(1);
     const px = capturedImageDatas[0]!;
 
     // Canvas pixel 0 → dataIdx 2 (topo=5 → LAND).
-    // Land cells are fully transparent (alpha=0) so a later-drawn dataset's
-    // real depth pixels are not occluded by this survey's land region.
-    expect(px[3]).toBe(0); // alpha = 0 (fully transparent)
+    expect([...px.slice(0, 4)]).toEqual(nodataPixel);
 
     // Canvas pixel 1 (i=4) → dataIdx 3 (topo=8 → LAND)
-    expect(px[7]).toBe(0); // alpha = 0 (fully transparent)
+    expect([...px.slice(4, 8)]).toEqual(nodataPixel);
   });
 
   it("water cells (topography ≤ 0) use the depth colourmap, not grey", () => {
@@ -1375,7 +1364,7 @@ describe("buildHeatmapBitmap — topography array: land cells rendered as grey",
     const withTopo = withTopoData[0]!;
     const noTopo  = noTopoData[0]!;
 
-    // Land pixels (i=0 and i=4) should differ — transparent (0,0,0,0) with topo, colourmap without.
+    // Land pixels differ from water pixels when topography is supplied.
     const landPixelsDiffer =
       withTopo[0] !== noTopo[0] ||
       withTopo[4] !== noTopo[4];
@@ -1405,22 +1394,12 @@ describe("buildHeatmapBitmap — topography array: land cells rendered as grey",
     const topography = [5, 0, 0, 0];
 
     const { capturedImageDatas, createElementSpy } = setupCanvasMock();
-    buildHeatmapBitmap(grid, "ocean", topography);
+    buildHeatmapBitmap(grid, "ocean", topography, true, nodataColor);
     createElementSpy.mockRestore();
 
     const px = capturedImageDatas[0]!;
-    const noDataByte = expectedNoDataByte();
-
-    // Canvas pixel 2 (i=8) → dataIdx 0 → null depth → NO_DATA colour, not grey.
-    // Alpha is 0 (transparent) so overlapping datasets show through in multi-dataset mode.
-    expect(px[8]).toBe(noDataByte);
-    expect(px[9]).toBe(noDataByte);
-    expect(px[10]).toBe(noDataByte);
-    expect(px[11]).toBe(0);
-
-    // Must NOT be the land grey.
-    const isLandGrey = px[8] === 120 && px[9] === 120 && px[10] === 120;
-    expect(isLandGrey).toBe(false);
+    // Canvas pixel 2 (i=8) → dataIdx 0 → null depth → configured no-data colour.
+    expect([...px.slice(8, 12)]).toEqual(nodataPixel);
   });
 
   it("NaN depth cells render as NO_DATA colour even when topography marks them as land", () => {
@@ -1433,21 +1412,12 @@ describe("buildHeatmapBitmap — topography array: land cells rendered as grey",
     const topography = [0, 3, 0, 0];
 
     const { capturedImageDatas, createElementSpy } = setupCanvasMock();
-    buildHeatmapBitmap(grid, "ocean", topography);
+    buildHeatmapBitmap(grid, "ocean", topography, true, nodataColor);
     createElementSpy.mockRestore();
 
     const px = capturedImageDatas[0]!;
-    const noDataByte = expectedNoDataByte();
-
-    // Canvas pixel 3 (i=12) → dataIdx 1 → NaN depth → NO_DATA colour.
-    // Alpha is 0 (transparent) so overlapping datasets show through in multi-dataset mode.
-    expect(px[12]).toBe(noDataByte);
-    expect(px[13]).toBe(noDataByte);
-    expect(px[14]).toBe(noDataByte);
-    expect(px[15]).toBe(0);
-
-    const isLandGrey = px[12] === 120 && px[13] === 120 && px[14] === 120;
-    expect(isLandGrey).toBe(false);
+    // Canvas pixel 3 (i=12) → dataIdx 1 → NaN depth → configured no-data colour.
+    expect([...px.slice(12, 16)]).toEqual(nodataPixel);
   });
 });
 

@@ -53,6 +53,29 @@ function collectSourceFiles(dir: string): string[] {
 const HOOKS = ["useClerk", "useAuth", "useUser"] as const;
 type HookName = (typeof HOOKS)[number];
 
+/** Load both the renderer and the shim after resetModules so they share React. */
+async function renderBypassHooks() {
+  vi.stubEnv("VITE_DEV_AUTH_BYPASS", "1");
+  vi.resetModules();
+  const { renderHook, cleanup } = await import("@testing-library/react/pure");
+  const compat = await import("../lib/clerkCompat.js");
+  const { DEV_AUTH_BYPASS } = await import("../lib/devAuth.js");
+  expect(DEV_AUTH_BYPASS, "bypass must be active for this sentinel").toBe(true);
+  const { result, unmount } = renderHook(() => ({
+    useClerk: compat.useClerk(),
+    useAuth: compat.useAuth(),
+    useUser: compat.useUser(),
+  }));
+  return {
+    stubs: result.current,
+    dispose: () => {
+      unmount();
+      cleanup();
+      vi.unstubAllEnvs();
+    },
+  };
+}
+
 /** members consumed per hook, discovered by static scan */
 function scanConsumedMembers(): Record<HookName, Set<string>> {
   const consumed: Record<HookName, Set<string>> = {
@@ -96,59 +119,57 @@ function scanConsumedMembers(): Record<HookName, Set<string>> {
 
 describe("Clerk bypass stubs ↔ real hook-member usage sentinel", () => {
   it("every hook member consumed in src/ exists on the bypass stubs", async () => {
-    vi.stubEnv("VITE_DEV_AUTH_BYPASS", "1");
-    vi.resetModules();
-    const compat = await import("../lib/clerkCompat.js");
-    const { DEV_AUTH_BYPASS } = await import("../lib/devAuth.js");
-    expect(DEV_AUTH_BYPASS, "bypass must be active for this sentinel").toBe(true);
+    const { stubs: hooks, dispose } = await renderBypassHooks();
+    try {
+      const stubs: Record<HookName, Record<string, unknown>> = {
+        useClerk: hooks.useClerk as unknown as Record<string, unknown>,
+        useAuth: hooks.useAuth as unknown as Record<string, unknown>,
+        useUser: hooks.useUser as unknown as Record<string, unknown>,
+      };
 
-    const stubs: Record<HookName, Record<string, unknown>> = {
-      useClerk: compat.useClerk() as unknown as Record<string, unknown>,
-      useAuth: compat.useAuth() as unknown as Record<string, unknown>,
-      useUser: compat.useUser() as unknown as Record<string, unknown>,
-    };
-
-    const consumed = scanConsumedMembers();
-    const missing: string[] = [];
-    for (const hook of HOOKS) {
-      for (const member of consumed[hook]) {
-        if (!(member in stubs[hook])) missing.push(`${hook}().${member}`);
+      const consumed = scanConsumedMembers();
+      const missing: string[] = [];
+      for (const hook of HOOKS) {
+        for (const member of consumed[hook]) {
+          if (!(member in stubs[hook])) missing.push(`${hook}().${member}`);
+        }
       }
+
+      expect(missing, [
+        "",
+        `${missing.length} Clerk hook member(s) are consumed in src/ but missing from the`,
+        "dev-bypass stubs in src/lib/clerkCompat.tsx:",
+        "",
+        missing.map((m) => `  • ${m}`).join("\n"),
+        "",
+        "Add each missing member to the corresponding bypass object",
+        "(bypassUseClerk / bypassUseAuth / bypassUseUser) in clerkCompat.tsx.",
+        "",
+      ].join("\n")).toEqual([]);
+
+    } finally {
+      dispose();
     }
-
-    expect(missing, [
-      "",
-      `${missing.length} Clerk hook member(s) are consumed in src/ but missing from the`,
-      "dev-bypass stubs in src/lib/clerkCompat.tsx:",
-      "",
-      missing.map((m) => `  • ${m}`).join("\n"),
-      "",
-      "Add each missing member to the corresponding bypass object",
-      "(bypassUseClerk / bypassUseAuth / bypassUseUser) in clerkCompat.tsx.",
-      "",
-    ].join("\n")).toEqual([]);
-
-    vi.unstubAllEnvs();
   });
 
   it("baseline nested contract: bypass session exposes getToken (past regression)", async () => {
-    vi.stubEnv("VITE_DEV_AUTH_BYPASS", "1");
-    vi.resetModules();
-    const compat = await import("../lib/clerkCompat.js");
+    const { stubs, dispose } = await renderBypassHooks();
+    try {
+      const clerk = stubs.useClerk as unknown as {
+        session?: { getToken?: () => Promise<string | null> };
+      };
+      expect(clerk.session, "bypass useClerk() must expose a session object").toBeTruthy();
+      expect(
+        typeof clerk.session?.getToken,
+        "bypass session must expose getToken() — App.tsx calls session.getToken() on every request",
+      ).toBe("function");
+      await expect(clerk.session!.getToken!()).resolves.toBeNull();
 
-    const clerk = compat.useClerk() as unknown as {
-      session?: { getToken?: () => Promise<string | null> };
-    };
-    expect(clerk.session, "bypass useClerk() must expose a session object").toBeTruthy();
-    expect(
-      typeof clerk.session?.getToken,
-      "bypass session must expose getToken() — App.tsx calls session.getToken() on every request",
-    ).toBe("function");
-    await expect(clerk.session!.getToken!()).resolves.toBeNull();
+      const auth = stubs.useAuth as unknown as { getToken?: () => Promise<string | null> };
+      expect(typeof auth.getToken, "bypass useAuth() must expose getToken()").toBe("function");
 
-    const auth = compat.useAuth() as unknown as { getToken?: () => Promise<string | null> };
-    expect(typeof auth.getToken, "bypass useAuth() must expose getToken()").toBe("function");
-
-    vi.unstubAllEnvs();
+    } finally {
+      dispose();
+    }
   });
 });
