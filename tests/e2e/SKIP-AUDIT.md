@@ -1,10 +1,19 @@
 # E2E conditional-skip audit
 
-Last audited: 2026-09-27. The static call-site baseline is **239**:
-`node scripts/check-skip-count.mjs` finds 0 static unit skips and 239
+Last audited: 2026-09-28. The static call-site baseline is **241**:
+`node scripts/check-skip-count.mjs` finds 0 static unit skips and 241
 conditional `test.skip(` sites under `tests/e2e/`. Runtime GitHub-runner skips
 are measured separately in `runtime-skip-baseline.json`; they must never be
 used to raise this source-level baseline.
+
+Baseline updated 2026-09-28 to 241: the EFH water-type-switch browser
+regression adds two explicit readiness gates. Missing `window.__bathyTest`
+matches category 2 (dev helpers are absent outside the dev build); missing
+`setActiveDatasetId` after the helper appears matches category 1 (the
+authenticated shell/TestBridge did not mount). The test cannot seed its
+catalog and terrain or switch water type through the bridge without these
+preconditions. In the authenticated E2E fixture both gates should be false;
+once ready, missing EFH controls or switch results are assertions, not skips.
 
 Baseline updated 2026-09-27 to 239: `efh-overlay.spec.ts` waits for initial
 server-settings and dataset-catalog hydration, resets collapsed panels, and
