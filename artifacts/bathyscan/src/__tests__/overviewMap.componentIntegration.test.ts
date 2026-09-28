@@ -2201,11 +2201,10 @@ describe("OverviewMap — puzzle geo-transform publication with a single grid", 
     expect(useUiStore.getState().puzzleGeoTransforms.size).toBe(0);
   });
 
-  it("re-publishes smaller dLon after zooming in — rAF loop stays consistent with canvas transform", async () => {
-    // Regression: puzzle geo offsets must track the current canvas transform scale,
-    // not just the transform at hydration time.  When the user zooms in (scale
-    // increases), each pixel covers fewer degrees, so the same px offset should
-    // produce a strictly smaller |dLon|.
+  it("restores the published dLon after zooming in and back out", async () => {
+    // Puzzle geo offsets must track the current canvas transform scale, not
+    // just the transform at hydration time. A fixed pixel offset spans fewer
+    // degrees when zoomed in, and the original offset when zoomed back out.
     const TX = 50; // 50 px east offset
     sessionStorage.setItem(
       "bathyscan:puzzleTransforms",
@@ -2232,10 +2231,17 @@ describe("OverviewMap — puzzle geo-transform publication with a single grid", 
     // Allow the dirty rAF loop to process the new transform and republish.
     await act(async () => { await new Promise((r) => setTimeout(r, 120)); });
 
-    const dLonAfter = useUiStore.getState().puzzleGeoTransforms.get(PUZZLE_DS_ID)?.dLon;
-    expect(dLonAfter).toBeDefined();
-    // After zooming in, each pixel spans fewer degrees → dLon must decrease.
-    expect(dLonAfter!).toBeLessThan(dLonBefore!);
+    const dLonAfterZoomIn = useUiStore.getState().puzzleGeoTransforms.get(PUZZLE_DS_ID)?.dLon;
+    expect(dLonAfterZoomIn).toBeDefined();
+    expect(dLonAfterZoomIn!).toBeLessThan(dLonBefore!);
+
+    // Zoom out at the same focal point and let the next rAF frame republish.
+    fireEvent.wheel(canvas!, { deltaY: 120, clientX: 512, clientY: 384, deltaMode: 0 });
+    await act(async () => { await new Promise((r) => setTimeout(r, 120)); });
+
+    const dLonAfterZoomOut = useUiStore.getState().puzzleGeoTransforms.get(PUZZLE_DS_ID)?.dLon;
+    expect(dLonAfterZoomOut).toBeDefined();
+    expect(dLonAfterZoomOut!).toBeCloseTo(dLonBefore!, 8);
   });
 });
 
