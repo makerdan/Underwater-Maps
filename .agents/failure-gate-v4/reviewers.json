@@ -1,0 +1,6 @@
+{
+  "reviewers": [
+    { "id": "admin", "active": true },
+    { "id": "Dan", "active": true }
+  ]
+}
