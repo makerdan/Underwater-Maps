@@ -10,3 +10,9 @@ description: Non-obvious environment facts behind scripts/kill-port-holders.mjs 
 - `sh -c "single command"` execs, so pnpm's intermediate shell often vanishes from the tree — holder's direct parent can be the pnpm node process itself.
 
 **How to apply:** use `scripts/kill-port-holders.mjs <port>` (or `--e2e`) for any new workflow/suite needing a clean port; never reintroduce `fuser`. It protects its own ancestor chain, so it is safe to call from dev scripts.
+
+Post-merge reconciliation success does not prove services restarted successfully. Old and new service wrappers can share the platform supervisor, causing the cleanup's own-tree exemption to protect stale listeners.
+
+**Why:** Reconciliation has returned success while the replacement web/API workflows failed with occupied ports and the sandbox silently chose a different port.
+
+**How to apply:** Check managed workflow status after reconciliation. If ports collide, confirm listener ownership first; use the existing explicit own-tree cleanup option only for those confirmed service ports, then restart the managed workflows.

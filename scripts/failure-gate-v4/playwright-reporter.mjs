@@ -1,11 +1,13 @@
 import { relative } from "node:path";
-import playwrightPackage from "@playwright/test/package.json" with { type: "json" };
+import { createRequire } from "node:module";
 import {
   createEngineEvidence,
   engineEnvironment,
   summarizeEngineError,
   writeEngineEvidenceReport,
 } from "./engine-evidence.mjs";
+
+const playwrightPackage = createRequire(import.meta.url)("@playwright/test/package.json");
 
 export default class FailureGatePlaywrightReporter {
   constructor(options = {}) {

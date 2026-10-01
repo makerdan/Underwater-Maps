@@ -6,9 +6,9 @@
  */
 
 import { createHash, randomUUID } from "node:crypto";
-import { createReadStream } from "node:fs";
 import {
   constants as fsConstants,
+  createReadStream,
   promises as fs,
   readFileSync,
   readdirSync,

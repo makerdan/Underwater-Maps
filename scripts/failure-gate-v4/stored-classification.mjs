@@ -943,7 +943,6 @@ function resolvedSource({
     evidenceDigest: attempt.evidenceDigest ?? null,
     authorizationDigest: attempt.authorizationDigest,
     inputDigest: attempt.inputDigest,
-    storedRecordDigest,
     environmentDigest: attempt.environmentDigest ?? null,
     writerCoordinationDigest,
     retryAuthorizationDigest: attempt.retryAuthorization
