@@ -1,0 +1,3241 @@
+TAP version 13
+# Subtest: discovers direct exports, export-star barrels, and named aliases
+ok 1 - discovers direct exports, export-star barrels, and named aliases
+  ---
+  duration_ms: 2.486722
+  type: 'test'
+  ...
+# Subtest: reports a clear diagnostic when a source directory is missing
+ok 2 - reports a clear diagnostic when a source directory is missing
+  ---
+  duration_ms: 41.421985
+  type: 'test'
+  ...
+# Subtest: the committed CI Validation Parity skill satisfies every semantic contract
+ok 3 - the committed CI Validation Parity skill satisfies every semantic contract
+  ---
+  duration_ms: 1.723871
+  type: 'test'
+  ...
+# Subtest: semantic contract failures identify the missing safeguard and wording
+ok 4 - semantic contract failures identify the missing safeguard and wording
+  ---
+  duration_ms: 2.070043
+  type: 'test'
+  ...
+# Subtest: non-text skill input produces an actionable diagnostic
+ok 5 - non-text skill input produces an actionable diagnostic
+  ---
+  duration_ms: 0.189647
+  type: 'test'
+  ...
+# Subtest: accepts a well-formed runtime outcome at its baseline
+ok 6 - accepts a well-formed runtime outcome at its baseline
+  ---
+  duration_ms: 0.977671
+  type: 'test'
+  ...
+# Subtest: rejects malformed outcome data before evaluating the ratchet
+ok 7 - rejects malformed outcome data before evaluating the ratchet
+  ---
+  duration_ms: 0.502171
+  type: 'test'
+  ...
+# Subtest: fails when runtime skipped coverage increases
+ok 8 - fails when runtime skipped coverage increases
+  ---
+  duration_ms: 0.256927
+  type: 'test'
+  ...
+# Subtest: rejects a result generated for a different workflow suite
+ok 9 - rejects a result generated for a different workflow suite
+  ---
+  duration_ms: 0.113223
+  type: 'test'
+  ...
+# Subtest: accepts a downward ratchet opportunity without silently rebasing it
+ok 10 - accepts a downward ratchet opportunity without silently rebasing it
+  ---
+  duration_ms: 0.136689
+  type: 'test'
+  ...
+# Subtest: Failure Gate refinement scenario contract
+    # Subtest: keeps the final skill materially shorter without dropping required plan decisions
+    ok 1 - keeps the final skill materially shorter without dropping required plan decisions
+      ---
+      duration_ms: 0.502991
+      type: 'test'
+      ...
+    # Subtest: lets unrelated feature work ignore documented baseline failures
+    ok 2 - lets unrelated feature work ignore documented baseline failures
+      ---
+      duration_ms: 0.166194
+      type: 'test'
+      ...
+    # Subtest: lets validation-repair work explicitly own a documented baseline failure
+    ok 3 - lets validation-repair work explicitly own a documented baseline failure
+      ---
+      duration_ms: 0.087479
+      type: 'test'
+      ...
+    # Subtest: classifies a passing retry as intermittency rather than provenance
+    ok 4 - classifies a passing retry as intermittency rather than provenance
+      ---
+      duration_ms: 0.132643
+      type: 'test'
+      ...
+    # Subtest: fails closed on unavailable tier data except for the explicit ad-hoc opt-out
+    ok 5 - fails closed on unavailable tier data except for the explicit ad-hoc opt-out
+      ---
+      duration_ms: 0.068163
+      type: 'test'
+      ...
+    # Subtest: keeps gitignored archive remediation environment-local
+    ok 6 - keeps gitignored archive remediation environment-local
+      ---
+      duration_ms: 0.118881
+      type: 'test'
+      ...
+    1..6
+ok 11 - Failure Gate refinement scenario contract
+  ---
+  duration_ms: 1.743674
+  type: 'suite'
+  ...
+# Subtest: new-plan baseline ownership
+    # Subtest: distinguishes ignored baseline failures from repairs explicitly owned by the task
+    ok 1 - distinguishes ignored baseline failures from repairs explicitly owned by the task
+      ---
+      duration_ms: 39.274869
+      type: 'test'
+      ...
+    # Subtest: resolves an active catalog ID and keeps environment observations task-local
+    ok 2 - resolves an active catalog ID and keeps environment observations task-local
+      ---
+      duration_ms: 46.750156
+      type: 'test'
+      ...
+    # Subtest: rejects unknown, needs-review, and resolved catalog IDs
+    ok 3 - rejects unknown, needs-review, and resolved catalog IDs
+      ---
+      duration_ms: 202.181589
+      type: 'test'
+      ...
+    # Subtest: rejects ambiguous ignored and owned declarations for the same ID
+    ok 4 - rejects ambiguous ignored and owned declarations for the same ID
+      ---
+      duration_ms: 266.952817
+      type: 'test'
+      ...
+    1..4
+ok 12 - new-plan baseline ownership
+  ---
+  duration_ms: 555.57499
+  type: 'suite'
+  ...
+# Subtest: catalog-aware plan reference validation
+    # Subtest: accepts an active ID with one explicit ignored ownership declaration
+    ok 1 - accepts an active ID with one explicit ignored ownership declaration
+      ---
+      duration_ms: 1.199332
+      type: 'test'
+      ...
+    # Subtest: accepts an active ID with one explicit owned-repair declaration
+    ok 2 - accepts an active ID with one explicit owned-repair declaration
+      ---
+      duration_ms: 0.104367
+      type: 'test'
+      ...
+    # Subtest: rejects unknown, inactive, and ownership-free references
+    ok 3 - rejects unknown, inactive, and ownership-free references
+      ---
+      duration_ms: 1.2062
+      type: 'test'
+      ...
+    # Subtest: does not treat a catalog ID outside the baseline section as an ignore
+    ok 4 - does not treat a catalog ID outside the baseline section as an ignore
+      ---
+      duration_ms: 0.1306
+      type: 'test'
+      ...
+    1..4
+ok 13 - catalog-aware plan reference validation
+  ---
+  duration_ms: 2.86202
+  type: 'suite'
+  ...
+# Subtest: archive mode is explicit maintenance
+    # Subtest: refuses an implicit archive scan and accepts the explicit --archive mode
+    ok 1 - refuses an implicit archive scan and accepts the explicit --archive mode
+      ---
+      duration_ms: 352.545735
+      type: 'test'
+      ...
+    1..1
+ok 14 - archive mode is explicit maintenance
+  ---
+  duration_ms: 352.792031
+  type: 'suite'
+  ...
+# Subtest: --fix-stub: a failed patch write is non-compliant
+    # Subtest: keeps the original content when a temporary write fails after partial output
+    ok 1 - keeps the original content when a temporary write fails after partial output
+      ---
+      duration_ms: 3.410051
+      type: 'test'
+      ...
+    # Subtest: keeps the original content when replacing the plan fails
+    ok 2 - keeps the original content when replacing the plan fails
+      ---
+      duration_ms: 0.353772
+      type: 'test'
+      ...
+    # Subtest: preserves the original permission bits after replacing the plan
+    ok 3 - preserves the original permission bits after replacing the plan
+      ---
+      duration_ms: 0.869061
+      type: 'test'
+      ...
+    # Subtest: keeps the original content and mode when applying temp-file permissions fails
+    ok 4 - keeps the original content and mode when applying temp-file permissions fails
+      ---
+      duration_ms: 2.692768
+      type: 'test'
+      ...
+    1..4
+ok 15 - --fix-stub: a failed patch write is non-compliant
+  ---
+  duration_ms: 10.557798
+  type: 'suite'
+  ...
+# Subtest: placeholder detection — fix-stub wording in **Why:**
+    # Subtest: flags the 'Placeholder — review before running this task' Why wording as unfilled (exit 1)
+    ok 1 - flags the 'Placeholder — review before running this task' Why wording as unfilled (exit 1)
+      ---
+      duration_ms: 208.225884
+      type: 'test'
+      ...
+    # Subtest: --stubs-only also flags the placeholder Why (exit 1)
+    ok 2 - --stubs-only also flags the placeholder Why (exit 1)
+      ---
+      duration_ms: 171.299734
+      type: 'test'
+      ...
+    1..2
+ok 16 - placeholder detection — fix-stub wording in **Why:**
+  ---
+  duration_ms: 381.409496
+  type: 'suite'
+  ...
+# Subtest: placeholder detection — skill-template angle-bracket Why (long form)
+    # Subtest: flags the '<one-line justification — …>' skill-template Why as unfilled (exit 1)
+    ok 1 - flags the '<one-line justification — …>' skill-template Why as unfilled (exit 1)
+      ---
+      duration_ms: 124.131538
+      type: 'test'
+      ...
+    1..1
+ok 17 - placeholder detection — skill-template angle-bracket Why (long form)
+  ---
+  duration_ms: 124.768606
+  type: 'suite'
+  ...
+# Subtest: placeholder detection — fix-stub <replace with one-line justification> Why (already caught)
+    # Subtest: flags the '<replace with one-line justification>' Why as unfilled (exit 1)
+    ok 1 - flags the '<replace with one-line justification>' Why as unfilled (exit 1)
+      ---
+      duration_ms: 42.166717
+      type: 'test'
+      ...
+    1..1
+ok 18 - placeholder detection — fix-stub <replace with one-line justification> Why (already caught)
+  ---
+  duration_ms: 42.769788
+  type: 'suite'
+  ...
+# Subtest: --stubs-only: invalid **Command:** tier is still reported (exit 1)
+    # Subtest: reports invalid tier in --stubs-only mode and exits 1
+    ok 1 - reports invalid tier in --stubs-only mode and exits 1
+      ---
+      duration_ms: 173.217851
+      type: 'test'
+      ...
+    # Subtest: a file without \#\# Validation section does NOT trigger a violation in --stubs-only mode
+    ok 2 - a file without \#\# Validation section does NOT trigger a violation in --stubs-only mode
+      ---
+      duration_ms: 69.966702
+      type: 'test'
+      ...
+    1..2
+ok 19 - --stubs-only: invalid **Command:** tier is still reported (exit 1)
+  ---
+  duration_ms: 243.83332
+  type: 'suite'
+  ...
+# Subtest: end-to-end pipeline: --fix-stub then strict
+    # Subtest: --fix-stub exits 0
+    ok 1 - --fix-stub exits 0
+      ---
+      duration_ms: 117.748497
+      type: 'test'
+      ...
+    # Subtest: --fix-stub distinguishes changed, unchanged, and manual-repair files
+    ok 2 - --fix-stub distinguishes changed, unchanged, and manual-repair files
+      ---
+      duration_ms: 47.43593
+      type: 'test'
+      ...
+    # Subtest: after --fix-stub all files have a \#\# Validation section
+    ok 3 - after --fix-stub all files have a \#\# Validation section
+      ---
+      duration_ms: 38.782983
+      type: 'test'
+      ...
+    # Subtest: strict check exits 1 (at least one violation remains after --fix-stub)
+    ok 4 - strict check exits 1 (at least one violation remains after --fix-stub)
+      ---
+      duration_ms: 93.078091
+      type: 'test'
+      ...
+    # Subtest: a plan without \#\# Validation is never reported as successfully line-patched
+    ok 5 - a plan without \#\# Validation is never reported as successfully line-patched
+      ---
+      duration_ms: 40.347565
+      type: 'test'
+      ...
+    # Subtest: insertValidationLine returns unchanged content with changed=false when the section is absent
+    ok 6 - insertValidationLine returns unchanged content with changed=false when the section is absent
+      ---
+      duration_ms: 0.605131
+      type: 'test'
+      ...
+    # Subtest: insertValidationLine returns changed content with changed=true when the section is present
+    ok 7 - insertValidationLine returns changed content with changed=true when the section is present
+      ---
+      duration_ms: 0.217028
+      type: 'test'
+      ...
+    # Subtest: --fix-stub reports and persists each missing Validation line it inserts
+    ok 8 - --fix-stub reports and persists each missing Validation line it inserts
+      ---
+      duration_ms: 39.916715
+      type: 'test'
+      ...
+    # Subtest: strict check reports the angle-bracket-why file as a violation
+    ok 9 - strict check reports the angle-bracket-why file as a violation
+      ---
+      duration_ms: 75.984261
+      type: 'test'
+      ...
+    # Subtest: strict check reports the bad-tier file as a violation
+    ok 10 - strict check reports the bad-tier file as a violation
+      ---
+      duration_ms: 85.065107
+      type: 'test'
+      ...
+    # Subtest: strict check does NOT report the fully compliant file as a violation
+    ok 11 - strict check does NOT report the fully compliant file as a violation
+      ---
+      duration_ms: 68.818392
+      type: 'test'
+      ...
+    1..11
+ok 20 - end-to-end pipeline: --fix-stub then strict
+  ---
+  duration_ms: 620.781593
+  type: 'suite'
+  ...
+# Subtest: single-file mode: TASK_PLAN_FILE set to a compliant plan
+    # Subtest: exits 0 when TASK_PLAN_FILE points at a compliant plan
+    ok 1 - exits 0 when TASK_PLAN_FILE points at a compliant plan
+      ---
+      duration_ms: 33.31728
+      type: 'test'
+      ...
+    # Subtest: logs the single-file mode notice
+    ok 2 - logs the single-file mode notice
+      ---
+      duration_ms: 31.699637
+      type: 'test'
+      ...
+    # Subtest: does NOT report the non-compliant sibling file when linting a compliant target
+    ok 3 - does NOT report the non-compliant sibling file when linting a compliant target
+      ---
+      duration_ms: 31.35996
+      type: 'test'
+      ...
+    1..3
+ok 21 - single-file mode: TASK_PLAN_FILE set to a compliant plan
+  ---
+  duration_ms: 97.130846
+  type: 'suite'
+  ...
+# Subtest: single-file mode: TASK_PLAN_FILE set to a non-compliant plan
+    # Subtest: exits 1 when TASK_PLAN_FILE points at a non-compliant plan
+    ok 1 - exits 1 when TASK_PLAN_FILE points at a non-compliant plan
+      ---
+      duration_ms: 33.722923
+      type: 'test'
+      ...
+    # Subtest: reports only the non-compliant target file, not the compliant sibling
+    ok 2 - reports only the non-compliant target file, not the compliant sibling
+      ---
+      duration_ms: 31.498408
+      type: 'test'
+      ...
+    1..2
+ok 22 - single-file mode: TASK_PLAN_FILE set to a non-compliant plan
+  ---
+  duration_ms: 66.006176
+  type: 'suite'
+  ...
+# Subtest: single-file mode: TASK_PLAN_FILE points at a missing file
+    # Subtest: exits 1 with a descriptive error when TASK_PLAN_FILE does not exist
+    ok 1 - exits 1 with a descriptive error when TASK_PLAN_FILE does not exist
+      ---
+      duration_ms: 30.141955
+      type: 'test'
+      ...
+    # Subtest: exits 1 with a descriptive error when TASK_PLAN_FILE is not a .md file
+    ok 2 - exits 1 with a descriptive error when TASK_PLAN_FILE is not a .md file
+      ---
+      duration_ms: 30.316494
+      type: 'test'
+      ...
+    1..2
+ok 23 - single-file mode: TASK_PLAN_FILE points at a missing file
+  ---
+  duration_ms: 60.877128
+  type: 'suite'
+  ...
+# Subtest: --fix-stub: unreadable plan files are hard failures
+    # Subtest: exits 1 and names the unreadable file
+    ok 1 - exits 1 and names the unreadable file
+      ---
+      duration_ms: 41.670523
+      type: 'test'
+      ...
+    # Subtest: archive scanning also exits 1 and reports the underlying read error
+    ok 2 - archive scanning also exits 1 and reports the underlying read error
+      ---
+      duration_ms: 34.431753
+      type: 'test'
+      ...
+    1..2
+ok 24 - --fix-stub: unreadable plan files are hard failures
+  ---
+  duration_ms: 76.520528
+  type: 'suite'
+  ...
+# Subtest: BARE_FONT_SIZE_RE
+    # Subtest: matches bare integer fontSize object property
+    ok 1 - matches bare integer fontSize object property
+      ---
+      duration_ms: 0.655402
+      type: 'test'
+      ...
+    # Subtest: does NOT match the compliant calc() form
+    ok 2 - does NOT match the compliant calc() form
+      ---
+      duration_ms: 0.105724
+      type: 'test'
+      ...
+    # Subtest: does NOT match JSX / TSX attribute syntax (fontSize={N})
+    ok 3 - does NOT match JSX / TSX attribute syntax (fontSize={N})
+      ---
+      duration_ms: 0.069022
+      type: 'test'
+      ...
+    # Subtest: does NOT match non-literal (variable) values
+    ok 4 - does NOT match non-literal (variable) values
+      ---
+      duration_ms: 0.07412
+      type: 'test'
+      ...
+    # Subtest: does NOT match TypeScript type annotations
+    ok 5 - does NOT match TypeScript type annotations
+      ---
+      duration_ms: 0.109059
+      type: 'test'
+      ...
+    1..5
+ok 25 - BARE_FONT_SIZE_RE
+  ---
+  duration_ms: 1.814859
+  type: 'suite'
+  ...
+# Subtest: findViolations
+    # Subtest: returns empty array for compliant source
+    ok 1 - returns empty array for compliant source
+      ---
+      duration_ms: 0.646167
+      type: 'test'
+      ...
+    # Subtest: finds bare numeric fontSize violations
+    ok 2 - finds bare numeric fontSize violations
+      ---
+      duration_ms: 0.135954
+      type: 'test'
+      ...
+    # Subtest: reports the correct 1-based line number
+    ok 3 - reports the correct 1-based line number
+      ---
+      duration_ms: 0.120213
+      type: 'test'
+      ...
+    # Subtest: skips comment-only lines
+    ok 4 - skips comment-only lines
+      ---
+      duration_ms: 0.175632
+      type: 'test'
+      ...
+    # Subtest: finds multiple violations in one file
+    ok 5 - finds multiple violations in one file
+      ---
+      duration_ms: 0.205303
+      type: 'test'
+      ...
+    1..5
+ok 26 - findViolations
+  ---
+  duration_ms: 1.565451
+  type: 'suite'
+  ...
+# Subtest: isTestFile
+    # Subtest: flags __tests__ directory paths
+    ok 1 - flags __tests__ directory paths
+      ---
+      duration_ms: 0.128756
+      type: 'test'
+      ...
+    # Subtest: flags .test. files
+    ok 2 - flags .test. files
+      ---
+      duration_ms: 0.14225
+      type: 'test'
+      ...
+    # Subtest: flags .spec. files
+    ok 3 - flags .spec. files
+      ---
+      duration_ms: 0.08334
+      type: 'test'
+      ...
+    # Subtest: does not flag normal source files
+    ok 4 - does not flag normal source files
+      ---
+      duration_ms: 0.05653
+      type: 'test'
+      ...
+    1..4
+ok 27 - isTestFile
+  ---
+  duration_ms: 0.545568
+  type: 'suite'
+  ...
+# Subtest: check-hardcoded-ports --scan restrictions
+    # Subtest: applies onlyUnder relative to a custom scan root
+    ok 1 - applies onlyUnder relative to a custom scan root
+      ---
+      duration_ms: 34.568547
+      type: 'test'
+      ...
+    1..1
+ok 28 - check-hardcoded-ports --scan restrictions
+  ---
+  duration_ms: 34.978755
+  type: 'suite'
+  ...
+# Subtest: check-codegen-stale process failures
+    # Subtest: reports a spawn error separately from a non-zero generator exit
+    ok 1 - reports a spawn error separately from a non-zero generator exit
+      ---
+      duration_ms: 37.566733
+      type: 'test'
+      ...
+    # Subtest: reports signal termination distinctly
+    ok 2 - reports signal termination distinctly
+      ---
+      duration_ms: 52.601225
+      type: 'test'
+      ...
+    1..2
+ok 29 - check-codegen-stale process failures
+  ---
+  duration_ms: 91.018588
+  type: 'suite'
+  ...
+# Subtest: check-duplicate-hooks-registry hook counting
+    # Subtest: counts let, var, and destructured hook calls but not non-calls
+    ok 1 - counts let, var, and destructured hook calls but not non-calls
+      ---
+      duration_ms: 35.063611
+      type: 'test'
+      ...
+    1..1
+ok 30 - check-duplicate-hooks-registry hook counting
+  ---
+  duration_ms: 35.225509
+  type: 'suite'
+  ...
+# Subtest: the committed Poe Setup skill satisfies the static contract
+ok 31 - the committed Poe Setup skill satisfies the static contract
+  ---
+  duration_ms: 3.031713
+  type: 'test'
+  ...
+# Subtest: the approved lazy memoized getter is accepted
+ok 32 - the approved lazy memoized getter is accepted
+  ---
+  duration_ms: 1.14209
+  type: 'test'
+  ...
+# Subtest: rejects obsolete secret naming and an OpenAI /bot/ base URL
+ok 33 - rejects obsolete secret naming and an OpenAI /bot/ base URL
+  ---
+  duration_ms: 1.402712
+  type: 'test'
+  ...
+# Subtest: rejects plainly and differently named eager clients
+ok 34 - rejects plainly and differently named eager clients
+  ---
+  duration_ms: 1.796941
+  type: 'test'
+  ...
+# Subtest: rejects module-scope secret lookup and missing-secret validation
+ok 35 - rejects module-scope secret lookup and missing-secret validation
+  ---
+  duration_ms: 0.652856
+  type: 'test'
+  ...
+# Subtest: rejects import-triggered health, catalogue, and completion requests
+ok 36 - rejects import-triggered health, catalogue, and completion requests
+  ---
+  duration_ms: 2.160939
+  type: 'test'
+  ...
+# Subtest: rejects removal of every required operational safeguard
+ok 37 - rejects removal of every required operational safeguard
+  ---
+  duration_ms: 11.304483
+  type: 'test'
+  ...
+# Subtest: non-text skill input produces an actionable diagnostic
+ok 38 - non-text skill input produces an actionable diagnostic
+  ---
+  duration_ms: 0.242318
+  type: 'test'
+  ...
+# Subtest: Phase 2 config covers both bathyscan and api-server trees
+ok 39 - Phase 2 config covers both bathyscan and api-server trees
+  ---
+  duration_ms: 0.959513
+  type: 'test'
+  ...
+# Subtest: Phase 1: root-relative /api/ call through a registered wrapper is flagged
+ok 40 - Phase 1: root-relative /api/ call through a registered wrapper is flagged
+  ---
+  duration_ms: 1.544623
+  type: 'test'
+  ...
+# Subtest: Phase 1: root-relative call through a custom registered wrapper is flagged
+ok 41 - Phase 1: root-relative call through a custom registered wrapper is flagged
+  ---
+  duration_ms: 0.730232
+  type: 'test'
+  ...
+# Subtest: Phase 1: base-path-prefixed calls, comments, and test files pass
+ok 42 - Phase 1: base-path-prefixed calls, comments, and test files pass
+  ---
+  duration_ms: 1.554531
+  type: 'test'
+  ...
+# Subtest: Phase 2: unregistered wrapper around native fetch is detected
+ok 43 - Phase 2: unregistered wrapper around native fetch is detected
+  ---
+  duration_ms: 1.295406
+  type: 'test'
+  ...
+# Subtest: Phase 2: bathyscan-style helper wrapping authorizedFetch is detected
+ok 44 - Phase 2: bathyscan-style helper wrapping authorizedFetch is detected
+  ---
+  duration_ms: 0.963009
+  type: 'test'
+  ...
+# Subtest: Phase 2: registered wrapper passes
+ok 45 - Phase 2: registered wrapper passes
+  ---
+  duration_ms: 0.824324
+  type: 'test'
+  ...
+# Subtest: Phase 2: explicitly registered external-only wrapper passes
+ok 46 - Phase 2: explicitly registered external-only wrapper passes
+  ---
+  duration_ms: 0.807314
+  type: 'test'
+  ...
+# Subtest: Phase 2: non-URL first param and fetch-free bodies are not flagged
+ok 47 - Phase 2: non-URL first param and fetch-free bodies are not flagged
+  ---
+  duration_ms: 0.782234
+  type: 'test'
+  ...
+# Subtest: detectFetchWrappersInSource canary: known-positive source must be detected
+ok 48 - detectFetchWrappersInSource canary: known-positive source must be detected
+  ---
+  duration_ms: 0.259508
+  type: 'test'
+  ...
+# Subtest: detectFetchWrappersInSource detects arrow, function-expression, and input-param forms
+ok 49 - detectFetchWrappersInSource detects arrow, function-expression, and input-param forms
+  ---
+  duration_ms: 0.892153
+  type: 'test'
+  ...
+# Subtest: detectFetchWrappersInSource detects a line-wrapped concise arrow wrapper
+ok 50 - detectFetchWrappersInSource detects a line-wrapped concise arrow wrapper
+  ---
+  duration_ms: 0.145015
+  type: 'test'
+  ...
+# Subtest: journal absent
+    # Subtest: exits 1 with a clear message naming the missing journal path
+    ok 1 - exits 1 with a clear message naming the missing journal path
+      ---
+      duration_ms: 40.762383
+      type: 'test'
+      ...
+    # Subtest: exits 1 with a clear message when the drizzle directory is missing entirely
+    ok 2 - exits 1 with a clear message when the drizzle directory is missing entirely
+      ---
+      duration_ms: 44.643955
+      type: 'test'
+      ...
+    1..2
+ok 51 - journal absent
+  ---
+  duration_ms: 85.908659
+  type: 'suite'
+  ...
+# Subtest: loadJournal
+    # Subtest: throws a path-naming error for a missing file
+    ok 1 - throws a path-naming error for a missing file
+      ---
+      duration_ms: 0.665
+      type: 'test'
+      ...
+    # Subtest: throws a path-naming error for malformed JSON
+    ok 2 - throws a path-naming error for malformed JSON
+      ---
+      duration_ms: 0.527906
+      type: 'test'
+      ...
+    # Subtest: parses a valid journal
+    ok 3 - parses a valid journal
+      ---
+      duration_ms: 0.428513
+      type: 'test'
+      ...
+    1..3
+ok 52 - loadJournal
+  ---
+  duration_ms: 1.803634
+  type: 'suite'
+  ...
+# Subtest: listDirOrThrow
+    # Subtest: throws a path-naming error for a missing directory
+    ok 1 - throws a path-naming error for a missing directory
+      ---
+      duration_ms: 0.299559
+      type: 'test'
+      ...
+    # Subtest: lists an existing directory
+    ok 2 - lists an existing directory
+      ---
+      duration_ms: 0.916978
+      type: 'test'
+      ...
+    1..2
+ok 53 - listDirOrThrow
+  ---
+  duration_ms: 1.805564
+  type: 'suite'
+  ...
+# Subtest: cleanupGenerated is idempotent
+    # Subtest: is safe with an empty created list and a valid backup string
+    ok 1 - is safe with an empty created list and a valid backup string
+      ---
+      duration_ms: 2.07243
+      type: 'test'
+      ...
+    # Subtest: removes created files and tolerates already-removed files
+    ok 2 - removes created files and tolerates already-removed files
+      ---
+      duration_ms: 0.795205
+      type: 'test'
+      ...
+    # Subtest: does not touch the journal when the backup is not a string
+    ok 3 - does not touch the journal when the backup is not a string
+      ---
+      duration_ms: 0.413858
+      type: 'test'
+      ...
+    1..3
+ok 54 - cleanupGenerated is idempotent
+  ---
+  duration_ms: 3.519581
+  type: 'suite'
+  ...
+# Subtest: schema drift cleanup
+    # Subtest: restores an existing snapshot rewritten by drizzle-kit
+    ok 1 - restores an existing snapshot rewritten by drizzle-kit
+      ---
+      duration_ms: 45.574259
+      type: 'test'
+      ...
+    1..1
+ok 55 - schema drift cleanup
+  ---
+  duration_ms: 45.686504
+  type: 'suite'
+  ...
+# Subtest: the committed Skill Compression skill satisfies every preview contract
+ok 56 - the committed Skill Compression skill satisfies every preview contract
+  ---
+  duration_ms: 1.741171
+  type: 'test'
+  ...
+# Subtest: semantic contract failures identify the missing safeguard and wording
+ok 57 - semantic contract failures identify the missing safeguard and wording
+  ---
+  duration_ms: 3.08984
+  type: 'test'
+  ...
+# Subtest: non-text skill input produces an actionable diagnostic
+ok 58 - non-text skill input produces an actionable diagnostic
+  ---
+  duration_ms: 0.189889
+  type: 'test'
+  ...
+# Subtest: baseline guards
+    # Subtest: missing baseline → exit 1 with a clear path-naming message
+    ok 1 - missing baseline → exit 1 with a clear path-naming message
+      ---
+      duration_ms: 59.627846
+      type: 'test'
+      ...
+    # Subtest: malformed baseline JSON → exit 1 with a clear message
+    ok 2 - malformed baseline JSON → exit 1 with a clear message
+      ---
+      duration_ms: 54.133861
+      type: 'test'
+      ...
+    # Subtest: JSON-valid but null baseline → exit 1 with a clear message, no stack trace
+    ok 3 - JSON-valid but null baseline → exit 1 with a clear message, no stack trace
+      ---
+      duration_ms: 48.161373
+      type: 'test'
+      ...
+    # Subtest: baseline with a non-integer field → exit 1 naming the key, no stack trace
+    ok 4 - baseline with a non-integer field → exit 1 naming the key, no stack trace
+      ---
+      duration_ms: 44.962331
+      type: 'test'
+      ...
+    1..4
+ok 59 - baseline guards
+  ---
+  duration_ms: 207.403921
+  type: 'suite'
+  ...
+# Subtest: missing scan roots
+    # Subtest: missing unit scan root → exit 1 naming the directory
+    ok 1 - missing unit scan root → exit 1 naming the directory
+      ---
+      duration_ms: 50.340211
+      type: 'test'
+      ...
+    # Subtest: missing e2e scan root → exit 1 naming the directory
+    ok 2 - missing e2e scan root → exit 1 naming the directory
+      ---
+      duration_ms: 36.950242
+      type: 'test'
+      ...
+    # Subtest: findMissingScanRoots flags a root that exists but is a file, and passes real dirs
+    ok 3 - findMissingScanRoots flags a root that exists but is a file, and passes real dirs
+      ---
+      duration_ms: 3.846169
+      type: 'test'
+      ...
+    1..3
+ok 60 - missing scan roots
+  ---
+  duration_ms: 91.410691
+  type: 'suite'
+  ...
+# Subtest: unreadable file handling
+    # Subtest: warns, skips the file, and keeps counting the rest (end-to-end)
+    ok 1 - warns, skips the file, and keeps counting the rest (end-to-end)
+      ---
+      duration_ms: 49.548352
+      type: 'test'
+      ...
+    # Subtest: EACCES directory → warns and exits 1 instead of counting partial coverage
+    ok 2 - EACCES directory → warns and exits 1 instead of counting partial coverage
+      ---
+      duration_ms: 47.856647
+      type: 'test'
+      ...
+    # Subtest: countMatches skips a nonexistent file and counts the rest (unit)
+    ok 3 - countMatches skips a nonexistent file and counts the rest (unit)
+      ---
+      duration_ms: 1.270247
+      type: 'test'
+      ...
+    # Subtest: countMatches normalizes non-global regexes and counts every match
+    ok 4 - countMatches normalizes non-global regexes and counts every match
+      ---
+      duration_ms: 0.898593
+      type: 'test'
+      ...
+    1..4
+ok 61 - unreadable file handling
+  ---
+  duration_ms: 99.846893
+  type: 'suite'
+  ...
+# Subtest: loadBaseline
+    # Subtest: throws a path-naming error for a missing file
+    ok 1 - throws a path-naming error for a missing file
+      ---
+      duration_ms: 1.656824
+      type: 'test'
+      ...
+    # Subtest: throws a clear error for malformed JSON
+    ok 2 - throws a clear error for malformed JSON
+      ---
+      duration_ms: 0.890637
+      type: 'test'
+      ...
+    # Subtest: throws a clear error for JSON-valid non-object shapes (null, array, scalar)
+    ok 3 - throws a clear error for JSON-valid non-object shapes (null, array, scalar)
+      ---
+      duration_ms: 0.861562
+      type: 'test'
+      ...
+    # Subtest: throws a key-naming error for missing or invalid field values
+    ok 4 - throws a key-naming error for missing or invalid field values
+      ---
+      duration_ms: 1.046019
+      type: 'test'
+      ...
+    # Subtest: parses a valid baseline
+    ok 5 - parses a valid baseline
+      ---
+      duration_ms: 0.357699
+      type: 'test'
+      ...
+    1..5
+ok 62 - loadBaseline
+  ---
+  duration_ms: 5.028001
+  type: 'suite'
+  ...
+# Subtest: normal ratchet behaviour
+    # Subtest: count == baseline → exit 0 with OK lines
+    ok 1 - count == baseline → exit 0 with OK lines
+      ---
+      duration_ms: 42.911135
+      type: 'test'
+      ...
+    # Subtest: count > baseline → exit 1 with FAIL naming the offending file
+    ok 2 - count > baseline → exit 1 with FAIL naming the offending file
+      ---
+      duration_ms: 36.166564
+      type: 'test'
+      ...
+    # Subtest: count below baseline → exit 0 with ratchet-down NOTE
+    ok 3 - count below baseline → exit 0 with ratchet-down NOTE
+      ---
+      duration_ms: 32.6163
+      type: 'test'
+      ...
+    # Subtest: baseline key missing → exit 1
+    ok 4 - baseline key missing → exit 1
+      ---
+      duration_ms: 33.658096
+      type: 'test'
+      ...
+    1..4
+ok 63 - normal ratchet behaviour
+  ---
+  duration_ms: 145.509222
+  type: 'suite'
+  ...
+# [check:testdb-schema-drift] OK — 76 columns and 5 uniqueIndex declaration(s) for test-db.ts tables are present in the hand-written DDL.
+# Subtest: scoped index search
+    # Subtest: (a) index name only in a comment → violation
+    ok 1 - (a) index name only in a comment → violation
+      ---
+      duration_ms: 44.654566
+      type: 'test'
+      ...
+    # Subtest: (b) index name only in an unrelated table's block → violation
+    ok 2 - (b) index name only in an unrelated table's block → violation
+      ---
+      duration_ms: 46.083973
+      type: 'test'
+      ...
+    # Subtest: (c) correctly placed UNIQUE INDEX clause → passes
+    ok 3 - (c) correctly placed UNIQUE INDEX clause → passes
+      ---
+      duration_ms: 42.743428
+      type: 'test'
+      ...
+    # Subtest: accepts a CONSTRAINT <name> UNIQUE clause inside the table block
+    ok 4 - accepts a CONSTRAINT <name> UNIQUE clause inside the table block
+      ---
+      duration_ms: 57.203566
+      type: 'test'
+      ...
+    # Subtest: bare (non-UNIQUE) index name in the right block → violation
+    ok 5 - bare (non-UNIQUE) index name in the right block → violation
+      ---
+      duration_ms: 40.803138
+      type: 'test'
+      ...
+    1..5
+ok 64 - scoped index search
+  ---
+  duration_ms: 232.305012
+  type: 'suite'
+  ...
+# Subtest: I/O guards
+    # Subtest: (d) missing test-db.ts → exit 1 with a path-containing message
+    ok 1 - (d) missing test-db.ts → exit 1 with a path-containing message
+      ---
+      duration_ms: 37.800398
+      type: 'test'
+      ...
+    # Subtest: (e) unreadable schema file → warning, scan continues
+    ok 2 - (e) unreadable schema file → warning, scan continues
+      ---
+      duration_ms: 73.453391
+      type: 'test'
+      ...
+    1..2
+ok 65 - I/O guards
+  ---
+  duration_ms: 111.457841
+  type: 'suite'
+  ...
+# Subtest: column parity
+    # Subtest: (f) reports missing and extra DDL columns
+    ok 1 - (f) reports missing and extra DDL columns
+      ---
+      duration_ms: 45.331928
+      type: 'test'
+      ...
+    # Subtest: (g) accepts matching Drizzle and DDL columns
+    ok 2 - (g) accepts matching Drizzle and DDL columns
+      ---
+      duration_ms: 39.482379
+      type: 'test'
+      ...
+    # Subtest: (h) reports mismatched column properties and named checks
+    ok 3 - (h) reports mismatched column properties and named checks
+      ---
+      duration_ms: 38.255673
+      type: 'test'
+      ...
+    1..3
+ok 66 - column parity
+  ---
+  duration_ms: 123.34364
+  type: 'suite'
+  ...
+# Subtest: unique-index definition parity
+    # Subtest: reports indexed-column drift with table and index names
+    ok 1 - reports indexed-column drift with table and index names
+      ---
+      duration_ms: 44.160795
+      type: 'test'
+      ...
+    # Subtest: reports partial-index predicate drift with table and index names
+    ok 2 - reports partial-index predicate drift with table and index names
+      ---
+      duration_ms: 40.545667
+      type: 'test'
+      ...
+    # Subtest: reports sort, NULL ordering, and collation drift with table and index names
+    ok 3 - reports sort, NULL ordering, and collation drift with table and index names
+      ---
+      duration_ms: 46.809486
+      type: 'test'
+      ...
+    # Subtest: accepts matching sort, NULL ordering, and collation modifiers
+    ok 4 - accepts matching sort, NULL ordering, and collation modifiers
+      ---
+      duration_ms: 44.792073
+      type: 'test'
+      ...
+    # Subtest: reports operator-class drift with table and index names
+    ok 5 - reports operator-class drift with table and index names
+      ---
+      duration_ms: 41.630955
+      type: 'test'
+      ...
+    # Subtest: accepts matching Drizzle and PostgreSQL operator classes
+    ok 6 - accepts matching Drizzle and PostgreSQL operator classes
+      ---
+      duration_ms: 46.113501
+      type: 'test'
+      ...
+    1..6
+ok 67 - unique-index definition parity
+  ---
+  duration_ms: 264.447082
+  type: 'suite'
+  ...
+# Subtest: helper units
+    # Subtest: stripComments removes SQL line, block, and TS line comments
+    ok 1 - stripComments removes SQL line, block, and TS line comments
+      ---
+      duration_ms: 0.23205
+      type: 'test'
+      ...
+    # Subtest: extractTableSlices maps each table to its own block
+    ok 2 - extractTableSlices maps each table to its own block
+      ---
+      duration_ms: 1.03237
+      type: 'test'
+      ...
+    # Subtest: sliceHasUniqueClause requires UNIQUE adjacency
+    ok 3 - sliceHasUniqueClause requires UNIQUE adjacency
+      ---
+      duration_ms: 0.322534
+      type: 'test'
+      ...
+    # Subtest: extracts Drizzle and DDL columns without table constraints
+    ok 4 - extracts Drizzle and DDL columns without table constraints
+      ---
+      duration_ms: 0.170979
+      type: 'test'
+      ...
+    # Subtest: extracts unique-index columns and deterministic predicates
+    ok 5 - extracts unique-index columns and deterministic predicates
+      ---
+      duration_ms: 0.922183
+      type: 'test'
+      ...
+    # Subtest: reports unique-index column and WHERE definition drift
+    ok 6 - reports unique-index column and WHERE definition drift
+      ---
+      duration_ms: 0.205861
+      type: 'test'
+      ...
+    1..6
+ok 68 - helper units
+  ---
+  duration_ms: 3.082799
+  type: 'suite'
+  ...
+# Subtest: exports
+    # Subtest: GUARDED_FILES is an array with at least 2 entries
+    ok 1 - GUARDED_FILES is an array with at least 2 entries
+      ---
+      duration_ms: 0.562621
+      type: 'test'
+      ...
+    # Subtest: GUARDED_FILE is the first entry of GUARDED_FILES (backward compat)
+    ok 2 - GUARDED_FILE is the first entry of GUARDED_FILES (backward compat)
+      ---
+      duration_ms: 0.158857
+      type: 'test'
+      ...
+    # Subtest: GUARDED_FILES includes the additional surface-condition panels
+    ok 3 - GUARDED_FILES includes the additional surface-condition panels
+      ---
+      duration_ms: 0.133072
+      type: 'test'
+      ...
+    # Subtest: FORBIDDEN_PATTERNS contains GENERAL_PATTERNS + TRIP_WINDOW_EXTRA_PATTERNS
+    ok 4 - FORBIDDEN_PATTERNS contains GENERAL_PATTERNS + TRIP_WINDOW_EXTRA_PATTERNS
+      ---
+      duration_ms: 0.104835
+      type: 'test'
+      ...
+    1..4
+ok 69 - exports
+  ---
+  duration_ms: 1.628718
+  type: 'suite'
+  ...
+# Subtest: GENERAL_PATTERNS
+    # Subtest: detects single-quoted ' kn' suffix literal
+    ok 1 - detects single-quoted ' kn' suffix literal
+      ---
+      duration_ms: 1.245183
+      type: 'test'
+      ...
+    # Subtest: detects double-quoted " kn" suffix literal
+    ok 2 - detects double-quoted " kn" suffix literal
+      ---
+      duration_ms: 0.277226
+      type: 'test'
+      ...
+    # Subtest: detects double-quoted " kt" speed suffix at end of string
+    ok 3 - detects double-quoted " kt" speed suffix at end of string
+      ---
+      duration_ms: 0.158978
+      type: 'test'
+      ...
+    # Subtest: detects single-quoted ' kt' speed suffix at end of string
+    ok 4 - detects single-quoted ' kt' speed suffix at end of string
+      ---
+      duration_ms: 0.127377
+      type: 'test'
+      ...
+    # Subtest: detects uppercase " KT" speed suffix in quoted string
+    ok 5 - detects uppercase " KT" speed suffix in quoted string
+      ---
+      duration_ms: 0.100048
+      type: 'test'
+      ...
+    # Subtest: detects single-quoted ' m ' suffix literal (mid-string)
+    ok 6 - detects single-quoted ' m ' suffix literal (mid-string)
+      ---
+      duration_ms: 0.128354
+      type: 'test'
+      ...
+    # Subtest: detects double-quoted " m " suffix literal (mid-string)
+    ok 7 - detects double-quoted " m " suffix literal (mid-string)
+      ---
+      duration_ms: 0.101962
+      type: 'test'
+      ...
+    # Subtest: detects double-quoted " m" at end of string (reviewer-verified case)
+    ok 8 - detects double-quoted " m" at end of string (reviewer-verified case)
+      ---
+      duration_ms: 0.046052
+      type: 'test'
+      ...
+    # Subtest: detects single-quoted ' m' at end of string
+    ok 9 - detects single-quoted ' m' at end of string
+      ---
+      duration_ms: 0.032638
+      type: 'test'
+      ...
+    # Subtest: detects raw } kn in a template-literal interpolation
+    ok 10 - detects raw } kn in a template-literal interpolation
+      ---
+      duration_ms: 0.034927
+      type: 'test'
+      ...
+    # Subtest: detects } kn at end of template string
+    ok 11 - detects } kn at end of template string
+      ---
+      duration_ms: 0.044535
+      type: 'test'
+      ...
+    # Subtest: detects lowercase } kt in a template-literal interpolation
+    ok 12 - detects lowercase } kt in a template-literal interpolation
+      ---
+      duration_ms: 0.036416
+      type: 'test'
+      ...
+    # Subtest: detects uppercase } KT in a template-literal interpolation
+    ok 13 - detects uppercase } KT in a template-literal interpolation
+      ---
+      duration_ms: 0.119146
+      type: 'test'
+      ...
+    # Subtest: detects no-space }kt in a JSX expression
+    ok 14 - detects no-space }kt in a JSX expression
+      ---
+      duration_ms: 0.035131
+      type: 'test'
+      ...
+    # Subtest: detects .toFixed() followed by } m in a template literal
+    ok 15 - detects .toFixed() followed by } m in a template literal
+      ---
+      duration_ms: 0.028294
+      type: 'test'
+      ...
+    # Subtest: detects .toFixed() with zero decimals followed by } m
+    ok 16 - detects .toFixed() with zero decimals followed by } m
+      ---
+      duration_ms: 0.029971
+      type: 'test'
+      ...
+    # Subtest: detects .toFixed(1) followed by } m in JSX expression
+    ok 17 - detects .toFixed(1) followed by } m in JSX expression
+      ---
+      duration_ms: 0.08569
+      type: 'test'
+      ...
+    # Subtest: detects Math.round() followed by } m in a template literal
+    ok 18 - detects Math.round() followed by } m in a template literal
+      ---
+      duration_ms: 0.063877
+      type: 'test'
+      ...
+    # Subtest: detects plain variable reference followed by } m (reviewer-verified case)
+    ok 19 - detects plain variable reference followed by } m (reviewer-verified case)
+      ---
+      duration_ms: 0.061172
+      type: 'test'
+      ...
+    # Subtest: detects no-space }m suffix in a JSX expression
+    ok 20 - detects no-space }m suffix in a JSX expression
+      ---
+      duration_ms: 0.033172
+      type: 'test'
+      ...
+    # Subtest: detects no-space }m in a saved-plan metadata label
+    ok 21 - detects no-space }m in a saved-plan metadata label
+      ---
+      duration_ms: 0.029117
+      type: 'test'
+      ...
+    # Subtest: DOES flag } kt drift in a template literal (suppression exempts GPX lines)
+    ok 22 - DOES flag } kt drift in a template literal (suppression exempts GPX lines)
+      ---
+      duration_ms: 0.02936
+      type: 'test'
+      ...
+    # Subtest: does NOT flag lines containing 'raw-unit-ok'
+    ok 23 - does NOT flag lines containing 'raw-unit-ok'
+      ---
+      duration_ms: 0.468654
+      type: 'test'
+      ...
+    # Subtest: does NOT flag } m when the line is suppressed
+    ok 24 - does NOT flag } m when the line is suppressed
+      ---
+      duration_ms: 0.164712
+      type: 'test'
+      ...
+    # Subtest: does NOT flag } km (distance, not metre alone)
+    ok 25 - does NOT flag } km (distance, not metre alone)
+      ---
+      duration_ms: 0.055571
+      type: 'test'
+      ...
+    # Subtest: does NOT flag .toFixed() inside XML ele tag (no m suffix)
+    ok 26 - does NOT flag .toFixed() inside XML ele tag (no m suffix)
+      ---
+      duration_ms: 0.079541
+      type: 'test'
+      ...
+    # Subtest: does NOT flag formatSpeedFromKnots result in a template (no raw kn)
+    ok 27 - does NOT flag formatSpeedFromKnots result in a template (no raw kn)
+      ---
+      duration_ms: 0.042182
+      type: 'test'
+      ...
+    # Subtest: does NOT flag formatWaveHeight result in a template (no raw m)
+    ok 28 - does NOT flag formatWaveHeight result in a template (no raw m)
+      ---
+      duration_ms: 0.073566
+      type: 'test'
+      ...
+    # Subtest: does NOT flag degree suffix °
+    ok 29 - does NOT flag degree suffix °
+      ---
+      duration_ms: 0.035745
+      type: 'test'
+      ...
+    # Subtest: does NOT flag 'kn' embedded in an identifier name
+    ok 30 - does NOT flag 'kn' embedded in an identifier name
+      ---
+      duration_ms: 0.066211
+      type: 'test'
+      ...
+    1..30
+ok 70 - GENERAL_PATTERNS
+  ---
+  duration_ms: 4.551239
+  type: 'suite'
+  ...
+# Subtest: FORBIDDEN_PATTERNS
+    # Subtest: detects single-quoted ' kn' suffix literal
+    ok 1 - detects single-quoted ' kn' suffix literal
+      ---
+      duration_ms: 0.067721
+      type: 'test'
+      ...
+    # Subtest: detects double-quoted " kn" suffix literal
+    ok 2 - detects double-quoted " kn" suffix literal
+      ---
+      duration_ms: 0.086542
+      type: 'test'
+      ...
+    # Subtest: detects single-quoted ' m ' suffix literal
+    ok 3 - detects single-quoted ' m ' suffix literal
+      ---
+      duration_ms: 0.049249
+      type: 'test'
+      ...
+    # Subtest: detects double-quoted " m " suffix literal
+    ok 4 - detects double-quoted " m " suffix literal
+      ---
+      duration_ms: 0.046605
+      type: 'test'
+      ...
+    # Subtest: detects maxWindKt.toFixed( direct call
+    ok 5 - detects maxWindKt.toFixed( direct call
+      ---
+      duration_ms: 0.047311
+      type: 'test'
+      ...
+    # Subtest: detects maxWaveM.toFixed( direct call
+    ok 6 - detects maxWaveM.toFixed( direct call
+      ---
+      duration_ms: 0.034787
+      type: 'test'
+      ...
+    1..6
+ok 71 - FORBIDDEN_PATTERNS
+  ---
+  duration_ms: 0.471452
+  type: 'suite'
+  ...
+# Subtest: findViolations
+    # Subtest: returns an empty array for compliant source (default patterns)
+    ok 1 - returns an empty array for compliant source (default patterns)
+      ---
+      duration_ms: 0.128352
+      type: 'test'
+      ...
+    # Subtest: returns an empty array for compliant source (GENERAL_PATTERNS)
+    ok 2 - returns an empty array for compliant source (GENERAL_PATTERNS)
+      ---
+      duration_ms: 0.07415
+      type: 'test'
+      ...
+    # Subtest: reports the correct line number for each violation
+    ok 3 - reports the correct line number for each violation
+      ---
+      duration_ms: 0.076449
+      type: 'test'
+      ...
+    # Subtest: does NOT flag 'kn' embedded in an identifier name
+    ok 4 - does NOT flag 'kn' embedded in an identifier name
+      ---
+      duration_ms: 0.102905
+      type: 'test'
+      ...
+    # Subtest: does NOT flag an 'm' that is not a standalone unit suffix
+    ok 5 - does NOT flag an 'm' that is not a standalone unit suffix
+      ---
+      duration_ms: 0.08859
+      type: 'test'
+      ...
+    # Subtest: does NOT flag formatSpeedFromKnots or formatWaveHeight calls
+    ok 6 - does NOT flag formatSpeedFromKnots or formatWaveHeight calls
+      ---
+      duration_ms: 0.067232
+      type: 'test'
+      ...
+    # Subtest: GENERAL_PATTERNS does NOT flag maxWindKt.toFixed (TripWindow-only pattern)
+    ok 7 - GENERAL_PATTERNS does NOT flag maxWindKt.toFixed (TripWindow-only pattern)
+      ---
+      duration_ms: 0.128701
+      type: 'test'
+      ...
+    # Subtest: GENERAL_PATTERNS does NOT flag maxWaveM.toFixed (TripWindow-only pattern)
+    ok 8 - GENERAL_PATTERNS does NOT flag maxWaveM.toFixed (TripWindow-only pattern)
+      ---
+      duration_ms: 0.087264
+      type: 'test'
+      ...
+    1..8
+ok 72 - findViolations
+  ---
+  duration_ms: 0.871406
+  type: 'suite'
+  ...
+# Subtest: real TripWindowPanel.tsx
+    # Subtest: exits 0 (no violations) against the current file (full FORBIDDEN_PATTERNS)
+    ok 1 - exits 0 (no violations) against the current file (full FORBIDDEN_PATTERNS)
+      ---
+      duration_ms: 0.593121
+      type: 'test'
+      ...
+    1..1
+ok 73 - real TripWindowPanel.tsx
+  ---
+  duration_ms: 0.645706
+  type: 'suite'
+  ...
+# Subtest: additional guarded surface-condition panels (GENERAL_PATTERNS)
+    # Subtest: ConditionsLegend.tsx has no raw-unit literal violations
+    ok 1 - ConditionsLegend.tsx has no raw-unit literal violations
+      ---
+      duration_ms: 1.390748
+      type: 'test'
+      ...
+    # Subtest: DriftTimeline.tsx has no raw-unit literal violations
+    ok 2 - DriftTimeline.tsx has no raw-unit literal violations
+      ---
+      duration_ms: 0.480678
+      type: 'test'
+      ...
+    # Subtest: WeatherPanel.tsx has no raw-unit literal violations
+    ok 3 - WeatherPanel.tsx has no raw-unit literal violations
+      ---
+      duration_ms: 1.536514
+      type: 'test'
+      ...
+    # Subtest: CurrentsPanel.tsx has no raw-unit literal violations
+    ok 4 - CurrentsPanel.tsx has no raw-unit literal violations
+      ---
+      duration_ms: 0.638812
+      type: 'test'
+      ...
+    # Subtest: ManualConditionsForm.tsx has no raw-unit literal violations
+    ok 5 - ManualConditionsForm.tsx has no raw-unit literal violations
+      ---
+      duration_ms: 0.355999
+      type: 'test'
+      ...
+    # Subtest: TidePanel.tsx has no raw-unit literal violations
+    ok 6 - TidePanel.tsx has no raw-unit literal violations
+      ---
+      duration_ms: 0.669113
+      type: 'test'
+      ...
+    1..6
+ok 74 - additional guarded surface-condition panels (GENERAL_PATTERNS)
+  ---
+  duration_ms: 5.23287
+  type: 'suite'
+  ...
+# Subtest: the checked-in catalog is valid at its verification date
+not ok 75 - the checked-in catalog is valid at its verification date
+  ---
+  duration_ms: 5.326577
+  type: 'test'
+  location: '/home/runner/workspace/scripts/__tests__/check-validation-baseline.test.mjs:26:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + [
+    +   'catalog.catalogDate 2026-09-28 cannot be after asOf 2026-08-30'
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0: 'catalog.catalogDate 2026-09-28 cannot be after asOf 2026-08-30'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/runner/workspace/scripts/__tests__/check-validation-baseline.test.mjs:28:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1106:25)
+    Test.start (node:internal/test_runner/test:1003:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:358:17)
+  ...
+# Subtest: the CLI validates the real catalog without changing it
+not ok 76 - the CLI validates the real catalog without changing it
+  ---
+  duration_ms: 2.225651
+  type: 'test'
+  location: '/home/runner/workspace/scripts/__tests__/check-validation-baseline.test.mjs:33:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + [
+    +   'catalog.catalogDate 2026-09-28 cannot be after asOf 2026-08-30'
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0: 'catalog.catalogDate 2026-09-28 cannot be after asOf 2026-08-30'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/runner/workspace/scripts/__tests__/check-validation-baseline.test.mjs:40:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1106:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+    Test.postRun (node:internal/test_runner/test:1235:19)
+    Test.run (node:internal/test_runner/test:1163:12)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3)
+  ...
+# Subtest: malformed entries report actionable schema errors
+ok 77 - malformed entries report actionable schema errors
+  ---
+  duration_ms: 2.082132
+  type: 'test'
+  ...
+# Subtest: duplicate IDs are rejected
+ok 78 - duplicate IDs are rejected
+  ---
+  duration_ms: 0.943675
+  type: 'test'
+  ...
+# Subtest: expired active records are rejected using an injected date
+ok 79 - expired active records are rejected using an injected date
+  ---
+  duration_ms: 1.688293
+  type: 'test'
+  ...
+# Subtest: missing repository references are rejected
+ok 80 - missing repository references are rejected
+  ---
+  duration_ms: 1.144923
+  type: 'test'
+  ...
+# Subtest: resolved records require resolution evidence and remain terminal
+not ok 81 - resolved records require resolution evidence and remain terminal
+  ---
+  duration_ms: 1.144391
+  type: 'test'
+  location: '/home/runner/workspace/scripts/__tests__/check-validation-baseline.test.mjs:76:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + [
+    +   'catalog.catalogDate 2026-09-28 cannot be after asOf 2026-08-30'
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0: 'catalog.catalogDate 2026-09-28 cannot be after asOf 2026-08-30'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/runner/workspace/scripts/__tests__/check-validation-baseline.test.mjs:80:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1106:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+    Test.postRun (node:internal/test_runner/test:1235:19)
+    Test.run (node:internal/test_runner/test:1163:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:788:7)
+  ...
+# Subtest: intermittent records require both sides of the observation
+ok 82 - intermittent records require both sides of the observation
+  ---
+  duration_ms: 1.016084
+  type: 'test'
+  ...
+# Subtest: catalog defects never become a test suppression mechanism
+ok 83 - catalog defects never become a test suppression mechanism
+  ---
+  duration_ms: 0.910871
+  type: 'test'
+  ...
+# Subtest: maintenance report returns no findings when active records are outside both windows
+not ok 84 - maintenance report returns no findings when active records are outside both windows
+  ---
+  duration_ms: 0.720736
+  type: 'test'
+  location: '/home/runner/workspace/scripts/__tests__/check-validation-baseline.test.mjs:118:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    13 !== 12
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 12
+  actual: 13
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/runner/workspace/scripts/__tests__/check-validation-baseline.test.mjs:126:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1106:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+    Test.postRun (node:internal/test_runner/test:1235:19)
+    Test.run (node:internal/test_runner/test:1163:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:788:7)
+  ...
+# Subtest: maintenance report includes the inclusive deadline boundary
+not ok 85 - maintenance report includes the inclusive deadline boundary
+  ---
+  duration_ms: 0.518637
+  type: 'test'
+  location: '/home/runner/workspace/scripts/__tests__/check-validation-baseline.test.mjs:129:1'
+  failureType: 'testCodeFailure'
+  error: 'undefined == true'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///home/runner/workspace/scripts/__tests__/check-validation-baseline.test.mjs:137:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1106:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+    Test.postRun (node:internal/test_runner/test:1235:19)
+    Test.run (node:internal/test_runner/test:1163:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:788:7)
+  ...
+# Subtest: maintenance report identifies expired deadlines and stale reviews
+not ok 86 - maintenance report identifies expired deadlines and stale reviews
+  ---
+  duration_ms: 0.350932
+  type: 'test'
+  location: '/home/runner/workspace/scripts/__tests__/check-validation-baseline.test.mjs:142:1'
+  failureType: 'testCodeFailure'
+  error: 'undefined == true'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///home/runner/workspace/scripts/__tests__/check-validation-baseline.test.mjs:154:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1106:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+    Test.postRun (node:internal/test_runner/test:1235:19)
+    Test.run (node:internal/test_runner/test:1163:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:788:7)
+  ...
+# Subtest: maintenance validation can report expired active records while strict validation rejects them
+not ok 87 - maintenance validation can report expired active records while strict validation rejects them
+  ---
+  duration_ms: 1.795161
+  type: 'test'
+  location: '/home/runner/workspace/scripts/__tests__/check-validation-baseline.test.mjs:159:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + [
+    +   'catalog.catalogDate 2026-09-28 cannot be after asOf 2026-08-30'
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0: 'catalog.catalogDate 2026-09-28 cannot be after asOf 2026-08-30'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/runner/workspace/scripts/__tests__/check-validation-baseline.test.mjs:172:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1106:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+    Test.postRun (node:internal/test_runner/test:1235:19)
+    Test.run (node:internal/test_runner/test:1163:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:788:7)
+  ...
+# Subtest: maintenance report treats inactive records as informational
+not ok 88 - maintenance report treats inactive records as informational
+  ---
+  duration_ms: 0.377863
+  type: 'test'
+  location: '/home/runner/workspace/scripts/__tests__/check-validation-baseline.test.mjs:175:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    1 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/runner/workspace/scripts/__tests__/check-validation-baseline.test.mjs:182:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1106:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+    Test.postRun (node:internal/test_runner/test:1235:19)
+    Test.run (node:internal/test_runner/test:1163:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:788:7)
+  ...
+# Subtest: maintenance CLI exits cleanly with no findings and nonzero for findings or invalid options
+not ok 89 - maintenance CLI exits cleanly with no findings and nonzero for findings or invalid options
+  ---
+  duration_ms: 43.631642
+  type: 'test'
+  location: '/home/runner/workspace/scripts/__tests__/check-validation-baseline.test.mjs:188:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    [check-validation-baseline] catalog.catalogDate 2026-09-28 cannot be after asOf 2026-08-30
+    
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/runner/workspace/scripts/__tests__/check-validation-baseline.test.mjs:212:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1106:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+    Test.postRun (node:internal/test_runner/test:1235:19)
+    Test.run (node:internal/test_runner/test:1163:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:788:7)
+  ...
+# \#\# Playwright runtime coverage
+# Suite: `pr-smoke` · outcome: **passed**
+# | Passed | Failed | Skipped | Interrupted | Flaky |
+# | ---: | ---: | ---: | ---: | ---: |
+# | 1 | 0 | 1 | 0 | 1 |
+# \#\#\# Runtime skip reasons
+# - `tests/e2e/gated.spec.ts:24 › reports gate` — WebGL is unavailable on this runner
+# Machine-readable result: `/tmp/ci-playwright-reporter-8HFHUX/outcome.json`
+# Subtest: records final retry outcomes and runtime skip reasons
+ok 90 - records final retry outcomes and runtime skip reasons
+  ---
+  duration_ms: 2.453847
+  type: 'test'
+  ...
+# (node:5034) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: an empty new workspace starts at TASK-000001
+ok 91 - an empty new workspace starts at TASK-000001
+  ---
+  duration_ms: 183.857955
+  type: 'test'
+  ...
+# Subtest: a missing database cannot be recreated when tracked namespace plans prove prior allocations
+ok 92 - a missing database cannot be recreated when tracked namespace plans prove prior allocations
+  ---
+  duration_ms: 221.111464
+  type: 'test'
+  ...
+# Subtest: a cancelled retained ID does not authorize a missing next projected allocation
+ok 93 - a cancelled retained ID does not authorize a missing next projected allocation
+  ---
+  duration_ms: 135.454434
+  type: 'test'
+  ...
+# Subtest: tracked high-water evidence fails closed when its ledger row is absent
+ok 94 - tracked high-water evidence fails closed when its ledger row is absent
+  ---
+  duration_ms: 185.36803
+  type: 'test'
+  ...
+# Subtest: an allocator high-water mark beyond complete retained rows is not silently accepted
+ok 95 - an allocator high-water mark beyond complete retained rows is not silently accepted
+  ---
+  duration_ms: 119.400539
+  type: 'test'
+  ...
+# Subtest: complete retained history permits reservations above the tracked projection high-water mark
+ok 96 - complete retained history permits reservations above the tracked projection high-water mark
+  ---
+  duration_ms: 232.276449
+  type: 'test'
+  ...
+# Subtest: an intact accepted-source reservation remains idempotent, but source projections cannot replace the ledger
+ok 97 - an intact accepted-source reservation remains idempotent, but source projections cannot replace the ledger
+  ---
+  duration_ms: 620.041145
+  type: 'test'
+  ...
+# Subtest: malformed, conflicting, and symlinked tracked task projections fail closed
+ok 98 - malformed, conflicting, and symlinked tracked task projections fail closed
+  ---
+  duration_ms: 476.172222
+  type: 'test'
+  ...
+# Subtest: concurrent writers allocate distinct monotonic task IDs
+ok 99 - concurrent writers allocate distinct monotonic task IDs
+  ---
+  duration_ms: 665.060744
+  type: 'test'
+  ...
+# Subtest: complete all-pass evidence with no applicable cases can be eligible
+ok 100 - complete all-pass evidence with no applicable cases can be eligible
+  ---
+  duration_ms: 3.481681
+  type: 'test'
+  ...
+# Subtest: each failed, skipped, unknown, and not-run discovered case is enumerated
+ok 101 - each failed, skipped, unknown, and not-run discovered case is enumerated
+  ---
+  duration_ms: 1.92967
+  type: 'test'
+  ...
+# Subtest: ignored baseline declarations do not classify raw failures or unlisted failures as accepted
+ok 102 - ignored baseline declarations do not classify raw failures or unlisted failures as accepted
+  ---
+  duration_ms: 1.084289
+  type: 'test'
+  ...
+# Subtest: owned repair declarations stay blocking for all-pass, absent, and skipped cases
+ok 103 - owned repair declarations stay blocking for all-pass, absent, and skipped cases
+  ---
+  duration_ms: 1.7859
+  type: 'test'
+  ...
+# Subtest: caller-supplied signatures and verified proof claims never resolve classification
+ok 104 - caller-supplied signatures and verified proof claims never resolve classification
+  ---
+  duration_ms: 0.687642
+  type: 'test'
+  ...
+# Subtest: missing or malformed retained artifacts produce an incomplete assessment
+ok 105 - missing or malformed retained artifacts produce an incomplete assessment
+  ---
+  duration_ms: 0.713086
+  type: 'test'
+  ...
+# Subtest: unverified run snapshot or writer coordination blocks otherwise complete evidence
+ok 106 - unverified run snapshot or writer coordination blocks otherwise complete evidence
+  ---
+  duration_ms: 0.436982
+  type: 'test'
+  ...
+# Subtest: a pinned committed approval is bound to the exact policy, task, namespace, tier, and empty parameters
+ok 107 - a pinned committed approval is bound to the exact policy, task, namespace, tier, and empty parameters
+  ---
+  duration_ms: 381.1325
+  type: 'test'
+  ...
+# Subtest: missing and uncommitted bootstrap approvals are unavailable
+ok 108 - missing and uncommitted bootstrap approvals are unavailable
+  ---
+  duration_ms: 285.873937
+  type: 'test'
+  ...
+# Subtest: a pinned bootstrap decision rejects another task, namespace, tier, parameters, and actor assertion
+ok 109 - a pinned bootstrap decision rejects another task, namespace, tier, parameters, and actor assertion
+  ---
+  duration_ms: 668.576967
+  type: 'test'
+  ...
+# Subtest: a changed governing policy invalidates the previously pinned bootstrap approval
+ok 110 - a changed governing policy invalidates the previously pinned bootstrap approval
+  ---
+  duration_ms: 659.344139
+  type: 'test'
+  ...
+# Subtest: declared exact baseline is ignored only when authoritative, active, and unexpired
+ok 111 - declared exact baseline is ignored only when authoritative, active, and unexpired
+  ---
+  duration_ms: 1.848376
+  type: 'test'
+  ...
+# Subtest: baseline matching preserves exact suite, test, signature, and environment distinctions
+ok 112 - baseline matching preserves exact suite, test, signature, and environment distinctions
+  ---
+  duration_ms: 0.374971
+  type: 'test'
+  ...
+# Subtest: actual catalog-shaped records require an explicit exact applicable variant
+ok 113 - actual catalog-shaped records require an explicit exact applicable variant
+  ---
+  duration_ms: 0.362019
+  type: 'test'
+  ...
+# Subtest: catalog records without applicableVariants match only an exact affected tier
+ok 114 - catalog records without applicableVariants match only an exact affected tier
+  ---
+  duration_ms: 0.354431
+  type: 'test'
+  ...
+# Subtest: owned repair obligation survives expiry and is cleared only by verified discovered pass proof
+ok 115 - owned repair obligation survives expiry and is cleared only by verified discovered pass proof
+  ---
+  duration_ms: 0.531981
+  type: 'test'
+  ...
+# Subtest: unlisted failures require three distinct authorized safe trustworthy retries and provenance
+ok 116 - unlisted failures require three distinct authorized safe trustworthy retries and provenance
+  ---
+  duration_ms: 0.789276
+  type: 'test'
+  ...
+# Subtest: passing isolation retries report intermittency only and do not stand in for pre-task provenance
+ok 117 - passing isolation retries report intermittency only and do not stand in for pre-task provenance
+  ---
+  duration_ms: 0.301304
+  type: 'test'
+  ...
+# Subtest: unknown, ambiguous, malformed, or conflicting declarations fail closed without catalog promotion
+ok 118 - unknown, ambiguous, malformed, or conflicting declarations fail closed without catalog promotion
+  ---
+  duration_ms: 0.349823
+  type: 'test'
+  ...
+# (node:5581) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: tier policy pins every case-report adapter and the invoking scripts package
+ok 119 - tier policy pins every case-report adapter and the invoking scripts package
+  ---
+  duration_ms: 0.700467
+  type: 'test'
+  ...
+# Subtest: canonical JSON digests ignore object insertion order and reject non-JSON plan values
+ok 120 - canonical JSON digests ignore object insertion order and reject non-JSON plan values
+  ---
+  duration_ms: 0.908268
+  type: 'test'
+  ...
+# Subtest: the default durable database path is project-local but outside the project and .local
+ok 121 - the default durable database path is project-local but outside the project and .local
+  ---
+  duration_ms: 0.38414
+  type: 'test'
+  ...
+# Subtest: reservations are durable and monotonic; only activation gives one registered tier
+ok 122 - reservations are durable and monotonic; only activation gives one registered tier
+  ---
+  duration_ms: 907.149586
+  type: 'test'
+  ...
+# Subtest: activation reads roster and decision from one pinned Git commit and audits derived status
+ok 123 - activation reads roster and decision from one pinned Git commit and audits derived status
+  ---
+  duration_ms: 824.273351
+  type: 'test'
+  ...
+# Subtest: a fresh accepted project-task callback activates one exact locally bound plan without reviewer identity
+ok 124 - a fresh accepted project-task callback activates one exact locally bound plan without reviewer identity
+  ---
+  duration_ms: 883.207978
+  type: 'test'
+  ...
+# Subtest: accepted project-task activation is blocked without a separate pinned bootstrap approval or for another subject
+ok 125 - accepted project-task activation is blocked without a separate pinned bootstrap approval or for another subject
+  ---
+  duration_ms: 909.927486
+  type: 'test'
+  ...
+# Subtest: bootstrap approval rejects stale policy digests and edited uncommitted decisions
+ok 126 - bootstrap approval rejects stale policy digests and edited uncommitted decisions
+  ---
+  duration_ms: 1724.965252
+  type: 'test'
+  ...
+# Subtest: accepted project-task activation rejects substitution, plan drift, invalid state, and caller policy fields
+ok 127 - accepted project-task activation rejects substitution, plan drift, invalid state, and caller policy fields
+  ---
+  duration_ms: 1212.866756
+  type: 'test'
+  ...
+# Subtest: project-task source reservation is idempotent but changed plan content gets a new local ID
+ok 128 - project-task source reservation is idempotent but changed plan content gets a new local ID
+  ---
+  duration_ms: 1181.083245
+  type: 'test'
+  ...
+# Subtest: project-task reservation creates a new local ID when its authorized tier policy changes
+ok 129 - project-task reservation creates a new local ID when its authorized tier policy changes
+  ---
+  duration_ms: 1416.984645
+  type: 'test'
+  ...
+# Subtest: activation rejects caller-selected alternate reviewer paths even when their blobs are valid
+ok 130 - activation rejects caller-selected alternate reviewer paths even when their blobs are valid
+  ---
+  duration_ms: 597.58619
+  type: 'test'
+  ...
+# Subtest: activation rejects caller-supplied tier registry digests and unregistered definitions
+ok 131 - activation rejects caller-supplied tier registry digests and unregistered definitions
+  ---
+  duration_ms: 574.316469
+  type: 'test'
+  ...
+# Subtest: Dan can activate a task when named in the pinned reviewer roster
+ok 132 - Dan can activate a task when named in the pinned reviewer roster
+  ---
+  duration_ms: 694.908012
+  type: 'test'
+  ...
+# Subtest: missing, mismatched, and non-designated committed reviewer decisions fail closed
+ok 133 - missing, mismatched, and non-designated committed reviewer decisions fail closed
+  ---
+  duration_ms: 961.456447
+  type: 'test'
+  ...
+# Subtest: corrupt plan contents are rejected rather than trusted through a stale digest
+ok 134 - corrupt plan contents are rejected rather than trusted through a stale digest
+  ---
+  duration_ms: 513.463936
+  type: 'test'
+  ...
+# Subtest: checked runner denies missing, escaping, and substituted plan projections before launch
+ok 135 - checked runner denies missing, escaping, and substituted plan projections before launch
+  ---
+  duration_ms: 1356.504294
+  type: 'test'
+  ...
+# Subtest: checked runner rejects a changed wrapper before launch against the approved digests
+ok 136 - checked runner rejects a changed wrapper before launch against the approved digests
+  ---
+  duration_ms: 748.022449
+  type: 'test'
+  ...
+# Subtest: preflight-only requests remain blocked despite a registered report adapter
+ok 137 - preflight-only requests remain blocked despite a registered report adapter
+  ---
+  duration_ms: 800.112152
+  type: 'test'
+  ...
+# Subtest: checked dispatch cannot launch without a digest-bound legacy plan and passing draft guards
+ok 138 - checked dispatch cannot launch without a digest-bound legacy plan and passing draft guards
+  ---
+  duration_ms: 991.285737
+  type: 'test'
+  ...
+# Subtest: checked dispatch rejects Clerk substitution and selector or Node runtime controls before creating a lease
+ok 139 - checked dispatch rejects Clerk substitution and selector or Node runtime controls before creating a lease
+  ---
+  duration_ms: 745.159366
+  type: 'test'
+  ...
+# Subtest: activation and its audit event roll back together; stale or duplicate activation is rejected
+ok 140 - activation and its audit event roll back together; stale or duplicate activation is rejected
+  ---
+  duration_ms: 714.726329
+  type: 'test'
+  ...
+# (node:7087) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: plan ownership is derived from the reserved plan and tracked catalog
+not ok 141 - plan ownership is derived from the reserved plan and tracked catalog
+  ---
+  duration_ms: 6.588252
+  type: 'test'
+  location: '/home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:124:1'
+  failureType: 'testCodeFailure'
+  error: "ENOENT: no such file or directory, lstat '/home/runner/workspace/scripts/.gitignore'"
+  code: 'ENOENT'
+  stack: |-
+    async lstat (node:internal/fs/promises:1021:18)
+    async createTrackedIsolationRoot (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:64:18)
+    async diagnosticsFixture (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:21:19)
+    async TestContext.<anonymous> (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:125:42)
+    async Test.run (node:internal/test_runner/test:1113:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3)
+  ...
+# Subtest: untrusted exact identities persist as immutable blocked diagnostics
+not ok 142 - untrusted exact identities persist as immutable blocked diagnostics
+  ---
+  duration_ms: 1.054568
+  type: 'test'
+  location: '/home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:142:1'
+  failureType: 'testCodeFailure'
+  error: "ENOENT: no such file or directory, lstat '/home/runner/workspace/scripts/.gitignore'"
+  code: 'ENOENT'
+  stack: |-
+    async lstat (node:internal/fs/promises:1021:18)
+    async createTrackedIsolationRoot (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:64:18)
+    async diagnosticsFixture (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:21:19)
+    async TestContext.<anonymous> (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:125:42)
+    async Test.run (node:internal/test_runner/test:1113:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3)
+  ...
+# Subtest: caller assertions and arbitrary isolation execution are rejected
+not ok 143 - caller assertions and arbitrary isolation execution are rejected
+  ---
+  duration_ms: 0.235599
+  type: 'test'
+  location: '/home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:174:1'
+  failureType: 'testCodeFailure'
+  error: "ENOENT: no such file or directory, lstat '/home/runner/workspace/scripts/.gitignore'"
+  code: 'ENOENT'
+  stack: |-
+    async lstat (node:internal/fs/promises:1021:18)
+    async createTrackedIsolationRoot (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:64:18)
+    async diagnosticsFixture (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:21:19)
+    async TestContext.<anonymous> (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:125:42)
+    async Test.run (node:internal/test_runner/test:1113:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3)
+  ...
+# Subtest: bounded Node isolation stores passing raw status, TAP discovery, and both snapshots
+not ok 144 - bounded Node isolation stores passing raw status, TAP discovery, and both snapshots
+  ---
+  duration_ms: 0.164617
+  type: 'test'
+  location: '/home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:241:1'
+  failureType: 'testCodeFailure'
+  error: "ENOENT: no such file or directory, lstat '/home/runner/workspace/scripts/.gitignore'"
+  code: 'ENOENT'
+  stack: |-
+    async lstat (node:internal/fs/promises:1021:18)
+    async createTrackedIsolationRoot (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:64:18)
+    async diagnosticsFixture (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:21:19)
+    async TestContext.<anonymous> (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:125:42)
+    async Test.run (node:internal/test_runner/test:1113:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3)
+  ...
+# Subtest: literal exact selection records zero discovery without treating it as a pass
+not ok 145 - literal exact selection records zero discovery without treating it as a pass
+  ---
+  duration_ms: 0.210072
+  type: 'test'
+  location: '/home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:284:1'
+  failureType: 'testCodeFailure'
+  error: "ENOENT: no such file or directory, lstat '/home/runner/workspace/scripts/.gitignore'"
+  code: 'ENOENT'
+  stack: |-
+    async lstat (node:internal/fs/promises:1021:18)
+    async createTrackedIsolationRoot (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:64:18)
+    async diagnosticsFixture (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:21:19)
+    async TestContext.<anonymous> (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:125:42)
+    async Test.run (node:internal/test_runner/test:1113:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3)
+  ...
+# Subtest: Node TAP failure status is stored for a deterministic tracked fixture
+not ok 146 - Node TAP failure status is stored for a deterministic tracked fixture
+  ---
+  duration_ms: 0.166153
+  type: 'test'
+  location: '/home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:305:1'
+  failureType: 'testCodeFailure'
+  error: "ENOENT: no such file or directory, lstat '/home/runner/workspace/scripts/.gitignore'"
+  code: 'ENOENT'
+  stack: |-
+    async lstat (node:internal/fs/promises:1021:18)
+    async createTrackedIsolationRoot (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:64:18)
+    async diagnosticsFixture (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:21:19)
+    async TestContext.<anonymous> (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:125:42)
+    async Test.run (node:internal/test_runner/test:1113:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3)
+  ...
+# Subtest: the exact task/failure identity rejects a fourth reserved isolation attempt
+not ok 147 - the exact task/failure identity rejects a fourth reserved isolation attempt
+  ---
+  duration_ms: 0.239845
+  type: 'test'
+  location: '/home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:323:1'
+  failureType: 'testCodeFailure'
+  error: "ENOENT: no such file or directory, lstat '/home/runner/workspace/scripts/.gitignore'"
+  code: 'ENOENT'
+  stack: |-
+    async lstat (node:internal/fs/promises:1021:18)
+    async createTrackedIsolationRoot (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:64:18)
+    async diagnosticsFixture (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:21:19)
+    async TestContext.<anonymous> (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:125:42)
+    async Test.run (node:internal/test_runner/test:1113:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3)
+  ...
+not ok 148 - /home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs
+  ---
+  duration_ms: 0.173601
+  location: '/home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:109:1'
+  failureType: 'hookFailed'
+  error: "ENOENT: no such file or directory, lstat '/home/runner/workspace/scripts/.gitignore'"
+  code: 'ENOENT'
+  stack: |-
+    async lstat (node:internal/fs/promises:1021:18)
+    async createTrackedIsolationRoot (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:64:18)
+    async diagnosticsFixture (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:21:19)
+    async TestContext.<anonymous> (file:///home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs:125:42)
+    async Test.run (node:internal/test_runner/test:1113:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3)
+  ...
+# (node:7099) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: planning guards accept an exact tier, live ignore, and persistent owned repair
+ok 149 - planning guards accept an exact tier, live ignore, and persistent owned repair
+  ---
+  duration_ms: 302.924032
+  type: 'test'
+  ...
+# Subtest: ignore declarations fail closed for ownership, authority, expiry, applicability, and unknown IDs
+ok 150 - ignore declarations fail closed for ownership, authority, expiry, applicability, and unknown IDs
+  ---
+  duration_ms: 374.977534
+  type: 'test'
+  ...
+# Subtest: tier escalation and malformed or absent gate Regression Guards are rejected
+ok 151 - tier escalation and malformed or absent gate Regression Guards are rejected
+  ---
+  duration_ms: 120.892664
+  type: 'test'
+  ...
+# Subtest: the phrase 'this authorized tier' binds to the plan's single declared registered tier
+ok 152 - the phrase 'this authorized tier' binds to the plan's single declared registered tier
+  ---
+  duration_ms: 91.723188
+  type: 'test'
+  ...
+# Subtest: baseline catalog must be a tracked regular project file and markdown projection is digest-bound
+ok 153 - baseline catalog must be a tracked regular project file and markdown projection is digest-bound
+  ---
+  duration_ms: 107.694342
+  type: 'test'
+  ...
+# Subtest: baseline discovery captures a separately labeled planning-only snapshot
+ok 154 - baseline discovery captures a separately labeled planning-only snapshot
+  ---
+  duration_ms: 90.317668
+  type: 'test'
+  ...
+# Subtest: planning baseline persists after reopening the store and recorded observations are immutable
+ok 155 - planning baseline persists after reopening the store and recorded observations are immutable
+  ---
+  duration_ms: 281.401658
+  type: 'test'
+  ...
+# Subtest: planning baseline storage rejects task and snapshot digest mismatches
+ok 156 - planning baseline storage rejects task and snapshot digest mismatches
+  ---
+  duration_ms: 193.552957
+  type: 'test'
+  ...
+# Subtest: coordinator baseline capture is idempotent and never creates validation evidence
+ok 157 - coordinator baseline capture is idempotent and never creates validation evidence
+  ---
+  duration_ms: 381.241199
+  type: 'test'
+  ...
+# Subtest: a live checked-run process group blocks recovery release
+ok 158 - a live checked-run process group blocks recovery release
+  ---
+  duration_ms: 9.769836
+  type: 'test'
+  ...
+# Subtest: a killed leader cannot release recovery while a descendant remains in its group
+ok 159 - a killed leader cannot release recovery while a descendant remains in its group
+  ---
+  duration_ms: 42.3965
+  type: 'test'
+  ...
+# Subtest: missing or malformed recorded process identity blocks recovery
+ok 160 - missing or malformed recorded process identity blocks recovery
+  ---
+  duration_ms: 0.26524
+  type: 'test'
+  ...
+# Subtest: an actually stopped checked-run group permits recovery release
+ok 161 - an actually stopped checked-run group permits recovery release
+  ---
+  duration_ms: 6.733823
+  type: 'test'
+  ...
+# (node:7348) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: requestRequiredValidation denies unauthorized fields before reading authorization or launching
+ok 162 - requestRequiredValidation denies unauthorized fields before reading authorization or launching
+  ---
+  duration_ms: 1.109749
+  type: 'test'
+  ...
+# Subtest: runRequiredValidation denies unauthorized fields before reading authorization or launching
+ok 163 - runRequiredValidation denies unauthorized fields before reading authorization or launching
+  ---
+  duration_ms: 0.637436
+  type: 'test'
+  ...
+# (node:7360) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: run lease start is audited and exclusive; orphan quarantine holds the lease until actual stopped-process recovery
+ok 164 - run lease start is audited and exclusive; orphan quarantine holds the lease until actual stopped-process recovery
+  ---
+  duration_ms: 797.550017
+  type: 'test'
+  ...
+# Subtest: completion retains full report evidence, rejects caller labels, and blocks unverified final snapshots
+ok 165 - completion retains full report evidence, rejects caller labels, and blocks unverified final snapshots
+  ---
+  duration_ms: 1141.088114
+  type: 'test'
+  ...
+# Subtest: stored assessment cannot clear an owned repair from all-pass or undiscovered case evidence
+ok 166 - stored assessment cannot clear an owned repair from all-pass or undiscovered case evidence
+  ---
+  duration_ms: 894.46111
+  type: 'test'
+  ...
+# Subtest: unverified writer coordination can never complete a task
+ok 167 - unverified writer coordination can never complete a task
+  ---
+  duration_ms: 885.60175
+  type: 'test'
+  ...
+# Subtest: failure releases the run lease without falsely completing; terminal cancellation leaves an audited tombstone
+ok 168 - failure releases the run lease without falsely completing; terminal cancellation leaves an audited tombstone
+  ---
+  duration_ms: 731.744209
+  type: 'test'
+  ...
+# Subtest: Vitest configs omit the reporters property when Failure Gate reporting is disabled
+ok 169 - Vitest configs omit the reporters property when Failure Gate reporting is disabled
+  ---
+  duration_ms: 9.240632
+  type: 'test'
+  ...
+# Subtest: Playwright config uses a config-relative custom reporter path
+ok 170 - Playwright config uses a config-relative custom reporter path
+  ---
+  duration_ms: 0.740577
+  type: 'test'
+  ...
+# Subtest: Playwright config loads with --list both with and without Failure Gate reporting
+ok 171 - Playwright config loads with --list both with and without Failure Gate reporting
+  ---
+  duration_ms: 3381.925072
+  type: 'test'
+  ...
+# Subtest: Node TAP discovery matches the runner summary and preserves skipped results
+ok 172 - Node TAP discovery matches the runner summary and preserves skipped results
+  ---
+  duration_ms: 1.940768
+  type: 'test'
+  ...
+# Subtest: Node TAP discovery counts nested test cases without counting suite summaries
+ok 173 - Node TAP discovery counts nested test cases without counting suite summaries
+  ---
+  duration_ms: 0.50351
+  type: 'test'
+  ...
+# Subtest: Node TAP discovery is incomplete when report totals omit a result
+ok 174 - Node TAP discovery is incomplete when report totals omit a result
+  ---
+  duration_ms: 0.341622
+  type: 'test'
+  ...
+# Subtest: Vitest reporter writes actual discovered case outcomes with a digestable report
+ok 175 - Vitest reporter writes actual discovered case outcomes with a digestable report
+  ---
+  duration_ms: 15.306744
+  type: 'test'
+  ...
+# Subtest: Vitest skipped cases are retained but cannot count as all passed
+ok 176 - Vitest skipped cases are retained but cannot count as all passed
+  ---
+  duration_ms: 5.609696
+  type: 'test'
+  ...
+# Subtest: Vitest does not accept a final pass when its result retains retry errors
+ok 177 - Vitest does not accept a final pass when its result retains retry errors
+  ---
+  duration_ms: 5.935855
+  type: 'test'
+  ...
+# Subtest: Playwright reporter retains retry outcomes and does not call a flaky case all passed
+ok 178 - Playwright reporter retains retry outcomes and does not call a flaky case all passed
+  ---
+  duration_ms: 7.141715
+  type: 'test'
+  ...
+# Subtest: raw Node TAP is digest-checked and unreferenced files invalidate discovery
+ok 179 - raw Node TAP is digest-checked and unreferenced files invalidate discovery
+  ---
+  duration_ms: 21.408663
+  type: 'test'
+  ...
+# Subtest: serializes cooperating foreground writers
+ok 180 - serializes cooperating foreground writers
+  ---
+  duration_ms: 305.807402
+  type: 'test'
+  ...
+# Subtest: timeout fails closed without running the protected operation
+ok 181 - timeout fails closed without running the protected operation
+  ---
+  duration_ms: 187.225376
+  type: 'test'
+  ...
+# Subtest: failed foreground commands preserve status and release the lock
+ok 182 - failed foreground commands preserve status and release the lock
+  ---
+  duration_ms: 63.818995
+  type: 'test'
+  ...
+# Subtest: writer proofs are bound to the live lease, lock path, and exact snapshot
+ok 183 - writer proofs are bound to the live lease, lock path, and exact snapshot
+  ---
+  duration_ms: 6.185909
+  type: 'test'
+  ...
+# Subtest: rejects a symlink lock path
+ok 184 - rejects a symlink lock path
+  ---
+  duration_ms: 3.913914
+  type: 'test'
+  ...
+# Subtest: final input check and terminal write exclude a waiting cooperating writer
+ok 185 - final input check and terminal write exclude a waiting cooperating writer
+  ---
+  duration_ms: 103.194909
+  type: 'test'
+  ...
+# Subtest: a foreground child retains the lock if its wrapper is killed
+ok 186 - a foreground child retains the lock if its wrapper is killed
+  ---
+  duration_ms: 377.668594
+  type: 'test'
+  ...
+# Subtest: rejects invalid, unknown, recursive, and production invocations
+ok 187 - rejects invalid, unknown, recursive, and production invocations
+  ---
+  duration_ms: 265.475153
+  type: 'test'
+  ...
+# Subtest: terminates an orphaned wrapper tree and confirms the port is free
+ok 188 - terminates an orphaned wrapper tree and confirms the port is free
+  ---
+  duration_ms: 560.848922
+  type: 'test'
+  ...
+# Subtest: .replit keeps Project isolated from the four registered validation workflows
+ok 189 - .replit keeps Project isolated from the four registered validation workflows
+  ---
+  duration_ms: 2.332553
+  type: 'test'
+  ...
+# Subtest: validation manifest is the exact five-command registration contract
+ok 190 - validation manifest is the exact five-command registration contract
+  ---
+  duration_ms: 0.275367
+  type: 'test'
+  ...
+# Subtest: heavy routing stays serialized and does not add an outer lock
+ok 191 - heavy routing stays serialized and does not add an outer lock
+  ---
+  duration_ms: 0.518193
+  type: 'test'
+  ...
+# Subtest: tier steps use the canonical registry and named conflict resources
+ok 192 - tier steps use the canonical registry and named conflict resources
+  ---
+  duration_ms: 0.496191
+  type: 'test'
+  ...
+# Subtest: E2E startup and relocated palette ports use tests/e2e/ports.ts
+ok 193 - E2E startup and relocated palette ports use tests/e2e/ports.ts
+  ---
+  duration_ms: 1.576846
+  type: 'test'
+  ...
+# Subtest: cleanup contract is guarded against unsafe invocation
+ok 194 - cleanup contract is guarded against unsafe invocation
+  ---
+  duration_ms: 0.395288
+  type: 'test'
+  ...
+# Subtest: published archive has the exact canonical package and no obsolete lock template
+ok 195 - published archive has the exact canonical package and no obsolete lock template
+  ---
+  duration_ms: 105.061175
+  type: 'test'
+  ...
+# Subtest: archive skill and templates match tracked sources byte-for-byte
+ok 196 - archive skill and templates match tracked sources byte-for-byte
+  ---
+  duration_ms: 11.133917
+  type: 'test'
+  ...
+# Subtest: extracted templates reject unsafe input and pass isolated smoke checks
+ok 197 - extracted templates reject unsafe input and pass isolated smoke checks
+  ---
+  duration_ms: 1458.713897
+  type: 'test'
+  ...
+# Subtest: TASK_PLAN_FILE absent
+    # Subtest: exits 1 with TIER-LOCK VIOLATION when --allow-no-plan is NOT passed
+    ok 1 - exits 1 with TIER-LOCK VIOLATION when --allow-no-plan is NOT passed
+      ---
+      duration_ms: 46.402965
+      type: 'test'
+      ...
+    # Subtest: warns and exits 0 when --allow-no-plan IS passed (opt-out for ad-hoc / non-task runs)
+    ok 2 - warns and exits 0 when --allow-no-plan IS passed (opt-out for ad-hoc / non-task runs)
+      ---
+      duration_ms: 53.030551
+      type: 'test'
+      ...
+    1..2
+ok 198 - TASK_PLAN_FILE absent
+  ---
+  duration_ms: 99.972998
+  type: 'suite'
+  ...
+# Subtest: unparseable tier-lock output
+    # Subtest: returns an explicit unparseable result for successful output without a resolved tier
+    ok 1 - returns an explicit unparseable result for successful output without a resolved tier
+      ---
+      duration_ms: 0.812664
+      type: 'test'
+      ...
+    1..1
+ok 199 - unparseable tier-lock output
+  ---
+  duration_ms: 0.981821
+  type: 'suite'
+  ...
+# Subtest: registered validation entrypoints
+    # Subtest: contains only the four canonical task-locked tiers
+    ok 1 - contains only the four canonical task-locked tiers
+      ---
+      duration_ms: 0.254657
+      type: 'test'
+      ...
+    # Subtest: test-fast remains fail-closed when TASK_PLAN_FILE is absent
+    ok 2 - test-fast remains fail-closed when TASK_PLAN_FILE is absent
+      ---
+      duration_ms: 0.253663
+      type: 'test'
+      ...
+    # Subtest: test-standard remains fail-closed when TASK_PLAN_FILE is absent
+    ok 3 - test-standard remains fail-closed when TASK_PLAN_FILE is absent
+      ---
+      duration_ms: 0.138812
+      type: 'test'
+      ...
+    # Subtest: test-standard-plus remains fail-closed when TASK_PLAN_FILE is absent
+    ok 4 - test-standard-plus remains fail-closed when TASK_PLAN_FILE is absent
+      ---
+      duration_ms: 0.099164
+      type: 'test'
+      ...
+    # Subtest: test-heavy remains fail-closed when TASK_PLAN_FILE is absent
+    ok 5 - test-heavy remains fail-closed when TASK_PLAN_FILE is absent
+      ---
+      duration_ms: 0.099606
+      type: 'test'
+      ...
+    1..5
+ok 200 - registered validation entrypoints
+  ---
+  duration_ms: 1.341716
+  type: 'suite'
+  ...
+# Subtest: plan without \#\# Validation section
+    # Subtest: exits 1 with TIER-LOCK VIOLATION (active plans must carry a Validation section)
+    ok 1 - exits 1 with TIER-LOCK VIOLATION (active plans must carry a Validation section)
+      ---
+      duration_ms: 84.530891
+      type: 'test'
+      ...
+    1..1
+ok 201 - plan without \#\# Validation section
+  ---
+  duration_ms: 84.697176
+  type: 'suite'
+  ...
+# Subtest: tier matches
+    # Subtest: test-fast / fast → exit 0
+    ok 1 - test-fast / fast → exit 0
+      ---
+      duration_ms: 77.718758
+      type: 'test'
+      ...
+    # Subtest: test-standard / standard → exit 0
+    ok 2 - test-standard / standard → exit 0
+      ---
+      duration_ms: 90.378625
+      type: 'test'
+      ...
+    # Subtest: test-standard-plus / full → exit 0 (test-standard-plus maps to full)
+    ok 3 - test-standard-plus / full → exit 0 (test-standard-plus maps to full)
+      ---
+      duration_ms: 83.513952
+      type: 'test'
+      ...
+    # Subtest: test-heavy / full → exit 0 (test-heavy maps to full)
+    ok 4 - test-heavy / full → exit 0 (test-heavy maps to full)
+      ---
+      duration_ms: 80.905566
+      type: 'test'
+      ...
+    1..4
+ok 202 - tier matches
+  ---
+  duration_ms: 332.865676
+  type: 'suite'
+  ...
+# Subtest: heavy-runner internal preflight regression
+    # Subtest: run-tier standard with TASK_PLAN_FILE=test-heavy plan exits 1 (outer check correctly blocks wrong caller)
+    ok 1 - run-tier standard with TASK_PLAN_FILE=test-heavy plan exits 1 (outer check correctly blocks wrong caller)
+      ---
+      duration_ms: 85.875128
+      type: 'test'
+      ...
+    # Subtest: run-tier standard WITHOUT TASK_PLAN_FILE and WITH --allow-no-plan exits 0 (simulates preflight after env-var strip)
+    ok 2 - run-tier standard WITHOUT TASK_PLAN_FILE and WITH --allow-no-plan exits 0 (simulates preflight after env-var strip)
+      ---
+      duration_ms: 45.568525
+      type: 'test'
+      ...
+    1..2
+ok 203 - heavy-runner internal preflight regression
+  ---
+  duration_ms: 131.708045
+  type: 'suite'
+  ...
+# Subtest: tier mismatch — TIER-LOCK VIOLATION
+    # Subtest: plan requires test-standard but tier=fast → exit 1 with TIER-LOCK VIOLATION
+    ok 1 - plan requires test-standard but tier=fast → exit 1 with TIER-LOCK VIOLATION
+      ---
+      duration_ms: 82.483897
+      type: 'test'
+      ...
+    # Subtest: plan requires test-fast but tier=standard → exit 1 with TIER-LOCK VIOLATION
+    ok 2 - plan requires test-fast but tier=standard → exit 1 with TIER-LOCK VIOLATION
+      ---
+      duration_ms: 88.334997
+      type: 'test'
+      ...
+    # Subtest: plan requires test-fast but tier=full → exit 1 with TIER-LOCK VIOLATION
+    ok 3 - plan requires test-fast but tier=full → exit 1 with TIER-LOCK VIOLATION
+      ---
+      duration_ms: 80.679268
+      type: 'test'
+      ...
+    # Subtest: plan requires test-standard-plus but tier=standard → exit 1 (test-standard-plus maps to full)
+    ok 4 - plan requires test-standard-plus but tier=standard → exit 1 (test-standard-plus maps to full)
+      ---
+      duration_ms: 82.543129
+      type: 'test'
+      ...
+    # Subtest: plan requires an unregistered placeholder tier name → TIER-LOCK VIOLATION, exits 1
+    ok 5 - plan requires an unregistered placeholder tier name → TIER-LOCK VIOLATION, exits 1
+      ---
+      duration_ms: 78.436957
+      type: 'test'
+      ...
+    # Subtest: plan with no \#\# Validation section → exits 1 with TIER-LOCK VIOLATION
+    ok 6 - plan with no \#\# Validation section → exits 1 with TIER-LOCK VIOLATION
+      ---
+      duration_ms: 83.578466
+      type: 'test'
+      ...
+    1..6
+ok 204 - tier mismatch — TIER-LOCK VIOLATION
+  ---
+  duration_ms: 496.482143
+  type: 'suite'
+  ...
+# Subtest: rejects a non-numeric lock timing environment value at startup
+ok 205 - rejects a non-numeric lock timing environment value at startup
+  ---
+  duration_ms: 39.121542
+  type: 'test'
+  ...
+# Subtest: rejects zero timing environment values
+ok 206 - rejects zero timing environment values
+  ---
+  duration_ms: 31.70873
+  type: 'test'
+  ...
+# Subtest: rejects a missing or empty-after-sanitization resource
+ok 207 - rejects a missing or empty-after-sanitization resource
+  ---
+  duration_ms: 90.008089
+  type: 'test'
+  ...
+# Subtest: reports lock directory creation failures without an uncaught stack
+ok 208 - reports lock directory creation failures without an uncaught stack
+  ---
+  duration_ms: 30.10337
+  type: 'test'
+  ...
+# Subtest: reentrant execution preserves shell command behavior
+ok 209 - reentrant execution preserves shell command behavior
+  ---
+  duration_ms: 47.585581
+  type: 'test'
+  ...
+# Subtest: run-locked-tier rejects extra positional plan files
+ok 210 - run-locked-tier rejects extra positional plan files
+  ---
+  duration_ms: 29.925694
+  type: 'test'
+  ...
+# Subtest: shared step list has valid entries and no duplicate names
+ok 211 - shared step list has valid entries and no duplicate names
+  ---
+  duration_ms: 1.102381
+  type: 'test'
+  ...
+# Subtest: every step with a non-null resource uses a known resource name
+ok 212 - every step with a non-null resource uses a known resource name
+  ---
+  duration_ms: 0.202309
+  type: 'test'
+  ...
+# Subtest: every step declares a non-empty, known tiers array
+ok 213 - every step declares a non-empty, known tiers array
+  ---
+  duration_ms: 0.183337
+  type: 'test'
+  ...
+# Subtest: getStepsForTier throws on a step with no tier assignment
+ok 214 - getStepsForTier throws on a step with no tier assignment
+  ---
+  duration_ms: 0.396834
+  type: 'test'
+  ...
+# Subtest: getStepsForTier throws on empty tiers array and unknown tier tag
+ok 215 - getStepsForTier throws on empty tiers array and unknown tier tag
+  ---
+  duration_ms: 0.127716
+  type: 'test'
+  ...
+# Subtest: getStepsForTier selects by tag preserving list order
+ok 216 - getStepsForTier selects by tag preserving list order
+  ---
+  duration_ms: 0.74173
+  type: 'test'
+  ...
+# Subtest: tier structure obeys the fast⊂standard⊂full cumulative convention
+ok 217 - tier structure obeys the fast⊂standard⊂full cumulative convention
+  ---
+  duration_ms: 0.489227
+  type: 'test'
+  ...
+# Subtest: check:* script missing from both CI sequence and allowlist is flagged
+ok 218 - check:* script missing from both CI sequence and allowlist is flagged
+  ---
+  duration_ms: 0.18981
+  type: 'test'
+  ...
+# Subtest: allowlisted check:* script is not flagged
+ok 219 - allowlisted check:* script is not flagged
+  ---
+  duration_ms: 0.197043
+  type: 'test'
+  ...
+# Subtest: stale allowlist entries are flagged (removed script or now in CI)
+ok 220 - stale allowlist entries are flagged (removed script or now in CI)
+  ---
+  duration_ms: 0.275045
+  type: 'test'
+  ...
+# Subtest: GitHub parity flags a canonical step with no coverage declaration
+ok 221 - GitHub parity flags a canonical step with no coverage declaration
+  ---
+  duration_ms: 0.297464
+  type: 'test'
+  ...
+# Subtest: GitHub parity flags a missing workflow token and invalid exclusion contract
+ok 222 - GitHub parity flags a missing workflow token and invalid exclusion contract
+  ---
+  duration_ms: 0.333553
+  type: 'test'
+  ...
+# Subtest: GitHub parity binds tokens to the canonical command or a documented equivalent
+ok 223 - GitHub parity binds tokens to the canonical command or a documented equivalent
+  ---
+  duration_ms: 0.301751
+  type: 'test'
+  ...
+# Subtest: GitHub parity only accepts executable command positions, not comments or echo arguments
+ok 224 - GitHub parity only accepts executable command positions, not comments or echo arguments
+  ---
+  duration_ms: 0.185247
+  type: 'test'
+  ...
+# Subtest: GitHub parity flags stale declarations and accepts documented local-only exclusions
+ok 225 - GitHub parity flags stale declarations and accepts documented local-only exclusions
+  ---
+  duration_ms: 0.138154
+  type: 'test'
+  ...
+# Subtest: GitHub parity requires local-only exclusions to name a supported environment dependency
+ok 226 - GitHub parity requires local-only exclusions to name a supported environment dependency
+  ---
+  duration_ms: 0.13302
+  type: 'test'
+  ...
+# Subtest: GitHub parity flags an exclusion that becomes unnecessary when its command reaches PR CI
+ok 227 - GitHub parity flags an exclusion that becomes unnecessary when its command reaches PR CI
+  ---
+  duration_ms: 0.051568
+  type: 'test'
+  ...
+# Subtest: GitHub workflow extraction counts run commands but not comments or step names
+ok 228 - GitHub workflow extraction counts run commands but not comments or step names
+  ---
+  duration_ms: 0.380883
+  type: 'test'
+  ...
+# Subtest: GitHub workflow text includes PR run commands and ignores main-only workflows
+ok 229 - GitHub workflow text includes PR run commands and ignores main-only workflows
+  ---
+  duration_ms: 2.154668
+  type: 'test'
+  ...
+# Subtest: fresh-database E2E workflows use schema push instead of migrations
+ok 230 - fresh-database E2E workflows use schema push instead of migrations
+  ---
+  duration_ms: 0.272286
+  type: 'test'
+  ...
+# Subtest: workflow scopes separate pull-request and push commands
+ok 231 - workflow scopes separate pull-request and push commands
+  ---
+  duration_ms: 0.146242
+  type: 'test'
+  ...
+# Subtest: workflow reader returns only executable run commands
+ok 232 - workflow reader returns only executable run commands
+  ---
+  duration_ms: 0.940931
+  type: 'test'
+  ...
+# Subtest: duplicate targeted unit and browser runs are flagged within the same event scope
+ok 233 - duplicate targeted unit and browser runs are flagged within the same event scope
+  ---
+  duration_ms: 1.285647
+  type: 'test'
+  ...
+# Subtest: browser suite detection normalizes pnpm exec, quotes, and continuations
+ok 234 - browser suite detection normalizes pnpm exec, quotes, and continuations
+  ---
+  duration_ms: 0.175655
+  type: 'test'
+  ...
+# Subtest: workflow comment lines containing Playwright are not executable commands
+ok 235 - workflow comment lines containing Playwright are not executable commands
+  ---
+  duration_ms: 0.191917
+  type: 'test'
+  ...
+# Subtest: real E2E workflows preserve the fresh-database bootstrap contract
+ok 236 - real E2E workflows preserve the fresh-database bootstrap contract
+  ---
+  duration_ms: 0.413275
+  type: 'test'
+  ...
+# Subtest: targeted suites on a different event scope do not count as duplicates
+ok 237 - targeted suites on a different event scope do not count as duplicates
+  ---
+  duration_ms: 0.187154
+  type: 'test'
+  ...
+# Subtest: a recorded overlap is accepted and stale or malformed declarations are flagged
+ok 238 - a recorded overlap is accepted and stale or malformed declarations are flagged
+  ---
+  duration_ms: 0.507475
+  type: 'test'
+  ...
+# Subtest: a check file referenced nowhere is flagged as an orphan
+ok 239 - a check file referenced nowhere is flagged as an orphan
+  ---
+  duration_ms: 0.109063
+  type: 'test'
+  ...
+# Subtest: an allowlisted orphan check file is not flagged
+ok 240 - an allowlisted orphan check file is not flagged
+  ---
+  duration_ms: 0.050337
+  type: 'test'
+  ...
+# Subtest: GitHub workflow references count as non-orphaned check-file references
+ok 241 - GitHub workflow references count as non-orphaned check-file references
+  ---
+  duration_ms: 1.952333
+  type: 'test'
+  ...
+# Subtest: stale orphan allowlist entries are flagged (deleted file or now referenced)
+ok 242 - stale orphan allowlist entries are flagged (deleted file or now referenced)
+  ---
+  duration_ms: 0.186494
+  type: 'test'
+  ...
+# Subtest: all check:* scripts in package.json are covered by the shared step list or allowlist
+ok 243 - all check:* scripts in package.json are covered by the shared step list or allowlist
+  ---
+  duration_ms: 0.417448
+  type: 'test'
+  ...
+# Subtest: every canonical validation step has portable GitHub coverage or a documented local-only exclusion
+ok 244 - every canonical validation step has portable GitHub coverage or a documented local-only exclusion
+  ---
+  duration_ms: 3.614531
+  type: 'test'
+  ...
+# Subtest: the committed workflows have no unrecorded duplicate behavioral suite runs or stale overlap exclusions
+ok 245 - the committed workflows have no unrecorded duplicate behavioral suite runs or stale overlap exclusions
+  ---
+  duration_ms: 2.777903
+  type: 'test'
+  ...
+# Subtest: all check-* files on disk are referenced somewhere or allowlisted
+ok 246 - all check-* files on disk are referenced somewhere or allowlisted
+  ---
+  duration_ms: 2.137207
+  type: 'test'
+  ...
+# Subtest: unreadable reference files produce a named diagnostic and continue
+ok 247 - unreadable reference files produce a named diagnostic and continue
+  ---
+  duration_ms: 1.494194
+  type: 'test'
+  ...
+# Subtest: runScheduledRefresh — hash diff canonicalization
+    # Subtest: treats two builds with identical content but different fetchedAt as UNCHANGED
+    ok 1 - treats two builds with identical content but different fetchedAt as UNCHANGED
+      ---
+      duration_ms: 2.007259
+      type: 'test'
+      ...
+    # Subtest: treats two builds with different content as CHANGED even when timestamps match
+    ok 2 - treats two builds with different content as CHANGED even when timestamps match
+      ---
+      duration_ms: 0.806502
+      type: 'test'
+      ...
+    # Subtest: treats a missing baseline as CHANGED (first-ever run)
+    ok 3 - treats a missing baseline as CHANGED (first-ever run)
+      ---
+      duration_ms: 0.544632
+      type: 'test'
+      ...
+    # Subtest: ignores object-key ordering differences (canonical sort)
+    ok 4 - ignores object-key ordering differences (canonical sort)
+      ---
+      duration_ms: 0.541172
+      type: 'test'
+      ...
+    1..4
+ok 248 - runScheduledRefresh — hash diff canonicalization
+  ---
+  duration_ms: 4.664759
+  type: 'suite'
+  ...
+# Subtest: --dry-run: valid plan resolves correct command and exits 0
+ok 249 - --dry-run: valid plan resolves correct command and exits 0
+  ---
+  duration_ms: 38.28714
+  type: 'test'
+  ...
+# Subtest: --dry-run: test-fast tier resolves to the fast command
+ok 250 - --dry-run: test-fast tier resolves to the fast command
+  ---
+  duration_ms: 32.57579
+  type: 'test'
+  ...
+# Subtest: accepts pnpm's conventional -- argument separator
+ok 251 - accepts pnpm's conventional -- argument separator
+  ---
+  duration_ms: 31.015141
+  type: 'test'
+  ...
+# Subtest: --dry-run: test-heavy tier resolves to the heavy command
+ok 252 - --dry-run: test-heavy tier resolves to the heavy command
+  ---
+  duration_ms: 30.908731
+  type: 'test'
+  ...
+# Subtest: --dry-run: test-standard-plus tier resolves to the standard-plus command
+ok 253 - --dry-run: test-standard-plus tier resolves to the standard-plus command
+  ---
+  duration_ms: 30.620376
+  type: 'test'
+  ...
+# Subtest: missing plan file exits 1 with a clear error
+ok 254 - missing plan file exits 1 with a clear error
+  ---
+  duration_ms: 31.585939
+  type: 'test'
+  ...
+# Subtest: no argument exits 1 with usage hint
+ok 255 - no argument exits 1 with usage hint
+  ---
+  duration_ms: 29.160864
+  type: 'test'
+  ...
+# Subtest: plan with no \#\# Validation section exits 1 with required-section error
+ok 256 - plan with no \#\# Validation section exits 1 with required-section error
+  ---
+  duration_ms: 30.627686
+  type: 'test'
+  ...
+# Subtest: \#\# Validation present but no **Command:** line exits 1
+ok 257 - \#\# Validation present but no **Command:** line exits 1
+  ---
+  duration_ms: 29.504796
+  type: 'test'
+  ...
+# Subtest: **Command:** present but no backtick-quoted value exits 1
+ok 258 - **Command:** present but no backtick-quoted value exits 1
+  ---
+  duration_ms: 38.1236
+  type: 'test'
+  ...
+# Subtest: unrecognised tier name exits 1 with valid tier list
+ok 259 - unrecognised tier name exits 1 with valid tier list
+  ---
+  duration_ms: 32.280802
+  type: 'test'
+  ...
+# Subtest: --dry-run does not launch the actual validation command
+ok 260 - --dry-run does not launch the actual validation command
+  ---
+  duration_ms: 31.276263
+  type: 'test'
+  ...
+# Subtest: task validation scopes the exact plan without mutating .replit
+ok 261 - task validation scopes the exact plan without mutating .replit
+  ---
+  duration_ms: 1.102874
+  type: 'test'
+  ...
+# Subtest: managed task validation passes the exact plan to its selected registered tier without changing workflow definitions
+ok 262 - managed task validation passes the exact plan to its selected registered tier without changing workflow definitions
+  ---
+  duration_ms: 38.590597
+  type: 'test'
+  ...
+# Subtest: managed task validation does not launch a tier when the supplied plan is unreadable
+ok 263 - managed task validation does not launch a tier when the supplied plan is unreadable
+  ---
+  duration_ms: 36.690288
+  type: 'test'
+  ...
+# Subtest: unit entry points use dedicated timeout guards
+ok 264 - unit entry points use dedicated timeout guards
+  ---
+  duration_ms: 2.270142
+  type: 'test'
+  ...
+# Subtest: normal completion preserves the wrapped command exit code
+ok 265 - normal completion preserves the wrapped command exit code
+  ---
+  duration_ms: 70.524925
+  type: 'test'
+  ...
+# Subtest: budget breach remains exit 124
+ok 266 - budget breach remains exit 124
+  ---
+  duration_ms: 113.190285
+  type: 'test'
+  ...
+# Subtest: interrupting an outer wrapper cleans up nested detached child groups
+ok 267 - interrupting an outer wrapper cleans up nested detached child groups
+  ---
+  duration_ms: 126.321336
+  type: 'test'
+  ...
+# Subtest: acquires lock, runs command, propagates exit code, releases lock
+ok 268 - acquires lock, runs command, propagates exit code, releases lock
+  ---
+  duration_ms: 233.485976
+  type: 'test'
+  ...
+# Subtest: write failure cleans up the partial lock and does not acquire it
+ok 269 - write failure cleans up the partial lock and does not acquire it
+  ---
+  duration_ms: 136.150994
+  type: 'test'
+  ...
+# Subtest: cleanup failure during lock creation reports a non-acquired lock
+ok 270 - cleanup failure during lock creation reports a non-acquired lock
+  ---
+  duration_ms: 154.873447
+  type: 'test'
+  ...
+# Subtest: second process queues behind holder and runs after release
+ok 271 - second process queues behind holder and runs after release
+  ---
+  duration_ms: 732.414989
+  type: 'test'
+  ...
+# Subtest: reclaims a stale lock whose recorded pid is dead
+ok 272 - reclaims a stale lock whose recorded pid is dead
+  ---
+  duration_ms: 150.214948
+  type: 'test'
+  ...
+# Subtest: reclaims a lock with a stale heartbeat even if pid is alive (pid reuse)
+ok 273 - reclaims a lock with a stale heartbeat even if pid is alive (pid reuse)
+  ---
+  duration_ms: 115.607193
+  type: 'test'
+  ...
+# Subtest: holder heartbeat keeps lock fresh; waiter does not reclaim
+ok 274 - holder heartbeat keeps lock fresh; waiter does not reclaim
+  ---
+  duration_ms: 1341.181178
+  type: 'test'
+  ...
+# Subtest: max-hold-age safety valve reclaims a hung-but-alive holder
+ok 275 - max-hold-age safety valve reclaims a hung-but-alive holder
+  ---
+  duration_ms: 3541.786295
+  type: 'test'
+  ...
+# Subtest: nested wrapper under a lock-holding ancestor runs without re-acquiring (no self-deadlock)
+ok 276 - nested wrapper under a lock-holding ancestor runs without re-acquiring (no self-deadlock)
+  ---
+  duration_ms: 103.75753
+  type: 'test'
+  ...
+# Subtest: SIGTERM releases the lock and terminates the wrapped command
+ok 277 - SIGTERM releases the lock and terminates the wrapped command
+  ---
+  duration_ms: 54.433776
+  type: 'test'
+  ...
+# Subtest: --resource gives each resource its own lock file
+ok 278 - --resource gives each resource its own lock file
+  ---
+  duration_ms: 73.251993
+  type: 'test'
+  ...
+# Subtest: two processes competing for the same named resource serialize
+ok 279 - two processes competing for the same named resource serialize
+  ---
+  duration_ms: 629.208657
+  type: 'test'
+  ...
+# Subtest: processes for different named resources do not block each other
+ok 280 - processes for different named resources do not block each other
+  ---
+  duration_ms: 122.714976
+  type: 'test'
+  ...
+# Subtest: reentrancy per named resource: nested wrapper for same resource skips re-acquire
+ok 281 - reentrancy per named resource: nested wrapper for same resource skips re-acquire
+  ---
+  duration_ms: 102.45596
+  type: 'test'
+  ...
+# Subtest: outer codegen lock exports only CODEGEN env var, not UNIT_CPU (correct per-resource env)
+ok 282 - outer codegen lock exports only CODEGEN env var, not UNIT_CPU (correct per-resource env)
+  ---
+  duration_ms: 66.629042
+  type: 'test'
+  ...
+# Subtest: higher-priority waiter acquires lock before lower-priority waiter
+ok 283 - higher-priority waiter acquires lock before lower-priority waiter
+  ---
+  duration_ms: 673.558992
+  type: 'test'
+  ...
+# Subtest: waiter manifest entry is removed after lock acquisition
+ok 284 - waiter manifest entry is removed after lock acquisition
+  ---
+  duration_ms: 153.677366
+  type: 'test'
+  ...
+# Subtest: waiter manifest entry is removed on SIGTERM (before acquisition)
+ok 285 - waiter manifest entry is removed on SIGTERM (before acquisition)
+  ---
+  duration_ms: 210.937648
+  type: 'test'
+  ...
+1..285
+# tests 432
+# suites 49
+# pass 415
+# fail 17
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 58829.412199

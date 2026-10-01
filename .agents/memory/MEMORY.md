@@ -29,6 +29,7 @@
 - [Dev workflow environment markers](dev-workflow-environment-markers.md) — REPLIT_DEV_DOMAIN distinguishes interactive development from misleading environment markers.
 - [Validated .replit line endings](replit-config-line-endings.md) — normalize replacement candidates to LF before validated replacement.
 - [Validation upserts can mutate Project](validation-upsert-reorders-dot-replit.md) — task-specific validation upserts may alter the run button; avoid or restore via validated replacement.
+- [Local ledger continuity](local-ledger-continuity.md) — accepted plans are not allocator/audit backups; missing history requires investigation, not ID reconstruction.
 - [Current dependency-audit baseline](unit-tier-baseline-2026-08.md) — dependency audit signatures need fresh isolated evidence before reassignment.
 - [Baseline catalog time snapshots](baseline-catalog-time-snapshots.md) — pinned historical `asOf` tests need a matching catalog snapshot, not the live catalog date/status.
 - [Skill mirror sync + foreign commits](skill-mirror-sync-check.md) — stale custom-skill mirrors fail tiers; cite foreign merge provenance in drift reasons.
@@ -41,3 +42,6 @@
 - [Orval Zod catalog detection](orval-zod-catalog-detection.md) — set the installed Zod major explicitly in Orval; catalog-based auto-detection may emit incompatible code.
 - [Incomplete pnpm install diagnosis](incomplete-pnpm-install.md) — fail early on missing declared test links; avoid installing packages from inside concurrent validation.
 - [Isolated task checkout freshness](isolated-task-checkout-freshness.md) — merged fixes may not appear in an active task checkout; compare against main-repl/main before retrying.
+- [Stale validation waiters and PID reuse](validation-waiter-pid-reuse.md) — an old priority-queue manifest can block a live tier if its PID is reused by an unrelated thread.
+- [Replit task plans need local binding](replit-task-plan-binding.md) — exact Agent-side task retrieval verifies content, but does not bind it to a Failure Gate ID or authorize local execution.
+- [Managed validation launch serialization](managed-validation-launch-serialization.md) — do not assume parallel CodeExecution callbacks can release a gate while startValidationRun is waiting.

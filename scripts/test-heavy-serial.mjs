@@ -28,17 +28,39 @@
  *   test:e2e    → unit-cpu + e2e-port resources (priority 3)
  *
  * Invoked by the "test-heavy" validation workflow.
+ * Pass --report <path> (or set VALIDATION_REPORT_FILE) to write a versioned
+ * JSON report containing PREFLIGHT, every preflight step, and every serial
+ * suite, including work not reached after a failure.
  */
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runTierLockDryRun } from "./lib/tier-lock-check.mjs";
+import { getStepsForTier, getValidationSteps } from "./validation-steps.mjs";
+import {
+  createStepRecord,
+  createStepReport,
+  parseReportOption,
+  writeStepReport,
+} from "./lib/step-report.mjs";
+import { collectTestCaseDiscovery } from "./failure-gate-v4/test-case-report.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const lockScript = resolve(root, "scripts/validation-lock.mjs");
 const timeoutScript = resolve(root, "scripts/run-with-timeout.mjs");
 mkdirSync(resolve(root, ".local/tmp"), { recursive: true });
+let reportPath = null;
+try {
+  ({ reportPath } = parseReportOption(process.argv.slice(2)));
+} catch (error) {
+  console.error(`[test-heavy] ${error.message}`);
+  process.exit(2);
+}
+reportPath ??= process.env.VALIDATION_REPORT_FILE || null;
+const reportStartedMs = Date.now();
+const reportStartedAt = new Date(reportStartedMs).toISOString();
 
 // Keep relocated palette ports in the same source-of-truth registry as the
 // Playwright config. This runner is plain ESM, so read the envPort defaults
@@ -191,6 +213,25 @@ const HEAVY_PRIORITY = 3;
 
 const runTierScript = resolve(root, "scripts/run-tier.mjs");
 const preflightStart = Date.now();
+const preflightSteps = getStepsForTier(getValidationSteps("test-heavy-report"), "standard")
+  .filter((step) => step.name !== "test:unit");
+const heavyStepNames = ["test:unit", "e2e-palette", "test:e2e"];
+const reportSteps = [
+  createStepRecord({ name: "PREFLIGHT", phase: "preflight", status: "not_reached" }),
+  ...preflightSteps.map((step) => createStepRecord({
+    name: step.name,
+    phase: "preflight",
+    status: "not_reached",
+  })),
+  ...heavyStepNames.map((name) => createStepRecord({
+    name,
+    phase: "heavy",
+    status: "not_reached",
+  })),
+];
+const reportStepByName = new Map(reportSteps.map((step) => [step.name, step]));
+const nestedReportDir = reportPath ? mkdtempSync(resolve(tmpdir(), "test-heavy-report-")) : null;
+const nestedReportPath = nestedReportDir ? resolve(nestedReportDir, "preflight.json") : null;
 console.log("\n[test-heavy] ▶ PREFLIGHT: typecheck + lint + static checks (run-tier.mjs standard --skip test:unit)");
 // Strip TASK_PLAN_FILE from the preflight environment. The outer tier-lock
 // check above has already verified that the plan authorises test-heavy. The
@@ -199,6 +240,8 @@ console.log("\n[test-heavy] ▶ PREFLIGHT: typecheck + lint + static checks (run
 // outside and must not be re-validated against the plan's ceiling.
 const preflightEnv = { ...process.env };
 delete preflightEnv.TASK_PLAN_FILE;
+setReportStarted("PREFLIGHT", preflightStart);
+if (reportPath) await writeHeavyReport(null);
 const preflightRes = spawnSync(
   process.execPath,
   // --allow-no-plan is required here: TASK_PLAN_FILE was stripped from
@@ -206,14 +249,53 @@ const preflightRes = spawnSync(
   // legitimate non-task invocation that must not hard-error on the missing
   // env var.  The outer tier-lock check above has already verified that the
   // plan authorises test-heavy before we reach this point.
-  [runTierScript, "standard", "--skip", "test:unit", "--allow-no-plan"],
+  [
+    runTierScript,
+    "standard",
+    "--skip", "test:unit",
+    "--allow-no-plan",
+    ...(nestedReportPath ? ["--report", nestedReportPath] : []),
+  ],
   { stdio: "inherit", cwd: root, env: preflightEnv },
 );
 const preflightCode = preflightRes.status ?? 1;
 const preflightSecs = ((Date.now() - preflightStart) / 1000).toFixed(1);
 console.log(`[test-heavy] ■ PREFLIGHT finished in ${preflightSecs}s (exit ${preflightCode})`);
+const preflightFinishedMs = Date.now();
+setReportRecord("PREFLIGHT", {
+  exitCode: preflightCode,
+  rawExitStatus: preflightRes.status,
+  signal: preflightRes.signal ?? null,
+  startMs: preflightStart,
+  finishedMs: preflightFinishedMs,
+});
+if (nestedReportPath) {
+  try {
+    const nestedReport = JSON.parse(readFileSync(nestedReportPath, "utf8"));
+    for (const step of nestedReport.steps ?? []) {
+      const record = reportStepByName.get(step.name);
+      if (record) Object.assign(record, { ...step, phase: "preflight" });
+    }
+  } catch (error) {
+    console.error(`[test-heavy] could not read complete PREFLIGHT report: ${error.message}`);
+    for (const step of preflightSteps) {
+      Object.assign(reportStepByName.get(step.name), {
+        status: "unknown",
+        reason: `the PREFLIGHT launcher did not provide a machine report: ${error.message}`,
+      });
+    }
+  }
+}
+if (reportPath) await writeHeavyReport(null);
 if (preflightCode !== 0) {
   console.error("[test-heavy] PREFLIGHT failed — aborting before heavy suites. Fix typecheck/lint errors first.");
+  if (reportPath) {
+    try {
+      await writeHeavyReport(preflightCode);
+    } finally {
+      rmSync(nestedReportDir, { recursive: true, force: true });
+    }
+  }
   process.exit(preflightCode);
 }
 
@@ -297,11 +379,26 @@ for (const { name, cmd } of steps) {
   sweepE2ePorts();
   const start = Date.now();
   console.log(`\n[test-heavy] ▶ step "${name}" starting (total elapsed ${((start - overallStart) / 1000).toFixed(0)}s)`);
-  const res = spawnSync(cmd[0], cmd.slice(1), { stdio: "inherit", cwd: root });
+  setReportStarted(name, start);
+  if (reportPath) await writeHeavyReport(null);
+  const res = spawnSync(cmd[0], cmd.slice(1), {
+    stdio: "inherit",
+    cwd: root,
+    env: heavyStepEnvironment(name),
+  });
   const exitCode = res.status ?? 1;
-  const secs = ((Date.now() - start) / 1000).toFixed(1);
-  results.push({ name, secs, exitCode });
+  const finished = Date.now();
+  const secs = ((finished - start) / 1000).toFixed(1);
+  results.push({ name, secs, exitCode, rawExitStatus: res.status, signal: res.signal ?? null });
+  setReportRecord(name, {
+    exitCode,
+    rawExitStatus: res.status,
+    signal: res.signal ?? null,
+    startMs: start,
+    finishedMs: finished,
+  });
   console.log(`[test-heavy] ■ step "${name}" finished in ${secs}s (exit ${exitCode})`);
+  if (reportPath) await writeHeavyReport(null);
 }
 
 console.log("\n[test-heavy] step summary:");
@@ -311,4 +408,84 @@ for (const r of results) {
   if (r.exitCode !== 0) failed = true;
 }
 console.log(`  total: ${((Date.now() - overallStart) / 1000).toFixed(1)}s`);
-process.exit(failed ? 1 : 0);
+const finalExitCode = failed ? 1 : 0;
+if (reportPath) {
+  try {
+    await writeHeavyReport(finalExitCode);
+  } finally {
+    rmSync(nestedReportDir, { recursive: true, force: true });
+  }
+}
+process.exit(finalExitCode);
+
+function setReportRecord(name, { exitCode, rawExitStatus, signal, startMs, finishedMs }) {
+  const record = reportStepByName.get(name);
+  if (!record) return;
+  Object.assign(record, {
+    status: exitCode === 0 ? "passed" : "failed",
+    rawExitStatus,
+    signal,
+    startedAt: new Date(startMs).toISOString(),
+    finishedAt: new Date(finishedMs).toISOString(),
+    durationMs: Math.max(0, finishedMs - startMs),
+    reason: null,
+  });
+}
+
+function setReportStarted(name, startMs) {
+  Object.assign(reportStepByName.get(name), {
+    status: "unknown",
+    rawExitStatus: null,
+    signal: null,
+    startedAt: new Date(startMs).toISOString(),
+    finishedAt: null,
+    durationMs: null,
+    reason: "step was still running when the progressive report was written",
+  });
+}
+
+function heavyStepEnvironment(name) {
+  const env = {
+    ...process.env,
+    // Test report context comes from this runner, not a fixture or caller.
+    FAILURE_GATE_TEST_STEP: name,
+  };
+  if (name === "test:unit") {
+    env.FAILURE_GATE_TEST_CASE_SUITE = "scripts-unit";
+  } else {
+    // playwright.config.ts uses this value as its suite identifier.
+    env.FAILURE_GATE_VALIDATION_TIER = name;
+  }
+  return env;
+}
+
+async function writeHeavyReport(rawExitStatus) {
+  const testCases = await collectTestCaseDiscovery(
+    process.env.FAILURE_GATE_TEST_CASE_REPORT_DIR,
+    { required: true },
+  );
+  const finishedAt = new Date().toISOString();
+  const report = createStepReport({
+    runner: "test-heavy-serial",
+    tier: "test-heavy",
+    startedAt: reportStartedAt,
+    finishedAt,
+    rawExitStatus,
+    discovery: {
+      validationSteps: {
+        available: true,
+        source: "scripts/validation-steps.mjs",
+        names: preflightSteps.map((step) => step.name),
+      },
+      serialSuites: {
+        available: true,
+        source: "test-heavy-serial.mjs",
+        names: heavyStepNames,
+      },
+      testCases,
+    },
+    steps: reportSteps,
+  });
+  writeStepReport(reportPath, report);
+  console.log(`[test-heavy] machine-readable report written to ${resolve(reportPath)}`);
+}

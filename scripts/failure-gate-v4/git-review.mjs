@@ -92,14 +92,28 @@ export function loadPinnedReviewerDecision(options) {
     }
   }
 
+  // Pin the permitted use with the decision, not with caller arguments. The
+  // ordinary route cannot be enabled until a separately reviewed cutover has
+  // demonstrated complete evidence and effective final-write coordination.
+  if (decision.activationScope !== "installation-demonstration") {
+    throw new Error("ordinary v4 activation is blocked: a pinned installation-demonstration decision is required until reviewed cutover");
+  }
+
   const approval = {
     ...expected,
+    activationScope: decision.activationScope,
     decision: "approved",
+    sourceKind: "git-review",
     reviewerId: decision.reviewerId,
     reference: decision.reference.trim(),
     sourceRevision,
     reviewerRosterDigest: digestJson(roster),
     decisionContentDigest: digestJson(decision),
+    sourceDigest: digestJson({
+      sourceRevision,
+      reviewerRosterDigest: digestJson(roster),
+      decisionContentDigest: digestJson(decision),
+    }),
   };
   return Object.freeze({
     approval: Object.freeze(approval),

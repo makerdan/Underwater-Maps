@@ -1,0 +1,1008 @@
+{
+  "schemaVersion": 1,
+  "engine": "vitest",
+  "suite": "lib-db-unit",
+  "outcome": "passed",
+  "complete": true,
+  "cases": [
+    {
+      "id": "6d237a82deaaf991149680719ac85d9ed1375e5e2373bf7b913e8bb76a18b763",
+      "source": "src/__tests__/audit-marker-dataset-bbox-integration.test.ts",
+      "title": "resolveBboxes — correctly formed terrain_json > resolves a custom_dataset with valid camelCase bbox fields",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "cd51d8bc9f0e616fdc9e3793151624c96f85d2a1c65886eb1f0e02ae3b36de50",
+      "source": "src/__tests__/audit-marker-dataset-bbox-integration.test.ts",
+      "title": "resolveBboxes — correctly formed terrain_json > classifies a marker inside the bbox as in-bounds (not in any problem bucket)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "f12cad2528103edc904aeef2ed594df6b1307428eb626f2c2cdf032df174d442",
+      "source": "src/__tests__/audit-marker-dataset-bbox-integration.test.ts",
+      "title": "resolveBboxes — snake_case bbox keys (e.g. min_lon instead of minLon) > maps the dataset id to null (bbox unresolvable)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "c7559d2448dde743c5e70a8d109067eabdb0c9881173d7f2827d50abbff5dc16",
+      "source": "src/__tests__/audit-marker-dataset-bbox-integration.test.ts",
+      "title": "resolveBboxes — snake_case bbox keys (e.g. min_lon instead of minLon) > classifies a marker referencing a snake_case-bbox dataset as unknownDataset",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "ca192698c6db4aed4497720c1024abd2bbbd51baad2a9e0826f78480b4e9b57b",
+      "source": "src/__tests__/audit-marker-dataset-bbox-integration.test.ts",
+      "title": "resolveBboxes — partial bbox fields (maxLon / maxLat missing) > maps the dataset id to null when required bbox keys are absent",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "8e2e60469d7d90db0801293926e86380c807bfb2363d2a4df4d5cb6dabb11f22",
+      "source": "src/__tests__/audit-marker-dataset-bbox-integration.test.ts",
+      "title": "resolveBboxes — partial bbox fields (maxLon / maxLat missing) > classifies a marker referencing a partial-bbox dataset as unknownDataset",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "a4ba8b2c8a7ff39eea2bbc2d037122446bbe21b9417a1509f841198ee3e7338e",
+      "source": "src/__tests__/audit-marker-dataset-bbox-integration.test.ts",
+      "title": "resolveBboxes — string-typed bbox values (correct keys, wrong type) > maps the dataset id to null when bbox values are strings not numbers",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "145fd30a5bc1b61b052c2f32a925a5d8c6a453fe57a604c9c3b4a56af7e49b3c",
+      "source": "src/__tests__/audit-marker-dataset-bbox-integration.test.ts",
+      "title": "resolveBboxes — string-typed bbox values (correct keys, wrong type) > classifies a marker referencing a string-valued-bbox dataset as unknownDataset",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "277fe04e87a180869be8064e0cd43f50f499ab2c15da9b8fe8b3d744414b8a3b",
+      "source": "src/__tests__/audit-marker-dataset-bbox-integration.test.ts",
+      "title": "resolveBboxes — mixed batch of dataset ids > resolves each id independently regardless of shape",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "849aca4204b821ce0e36de96bbade2ca2d71b9260b3569531c2569f781cdb2e0",
+      "source": "src/__tests__/audit-marker-dataset-bbox-integration.test.ts",
+      "title": "resolveBboxes — mixed batch of dataset ids > classifies markers across the batch correctly",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "05a3fda18948db782176f20b7e2fecb390f07a351f14d23df8f344741bc11c82",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "isInBbox > returns true for a point well inside the bbox",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "6fc50dea8b537f6bdd2fd5a356e34c68e35557d5f968b147b6cda3291c52438e",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "isInBbox > returns true on the exact minimum corner (inclusive)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "0e6119b02a72614d322d9dc43256ceab6c9a0da9221e47346d1d3aa012ecd50c",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "isInBbox > returns true on the exact maximum corner (inclusive)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "83bb655bb29747059db29588087b4b26c7c538d540795f0e6cd6d6b11526154d",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "isInBbox > returns false for a point just outside minLon",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "113ebaee0a81d8d3166b399e04cd185071644909d9e5ed50439f0f7a1929fbf9",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "isInBbox > returns false for a point just outside maxLon",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "d1d5845fc72cc5a1804c182dec0c8a6bcde13051ed3db763cc0551e5d9c59feb",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "isInBbox > returns false for a point just outside minLat",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "8137161e5222ad24be044d8e80ec56d674f831658a8cc70ecbaccf7ecc2f1e26",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "isInBbox > returns false for a point just outside maxLat",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "680435a993d800ce1a2138216f179e66d4415fcc2f24a797dbda3703b885f543",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "isInBbox > returns false for a completely different region",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "2a443369979d9163a815d3aef71c0f843367c3aee84ba3e2214f46640a2d67f3",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "classifyMarkers > returns empty buckets when all markers are in-bounds",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "604d0a91a08451f8dd920282e40cd291a24d793dab5ed2a2f26d4a83dd7d4ce7",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "classifyMarkers > classifies a marker outside the dataset bbox as out-of-bounds",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "aa0ff8688f79cc7e37bf1ec37b01b1b70f14444ef6023fada4cc1ae26fe3cb7c",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "classifyMarkers > classifies a marker whose dataset no longer exists as unknownDataset",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "9785ede9677565a5f68caaf69dbc122f74dc2ee2f5d831221c1aa435c719f104",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "classifyMarkers > handles a mix of in-bounds, out-of-bounds, and unknown-dataset markers",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "0c5013c8592dac7c071a146ac82743e6687ba13c47e9403a4ae7bb0021cb3879",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "classifyMarkers > returns empty buckets when the markers array is empty",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "94416ce7544438a25e4fa5d0abc5fde0d154080fac895f9ba0c5cb051acb7d85",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "classifyMarkers > treats a datasetId missing from bboxMap (undefined) the same as null — unknownDataset",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "59dc1056d214b4727aabf574f34b1914af52e8a79a8ef2c05f23e6823d4e2ce7",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "classifyMarkers > skips unassigned markers (datasetId null) — nothing to validate",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "bab267e927a5670ceb5fbcfec8921bf49857020c70a6d41527d2ae02a906ce03",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "classifyMarkers > counts boundary-edge markers as in-bounds (not out-of-bounds)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "6b8babebaf13f55bcf06413960dfb9c4aed34eb8ed2c3f2486380e896c2bc7c6",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "ciExitCode > returns 0 when there are no problems, regardless of ciMode",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "be5d666802ddfacf3ab9a24e3b08c970e67ab89318def350eb9cb441586c557d",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "ciExitCode > returns 1 when ciMode is true and there are problems",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "28ce719776e2495130f6a89dbe38d1449dd6ad691fe1591d3b71e92c04584758",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "ciExitCode > returns 0 when ciMode is false even with problems",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "0847d550a4f6e4caf51f62d72bc6f55f3bbfa8608e3d1f7d6086a61bf88a3e14",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "bbox shrinks after markers are saved — DB integration > detects a marker that drifts out-of-bounds when the catalog bbox shrinks",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "4046b80def84cb97d9047f3db04a2492d52c404f4d7f6610e2de7735894a8560",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "bbox shrinks after markers are saved — DB integration > keeps a marker in-bounds when the bbox shrinks but the marker stays inside",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "1e337b7d2c7030f815d89c014e615252177c2cc389b1aedd3b96a4b73f576d1f",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "classifyMarkers → ciExitCode integration > yields exit 0 when all markers are in-bounds",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "0ea2d3795789221fa61898e78e904b7705584351c52a5c6b1f30e37459999dff",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "classifyMarkers → ciExitCode integration > yields exit 1 with --ci when there are out-of-bounds markers",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "fb8ca9604dd56b56d343170e4b9f5d5bcd215cc38de9aacd65aa29d767fd97b0",
+      "source": "src/__tests__/audit-marker-dataset-bbox.test.ts",
+      "title": "classifyMarkers → ciExitCode integration > yields exit 1 with --ci when there are unknown-dataset markers",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "03efb789f9b6b6abc42d00152bb5fa57e0aac15f17e19302f3b8a6daf526eade",
+      "source": "src/__tests__/backfill-water-type.test.ts",
+      "title": "resolveLegacyWaterType > resolves freshwater from a linked catalog row (Ray Roberts)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "9a76be490e84b52baf225d9b028f8b1b3fd61d065f1b3bf65e0296b89b4c5fad",
+      "source": "src/__tests__/backfill-water-type.test.ts",
+      "title": "resolveLegacyWaterType > resolves freshwater via the preset registry when the catalog row is absent (Ray Roberts)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "77d5d024a98101a2c39825a10b1ee842befa9bc8ea657e75dac8fa88116de0f9",
+      "source": "src/__tests__/backfill-water-type.test.ts",
+      "title": "resolveLegacyWaterType > resolves freshwater via the preset registry when the catalog row carries an invalid value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "84239b4adba61cf32381a44af680e55c145779f1d63e08adef7356e3d27132dd",
+      "source": "src/__tests__/backfill-water-type.test.ts",
+      "title": "resolveLegacyWaterType > defaults an unlinked legacy row (no catalog save) to saltwater",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "07dcf27e70328bf67e9d8d37e4d173aa127e2eb8f1354a08bfe264ded88b8d0b",
+      "source": "src/__tests__/backfill-water-type.test.ts",
+      "title": "resolveLegacyWaterType > defaults an unknown catalog id with no registry match to saltwater",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "4ddf09638a921429f37262ce399d59c06ad41925c2e42c885c1407479aaabd4c",
+      "source": "src/__tests__/backfill-water-type.test.ts",
+      "title": "resolveLegacyWaterType > resolves non-preset freshwater catalog rows (fw-* entries) from the catalog",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "138e3539af563be48c66106ae5678f43d26a696c6155aacc979af6681adcab97",
+      "source": "src/__tests__/backfill-water-type.test.ts",
+      "title": "resolveLegacyWaterType > resolves saltwater catalog rows from the catalog",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "1f6188fa5f05cb2ffdf1f42bba7b8a9d54fa7f4f60bbc7f43c7a9a3455cbbeed",
+      "source": "src/__tests__/backfill-water-type.test.ts",
+      "title": "presetRegistryWaterType > strips the preset- prefix before consulting the registry mirror",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "c3e0fe17a1f9053cfe0952a56bd4245fff959b4cc055a0fd911b5ec293ca53bd",
+      "source": "src/__tests__/backfill-water-type.test.ts",
+      "title": "presetRegistryWaterType > accepts a bare preset dataset id",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "00e8387034202d68ddc2e8d96b6ab8b52f4d0c026ad6d1fa5ca6ee0307545dfa",
+      "source": "src/__tests__/backfill-water-type.test.ts",
+      "title": "presetRegistryWaterType > returns null for ids not in the registry mirror",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "30615d6885229460ee934731f499d402f6db0d73a815b9b32787e8ee81d041b4",
+      "source": "src/__tests__/backfill-water-type.test.ts",
+      "title": "presetRegistryWaterType > registry mirror contains Lake Ray Roberts as freshwater",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "382da434ea2ca9b2d8abcfe130725e47c04673d4df1c8a765ffa814c64dde22e",
+      "source": "src/__tests__/backfill-water-type.test.ts",
+      "title": "patchBlob > injects the resolved waterType when missing",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "17c368719307a801542910597ca10c7f3c68ec0f6a758a81b6b5280ebdfe18ef",
+      "source": "src/__tests__/backfill-water-type.test.ts",
+      "title": "patchBlob > replaces an invalid stored waterType with the resolved one",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "7b66410532723fff574408ebbd46614d6bda4354df35ba266ade72a0b1521d51",
+      "source": "src/__tests__/backfill-water-type.test.ts",
+      "title": "patchBlob > never overwrites an existing valid waterType",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "7ca3c9e2b4751a6f32c28216cc2e4501b3d425eac67de9910e83eecd4ebadc9d",
+      "source": "src/__tests__/backfill-water-type.test.ts",
+      "title": "patchBlob > strips the removed synthetic dataSource",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "54cf8f4cd838c016ecb36ba6e6a6f38f8c827c1e5184b4ee8f797e239a22e357",
+      "source": "src/__tests__/backfill-water-type.test.ts",
+      "title": "patchBlob > keeps a valid dataSource",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "840c83eac410b1a21f6d48f937ce2e95986c11f1a190ff0d35052ac7143153c0",
+      "source": "src/__tests__/backfill-water-type.test.ts",
+      "title": "needsBackfill > flags blobs missing waterType",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "cd75fd74c38d5b02be03058eea9632d5cb79128bb2db454e086a3e91c66a82da",
+      "source": "src/__tests__/backfill-water-type.test.ts",
+      "title": "needsBackfill > flags blobs carrying dataSource=synthetic",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "7cb21abf2756e1dcc44e3f9951bbaf50b1905b84815ece0cd452377ab2b22a8c",
+      "source": "src/__tests__/backfill-water-type.test.ts",
+      "title": "needsBackfill > passes modern blobs untouched",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "5718ae9307cd14e852d677ee66439dd2ce340b8e7f67f4f99cb3817ad6bab65d",
+      "source": "src/__tests__/custom-datasets.test.ts",
+      "title": "custom_datasets — folderId FK (ON DELETE SET NULL) > accepts a dataset with a valid folderId",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "34304f8a82f9279f587e53bb894cd41d252ba42aa0c90f8f2739be1d926ec627",
+      "source": "src/__tests__/custom-datasets.test.ts",
+      "title": "custom_datasets — folderId FK (ON DELETE SET NULL) > sets folderId to NULL when the referenced folder is deleted (ON DELETE SET NULL)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "a8c56f2e6df0842375ac3e936eef283f08f28be1a4e2c468a4d00cf7c3787d9f",
+      "source": "src/__tests__/custom-datasets.test.ts",
+      "title": "custom_datasets — folderId FK (ON DELETE SET NULL) > keeps the dataset row (only nulls folderId) when its folder is deleted",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "2ac4abeeebfc1459e402d4210fb5d2d50b09da4606bfb9eb20e009cf10c548ca",
+      "source": "src/__tests__/custom-datasets.test.ts",
+      "title": "custom_datasets — folderId FK (ON DELETE SET NULL) > only nulls datasets in the deleted folder, not datasets in other folders",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "243edaf07f96a6e0e43d82d2897c33455dec3be91ce728ab3e3b62d310c6ebb8",
+      "source": "src/__tests__/custom-datasets.test.ts",
+      "title": "custom_datasets — folderId FK (ON DELETE SET NULL) > accepts a dataset with no folderId (null)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "f0c6d53c42cdc4fc9ee75f48dd50f4164f86c654d91e4b2f706899ca49ec5f26",
+      "source": "src/__tests__/custom-datasets.test.ts",
+      "title": "custom_datasets — folderId FK (ON DELETE SET NULL) > rejects a dataset referencing a non-existent folder (FK enforced)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "23c03ba07ecf5711f4b7caa861b2f8bfe04d1ded319eafabd187246d8df67057",
+      "source": "src/__tests__/dataset-collections.test.ts",
+      "title": "dataset_collections — collection kind + special meta (special collections) > defaults collection_kind to 'standard' with NULL meta (existing-row behavior)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "ab8e1d074ac82fca9c77e90e485ebd78ba10af0f872a493abc362ded31b6695a",
+      "source": "src/__tests__/dataset-collections.test.ts",
+      "title": "dataset_collections — collection kind + special meta (special collections) > rejects an unknown collection_kind (dataset_collections_kind_check)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "9b62095da599796b13dc1728a0d4991a0f8b660d911f8fa174a5bd91901f0431",
+      "source": "src/__tests__/dataset-collections.test.ts",
+      "title": "dataset_collections — collection kind + special meta (special collections) > round-trips a SpecialCollectionMeta JSONB payload intact",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "1b2fc9a9293dcc06c6d496bdd540303709ed973faf53da1cccf34f2fae6c0f73",
+      "source": "src/__tests__/dataset-collections.test.ts",
+      "title": "dataset_collections — unique name per user (dataset_collections_user_name_uniq) > rejects two collections with the same name (exact case) for the same user",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "4fc083ad79c7aafc550d3b7e747cf1eb1205322069a090a0c631ac132341ee7d",
+      "source": "src/__tests__/dataset-collections.test.ts",
+      "title": "dataset_collections — unique name per user (dataset_collections_user_name_uniq) > rejects duplicate names differing only in case for the same user",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "dd1ad204614e58b6f39bb28c913db2f0c8d7753cca254a08f49067b84cad0160",
+      "source": "src/__tests__/dataset-collections.test.ts",
+      "title": "dataset_collections — unique name per user (dataset_collections_user_name_uniq) > allows the same name for different users",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "cd748ca0332d667bb20291f0b0b02bbab75237c0b7fcd519c8fb594564612408",
+      "source": "src/__tests__/dataset-collections.test.ts",
+      "title": "dataset_collection_members — exactly-one-reference CHECK > rejects a member with neither datasetId nor catalogSaveId",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "81a306cc95b64ebdc75f0cfc71f3859cb902b9126f2cf155588afb0b0354e5ce",
+      "source": "src/__tests__/dataset-collections.test.ts",
+      "title": "dataset_collection_members — exactly-one-reference CHECK > rejects a member with both datasetId and catalogSaveId",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "b805a3be73c9fc937638f8fd8e8ae967754117ee1da6eb8f4ab3923d39344cde",
+      "source": "src/__tests__/dataset-collections.test.ts",
+      "title": "dataset_collection_members — exactly-one-reference CHECK > accepts dataset-kind and save-kind members in the same collection",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "408f35055c14915cf3c1f00b6b15dee519a63cd1b4569637e5a7624a4dc5a8cf",
+      "source": "src/__tests__/dataset-collections.test.ts",
+      "title": "dataset_collection_members — per-collection uniqueness > rejects the same dataset twice in one collection",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "8c5107c4c6a6ac4501322ac1655dc2ce52ab6aa912f805c1e4e354522e356ad9",
+      "source": "src/__tests__/dataset-collections.test.ts",
+      "title": "dataset_collection_members — per-collection uniqueness > rejects the same catalog save twice in one collection",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "7ca6e760d6facbaef5a460321efe8cf89a9abd4ed5c3d262e9ab3d16e43b9fc7",
+      "source": "src/__tests__/dataset-collections.test.ts",
+      "title": "dataset_collection_members — per-collection uniqueness > allows the same dataset in two different collections",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "f3741047bc3ce8a247e5a0c297d414b30347cd2bc2475e553b214d5d46eee431",
+      "source": "src/__tests__/dataset-collections.test.ts",
+      "title": "dataset_collection_members — cascade behavior (regression guard) > deleting a collection removes its members but never the datasets/saves",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "0d56b0bfc1196bcca5aa06daaf0f8555f95c12400f8bba9de824cafd33ddcc01",
+      "source": "src/__tests__/dataset-collections.test.ts",
+      "title": "dataset_collection_members — cascade behavior (regression guard) > deleting a dataset that belongs to collections succeeds and drops its membership rows",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "c9751be8e8b8516637548081f3d38feec4a75e316617d435d7f205a233d8dae9",
+      "source": "src/__tests__/dataset-collections.test.ts",
+      "title": "dataset_collection_members — cascade behavior (regression guard) > deleting the selected dataset member clears the collection default",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "f2868efbdc5b6365a8b387c2ca91986237a9af1b3efa9a678a04d26bcc333650",
+      "source": "src/__tests__/dataset-collections.test.ts",
+      "title": "dataset_collection_members — cascade behavior (regression guard) > deleting a catalog save that belongs to a collection succeeds and drops its membership row",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "043f7a37f2c55dc17631637207506b51e4e3023d54aba175ae3c502f8dedcc46",
+      "source": "src/__tests__/dataset-folders.test.ts",
+      "title": "dataset_folders — unique root-name constraint (dataset_folders_root_name_uniq) > rejects two root-level folders with the same name (exact case) for the same user",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "e2d8429f9000fa3c8bfc161a6cbab8b041b1e664ab8961103af02a95c7fda597",
+      "source": "src/__tests__/dataset-folders.test.ts",
+      "title": "dataset_folders — unique root-name constraint (dataset_folders_root_name_uniq) > rejects two root-level folders with the same name in different case for the same user",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "e9a64ef1ba911343619ae21809522b030d1829762f5dc7b64db4ef86172bba0c",
+      "source": "src/__tests__/dataset-folders.test.ts",
+      "title": "dataset_folders — unique root-name constraint (dataset_folders_root_name_uniq) > allows two root-level folders with the same name for different users",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "2a4e390d3c4ebc151ba2988666409c71acd067966efd295ae4a97dea15a26c8c",
+      "source": "src/__tests__/dataset-folders.test.ts",
+      "title": "dataset_folders — unique child-name constraint (dataset_folders_child_name_uniq) > rejects two siblings with the same name (exact case) under the same parent",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "7b219583da91bd1ff0ccfc99cd764ae37745862adea53540aab8ceae11aee4ea",
+      "source": "src/__tests__/dataset-folders.test.ts",
+      "title": "dataset_folders — unique child-name constraint (dataset_folders_child_name_uniq) > rejects two siblings with the same name in different case under the same parent",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "b9f2f0ebd1518fb2f5b88bf805619aa39f8deca4bcb468f322bff46e4e60d315",
+      "source": "src/__tests__/dataset-folders.test.ts",
+      "title": "dataset_folders — unique child-name constraint (dataset_folders_child_name_uniq) > allows two folders with the same name under different parents",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "be83394418bccca6b9609bd27c5e929064875f013f3fed4b767141fb18bdc50a",
+      "source": "src/__tests__/dataset-folders.test.ts",
+      "title": "dataset_folders — unique child-name constraint (dataset_folders_child_name_uniq) > allows two folders with the same name for different users under the same logical parent position",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "a59f53f226de4b2cdfd7ac750ebb9f6a94fd540da32982a523d18b95a51d4524",
+      "source": "src/__tests__/dataset-folders.test.ts",
+      "title": "dataset_folders — ON DELETE CASCADE > deleting a parent cascades to its direct children",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "7c3b692e5c31d73429d606d4f7568e22c79a1584b29c1af8d915ffff4f25fdc1",
+      "source": "src/__tests__/dataset-folders.test.ts",
+      "title": "dataset_folders — ON DELETE CASCADE > deleting a grandparent cascades transitively through all generations",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "66681c6270a864384c3fbc2a38230d5bd9c11c6a1aacc7e9e003193cbcff8532",
+      "source": "src/__tests__/dataset-folders.test.ts",
+      "title": "dataset_folders — ON DELETE CASCADE > deleting a parent does not affect unrelated folders for the same user",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "e76e98da7185a708181e920e405cdef231f88ad811ae80989484de82187fed9b",
+      "source": "src/__tests__/markers-dataset-unassign.test.ts",
+      "title": "custom dataset deletion — marker unassign > unassigns a marker when its custom dataset is deleted (marker is not deleted)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "92210804aaa1d4dfc1202a73d091ccbda261f5cecb531bcca5b5892deed5b4f3",
+      "source": "src/__tests__/markers-dataset-unassign.test.ts",
+      "title": "custom dataset deletion — marker unassign > unassigns multiple markers referencing the same deleted custom dataset",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "1cefa4643a0fa1f97052d6b7c5b26a6b251ce9cc6f2c75f370fd77c6e9defde4",
+      "source": "src/__tests__/markers-dataset-unassign.test.ts",
+      "title": "custom dataset deletion — marker unassign > does not affect markers referencing a different custom dataset",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "bb21419837dac80574b4f2ee97bfdef20f4604b7ad45eff3f04b7fc8f0e452c9",
+      "source": "src/__tests__/markers-dataset-unassign.test.ts",
+      "title": "custom dataset deletion — marker unassign > does not affect markers with no dataset (dataset_id IS NULL)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "0982e2bfe6f7af10742d84e659d5bc0d32053549411d091ab0de6c5f9e3e96bf",
+      "source": "src/__tests__/markers-dataset-unassign.test.ts",
+      "title": "catalog dataset deletion — marker unassign > unassigns a marker when its catalog dataset is deleted (marker is not deleted)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "e5053f5edf84c9cab37f0dc7109d81167c34aaf922d4cd3cf9ccc0d321fcf7b2",
+      "source": "src/__tests__/markers-dataset-unassign.test.ts",
+      "title": "catalog dataset deletion — marker unassign > unassigns multiple markers referencing the same deleted catalog dataset",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "cca64cead3c0098a8765eacfcaf7156799c08edf3621f611c0b30ea395b8f5a1",
+      "source": "src/__tests__/markers-dataset-unassign.test.ts",
+      "title": "catalog dataset deletion — marker unassign > does not affect markers referencing a different catalog dataset",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "194c2bde1607f0fd230d33f55f6abb859ccc4ba88e27d21503a6b069788fb816",
+      "source": "src/__tests__/markers-dataset-unassign.test.ts",
+      "title": "audit stays at zero unknown-dataset markers after deletion > leaves no markers with stale dataset_id after custom dataset deletion",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "55d5b372f719413f848e3568c05c269307d2098c306da40a5edac698594e2727",
+      "source": "src/__tests__/markers-dataset-unassign.test.ts",
+      "title": "audit stays at zero unknown-dataset markers after deletion > leaves no markers with stale dataset_id after catalog dataset deletion",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "8df5b6bfc79be2d54f7232935a6d31ea321aadc66ce6b9ce9aaf6937cfb94e4b",
+      "source": "src/__tests__/markers.test.ts",
+      "title": "markers — userId NOT NULL constraint > inserts a valid marker with userId successfully",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "ddf4335758b149b34e11680a3ea57ce7657e25daa4ca7d07074f1dce9ad22770",
+      "source": "src/__tests__/markers.test.ts",
+      "title": "markers — userId NOT NULL constraint > throws a DB-level NOT NULL violation (code 23502) when userId is NULL via raw SQL",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "9fb53ac9f6ab65c833e1b3d63a89648c8da9b8df7c180f7c47e5569024dba41e",
+      "source": "src/__tests__/markers.test.ts",
+      "title": "markers — userId NOT NULL constraint > stores all optional fields as null when not provided",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "34f61436ca935d39ebb8d8aab028b640a96604fad96263d8568428e1b4698845",
+      "source": "src/__tests__/markers.test.ts",
+      "title": "markers — userId NOT NULL constraint > allows multiple markers with the same userId (no unique constraint on userId)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "d2e10c9738c9059cdf88c61a2b2646a366bc872250c1b8977d74318e0acb7192",
+      "source": "src/__tests__/user-catalog-saves.test.ts",
+      "title": "user_catalog_saves — folderId FK (ON DELETE SET NULL) > accepts a save with a valid folderId",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "c52c69f4ee450ed50e39fdd6d3473a14db35dcf358a5774d582ea8527654ff5e",
+      "source": "src/__tests__/user-catalog-saves.test.ts",
+      "title": "user_catalog_saves — folderId FK (ON DELETE SET NULL) > sets folderId to NULL when the referenced folder is deleted (ON DELETE SET NULL)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "b06207af6db32901ae5a1b1b2bf38fdb805cea3a51370fbfe3d3d5ccbbeac88a",
+      "source": "src/__tests__/user-catalog-saves.test.ts",
+      "title": "user_catalog_saves — folderId FK (ON DELETE SET NULL) > accepts a save with no folderId (null)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "1b4687cec4c9df7383c87e60911b004c24cf292a75394bee535435c46b48e3ca",
+      "source": "src/__tests__/user-catalog-saves.test.ts",
+      "title": "user_catalog_saves — datasetId FK (ON DELETE SET NULL) > accepts a save with a valid datasetId",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "eb5b8eebd0c23a438f04e9d8f2c89a566554a3d4ee2932a43c0645add95f2f40",
+      "source": "src/__tests__/user-catalog-saves.test.ts",
+      "title": "user_catalog_saves — datasetId FK (ON DELETE SET NULL) > sets datasetId to NULL when the referenced custom_dataset is deleted (ON DELETE SET NULL)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "27de6737ae640e503db17d58c9daf876898cac958ba64d6337ac9827df913b3a",
+      "source": "src/__tests__/user-catalog-saves.test.ts",
+      "title": "user_catalog_saves — datasetId FK (ON DELETE SET NULL) > accepts a save with no datasetId (null)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "14a00e4b50e6a7b92b98eb7a0be9881e9bd8dc7f8d814ef17f4ab6e55a3ff8fd",
+      "source": "src/__tests__/user-catalog-saves.test.ts",
+      "title": "user_catalog_saves — combined FK nulling on folder delete > nulls folderId without affecting datasetId when the folder is deleted",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "2fc33c49fb6fa5467de35bc82bf688057f15e8e0dc986c5c79a3fa526f1b919b",
+      "source": "src/__tests__/user-catalog-saves.test.ts",
+      "title": "user_catalog_saves — (userId, catalogId) is non-unique > allows two saves with the same (userId, catalogId) pair",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "74e3914ec25b0c53fdc7177f3a7288602995c716d581c91b0f21ed5dc5a7dae9",
+      "source": "src/__tests__/user-catalog-saves.test.ts",
+      "title": "user_catalog_saves — (userId, catalogId) is non-unique > allows two saves with the same catalogId for different users",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "e6c437aea1d8d6c75cc4d1579185a011d3295f9c03269b6a2eec317eae90e387",
+      "source": "src/__tests__/user-catalog-saves.test.ts",
+      "title": "user_catalog_saves — (userId, catalogId) is non-unique > allows the same user to save two different catalog entries",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "e1af957ae33dfde85c79580809e3e9311f29a87bb7194c14e3c00e64c0a3aec8",
+      "source": "src/__tests__/user-catalog-saves.test.ts",
+      "title": "user_catalog_saves — areaRequestId storage and retrieval > stores and retrieves a non-null areaRequestId",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "b920d42a223b2091a675c7232d760fe3904edfcfac7336aa47ce67cfbc311f54",
+      "source": "src/__tests__/user-catalog-saves.test.ts",
+      "title": "user_catalog_saves — areaRequestId storage and retrieval > defaults areaRequestId to null when not supplied",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "615c2f2c697d910760811380f8b1fac924f0e2e2252bb674889709912105aa8f",
+      "source": "src/__tests__/user-catalog-saves.test.ts",
+      "title": "user_catalog_saves — areaRequestId storage and retrieval > allows multiple saves for different catalog entries to share the same areaRequestId",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    }
+  ]
+}

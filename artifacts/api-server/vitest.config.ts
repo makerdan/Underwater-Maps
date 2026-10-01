@@ -1,6 +1,7 @@
 import { defineConfig } from "vitest/config";
 import { BaseSequencer, type TestFile } from "vitest/node";
 import budgets from "../../tests/timeout-guard/budgets.json";
+import { fileURLToPath } from "node:url";
 
 /**
  * Run high-priority files first in the sequential singleFork queue.
@@ -45,6 +46,20 @@ export default defineConfig({
     // Layers 1+2: per-test / per-hook timeouts from the shared budget config.
     testTimeout: budgets.apiServerUnit.testTimeoutMs,
     hookTimeout: budgets.apiServerUnit.hookTimeoutMs,
+    ...(process.env.FAILURE_GATE_TEST_CASE_REPORT_DIR
+      ? {
+          reporters: [
+            "default",
+            [
+              fileURLToPath(new URL("../../scripts/failure-gate-v4/vitest-reporter.mjs", import.meta.url)),
+              {
+                outputDirectory: process.env.FAILURE_GATE_TEST_CASE_REPORT_DIR,
+                suite: "api-server-unit",
+              },
+            ],
+          ],
+        }
+      : {}),
     setupFiles: [
       "./src/__tests__/bagWorkerWarmup.ts",
       "./src/__tests__/setup.ts",

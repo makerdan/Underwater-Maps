@@ -9,6 +9,7 @@
  *    in bathyscan matches the DB column constraints enforced by Drizzle.
  */
 import { defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import budgets from "../../tests/timeout-guard/budgets.json";
@@ -23,6 +24,20 @@ export default defineConfig({
     jsxImportSource: "react",
   },
   test: {
+    ...(process.env.FAILURE_GATE_TEST_CASE_REPORT_DIR
+      ? {
+          reporters: [
+            "default",
+            [
+              fileURLToPath(new URL("../../scripts/failure-gate-v4/vitest-reporter.mjs", import.meta.url)),
+              {
+                outputDirectory: process.env.FAILURE_GATE_TEST_CASE_REPORT_DIR,
+                suite: "bathyscan-validation",
+              },
+            ],
+          ],
+        }
+      : {}),
     name: "validation-regression-bathyscan",
     environment: "jsdom",
     globals: true,

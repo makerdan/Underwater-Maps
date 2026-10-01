@@ -1,0 +1,1206 @@
+{
+  "schemaVersion": 1,
+  "engine": "vitest",
+  "suite": "api-zod-unit",
+  "outcome": "passed",
+  "complete": true,
+  "cases": [
+    {
+      "id": "627bc17b80e4c9f28e21eb972cac11de87a9ccdad9479b08f6222a5a55e5b46d",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "generated OpenAPI contract > retains query parameter names, coercion, bounds and defaults",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "0c644edc551296bfdfe566c054aa37c88044838990dba90694f6c813110d76a3",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "generated OpenAPI contract > retains enum and numeric defaults for multipart bodies",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "aa1052f79ddd99ca4f99a70fc9e2e84cd93c2821bc89ba4c0724877ba8a3288e",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "generated OpenAPI contract > preserves object and array defaults and required response fields",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "3348021a8e3dabcefa5a8490264e3d7ce28935d4540f60f6fa133be9c05ae858",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PoeClassifyBody > preserves the generated output type for classification fields",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "7b7a31f4146955a1f99929c95f5442a1ea26b3fe2e624d667e406f8d49610bd1",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PoeClassifyBody > accepts the required image and defaults waterType",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "44a0c125f43af4c91f91ceb8ebbfb5f4fcc561ca9058c09ca1addb434908c46b",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PoeClassifyBody > enforces the image format and exact fallback-grid length",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "994aa5c4db9d3322c0d76670feaa64830433d41fd97fa2cf69271925a794bdc7",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PoeClassifyBody > enforces the declared full-grid dimension bounds",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "80ae10dddcfbec007e01ba847440e9ad651f5c14dc66182c5938cf679e3918f6",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostMarkersBody > accepts a valid body",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "05a8f218242f333e26c1bfb01ed2a3dbb5b0f9d629cfd0c18e4361d855950f5d",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostMarkersBody > accepts when datasetId is missing (nullish — dataset-free markers are supported)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "d5b3b38744e17a7c6b39841ba9b55fd0bdf6bf77bbf200188db2b6007a6d3ddf",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostMarkersBody > rejects when lon is a string (wrong type)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "1eb8aee81cffd0122864615c391277214b46ebdf12ad9a709411463b39250f15",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostMarkersBody > rejects when label is missing",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "cb6f0923761f59e67e11fb7edda75e89d1737bbfaf398003c14b33b7ff5f2924",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostMarkersBody > rejects when label is empty string",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "4f14ffbeeea764cc270b2242317cd03627c0a78239153a59ad9436ee61468762",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostMarkersBody > accepts a label at exactly 200 characters",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "ca7eab47e3a420e45d4b7ff63485bf5ac0407bc6d58c19dacdafcc6077978248",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostMarkersBody > rejects a label at 201 characters",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "32107a1acd52bf6d9995abd1e9e654d1a1eaac5f7870facd374ca9acf99ff1ea",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostMarkersBody > accepts notes at exactly 2000 characters",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "9db0ae83d5b6586dd2f795269a9cdd16f5b300c7fbb27ce16c6ee87db2817002",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostMarkersBody > rejects notes at 2001 characters",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "375cf821a580cdb1cf29393094a9fed9a0e536c0691c6da5a4fe5610150a256b",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostMarkersBody > accepts null notes",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "e6e8dd8a53c32b45541b17ea8696e02ee92f68811d57806a3e66bd717aa18ab0",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostMarkersBody > rejects an invalid type enum value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "f2367fcb3fc896e4717957f13460a9b3bb8c01ec6be6adf5fdeb297d277e2fa8",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostMarkersBody > accepts a valid type enum value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "df6329840b22847e6eba6856ebc73260c1da8a66faa138e2f3b66a9fd1cf0f99",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PatchMarkersIdBody > accepts an empty body (all fields optional)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "fde9a22d650be324fb2c5591ce8d1d22830b4fa0e7d2464f674ed8e923d02ff3",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PatchMarkersIdBody > accepts a valid partial body with label only",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "f3b9e40ec11a021e95ac7ba7e3aba64cd74382b31573ecfa165df25b177f69f9",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PatchMarkersIdBody > rejects label longer than 200 characters",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "9b4459078c93157e5e727200e38088ab7c8355129c06b9a91389bf600b343879",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PatchMarkersIdBody > accepts label at exactly 200 characters",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "5eff1d9ffabe924af657edfb75d0e876ae4570b56d65713d7b2cb8cfd4a01172",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PatchMarkersIdBody > rejects empty label (min 1)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "9e22cf80d28fc773eb6ce0019e442d6923b8c27a221bbc1c5a158303999852d4",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PatchMarkersIdBody > rejects notes longer than 2000 characters",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "36d5134623059b40a5d23b6180ddb10b5f18171d6580a4ad73389a940e64facc",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PatchMarkersIdBody > accepts notes at exactly 2000 characters",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "561d38eb396c21e84ffd0d503107c8067dbc188c89cb8baa2e91eb4b420c1cc9",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PatchMarkersIdBody > rejects an invalid type enum value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "1b9b57c00db0a194765b35f3c859d0a7da47c10ca5f911a7ddcf517a9a023ddc",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetMarkersQueryParams > accepts a valid datasetId",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "9b6ec808887dbba912d0160bc7bdf8cbe8cbba0d116b6d1ce2c01b622cac3145",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetMarkersQueryParams > coerces a numeric datasetId to string",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "9235ada0683036412869f2e4dd5fd803c538b22ca1f1707c99131687676dbe8f",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetMarkersQueryParams > leaves datasetId as undefined when omitted (coerce.string + .optional() — undefined is not coerced)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "0ab37479ef44198c825b41b6b36e32f68e3a9fcc5b3c30c4e21abd1fcd861a98",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > accepts an empty body (all fields have defaults)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "bc0bbb63443e5c48408544b2d620a2abd78ec4aa2740c102cd9107d950e8bb06",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > accepts a partial body with just textureQuality",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "ba4d5559154da0329cc7661dcfc470c0aa05a9b130f8bce51ff836428c00205b",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects an invalid textureQuality enum value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "4d25aec9e482e5a327e63b624e521077c1053c66c17e7dddbbda3d96b41e58aa",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects fogDensity as a string (wrong type)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "739b55801f042feb902c9f9ccde31cb2d08a2bbf86c9ac8a5e8f1403a34a5115",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects fogDensity out of range (too high)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "c851b6dac78b14433c02aab7cd3a1f140360ed13a34b91ff150605e96e92c52a",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects fogDensity out of range (too low)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "78e0100d5d264ad7484e59bb5a66bc599645b6e8fda973094d39133ceb601933",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects an invalid colormapTheme enum value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "330c646ef507290e0c2e5a1841b51d0d31a1a819ba9952c1b25e7ef237b4b979",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > accepts valid colormapTheme values",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "ae55444e46b4cdc91c9917ee4ce3eacab593774dfa8204baf57043dee5410395",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > accepts a valid waterType value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "ee0a6ce3738fb49260974b857f43c776d36210dcb2d111abf8f4c7985ffe3485",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects an invalid waterType enum value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "a1370bb1b8d2983eb77c273f3977ab4fe23069909cfb5c9d7047e2cce285edd3",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects bandBoundaries that don't start with 0",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "c323fce6f3f163153fc58b69eb3a3700f18cd801f0f3bf164fbd98ba53b27cfa",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > accepts bandBoundaries ending at a value other than 2000 (editable last boundary)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "8f34fed103f7bb12b1ba45a48279d92b53f4d15acd5cbb4f0f46987caaf6bcb4",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects bandBoundaries whose last value exceeds 36000",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "cb2726576133a9b74256a75a201a8acef1c93af8f247a995be28ba4e98cd8e70",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects bandBoundaries with fewer than 3 entries",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "4af3fa8499d9b8816f9faecce25da7c5f72abdbafa4d6b056d95c6aaea1c2d8c",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects bandBoundaries with more than 17 entries",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "6e22f159503a4cc3bc2ed9f06b790a081c4484c43c966561d7c51ce4859e3422",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > accepts blendDepthBands boolean and rejects non-boolean",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "5e6465fcc7dedee94f27dcfb1512a9bdff9ad21ac1b02151fa7e3dab3be1de15",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects non-strictly-increasing bandBoundaries",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "1fcf09c62afc30c9382a39ec632d5fbf0138e9976b6ac7cda8d11c53a32bc462",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > accepts valid bandBoundaries",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "8b9630d98e27ac305d9fa483f9279c6d5a80291f4da9c6c87a583fad4c055d94",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > accepts valid currentDepthLayers values",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "8da4b456ab790d9b448e705b3c84d8a01c03c0e785a0cd6c0476b2cdacc117f1",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > accepts multiple currentDepthLayers values together",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "8093fe7834d47429274a42d7dfd4134157a51e93eeae6faa491580cbfe00a0a1",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects an invalid currentDepthLayers enum value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "74f569e218ab3e14fbab7c5e46fd04d0e13cbdc1e3cd8751fe987ec6a31d7db0",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > accepts zonePaintBrushRadius at minimum (1)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "13e0652f58e88a0566beb1b0488098f6e28dcd26b1b0fcd54a85eb0197f89889",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > accepts zonePaintBrushRadius at maximum (20)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "31d37c7cd0349c50415aa56a7ce346db4b2ccb6624d41208a6954e7d3211c79b",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects zonePaintBrushRadius above maximum (21)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "6c94083fff0b04142a318ac61bfe9230874636684b295c5a3403858e474e8411",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects zonePaintBrushRadius below minimum (0)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "31ae10f03849310202aeee40b2b6eedd5e56abcb187944c982c307386a423f09",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects zonePaintBrushRadius as a float",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "78335cead5f5416d16f6852d0d08e70e2fd5e94d946d358a3594632f49bfd1ae",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > accepts zonePaintSlot at minimum (0)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "7d457f3e8a548b6f3417d471cd0c323362d99fb92db16248fec8bf9a4a4f0689",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > accepts zonePaintSlot at maximum (3)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "aeafe1c215a393aa9db7b072289c983a3bbe221419bb40e2d7ffaa2fd1f38914",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects zonePaintSlot above maximum (4)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "47a35836e029458a42a51b778b2f756734cc6e6a374dc6f4e4ba4118fbca6a9e",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects zonePaintSlot below minimum (-1)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "a35632ff5346b479442d15518830c23e2e4d3869932d3c662c2288b66dbbd796",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects zonePaintSlot as a float",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "46a74cc3b0bddf48a0668f1a5af8a4c13309c41813086ce5b0cb094e265990e5",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > accepts valid globalFontSize values",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "891c482dd13ad5f4ef49b93929f27ea70f374feaca3af3648d9ae6619b1ad964",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects an invalid globalFontSize enum value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "7ba12601344e32877299ee5f53f1ae3d2491787a315dd66e1e94df1f5aae10f3",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > accepts valid intertidalScoreMode values",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "85c67aaa6809f41d4d57068efb3fb8df62030a74d3560d74a50c7d5d1ca6f9ef",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects an invalid intertidalScoreMode enum value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "07e265839eaf4ec48232aaa207398da068d08ba8a1738f69c3313a4f27e71214",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > accepts boolean overlay toggles set to true",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "baaf491b218e34b0f7ff2ea8704772af1fb3468d20a060fc12185edd6cb6a7b0",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects a non-boolean value for windOverlayActive",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "b6d293bd18dae7ee5473cf7df5ca3feec4c9243eb41d5ec756791c9c663de79b",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > accepts hiddenSubstrateClasses as an array of strings",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "b5afd5b6fdb32ac4ec45e194c90f0fcae4bb2c16f340ee3b1100407d3feaa86d",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > accepts hiddenSubstrateClasses as an empty array",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "e9d77c4d54fdaaffa3c05de28359586cb8f043f174c61429824f57701f634f7a",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects hiddenSubstrateClasses containing non-string items",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "b6aa73e45d7c74d2e16c9cadb725ce653d6a863c64ad3de36ac11a7d3cc4ab7b",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > accepts hiddenEfhSpecies as an array of strings",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "3cb9a55281ca8163c381e6691373ed80b568e463c39be70af6e9d44b5cb9c1de",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > accepts hiddenEfhSpecies as an empty array",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "56007fa1c48e1134df3a40e6d6a1bcb7bc72423c4b71402cc7bb0e92a8afb185",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PutSettingsBody > rejects hiddenEfhSpecies containing non-string items",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "eedb5e68114a45be77322eb7e187f07f0ff7d0f619c9991f343e42a67e42f4b6",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > accepts an empty body (all fields have defaults)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "9ee85c7cd497519ca8f7cd4479bee256f6bf2a5633714101b7016ff5774f5491",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > rejects an invalid particleDensity enum value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "5c1d26497bbc147c884842193ef4d14f841a33dd37d1845414afd4d357c3186f",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > accepts valid particleDensity values",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "b408ce3fb0617d4593299249e59a243a8cf86f45b209eddecaf3b70f6549b490",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > rejects an invalid coordinateFormat enum value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "329491aebd205f3d241c17223d4513c436b95d0f6be30df00fdfa514944fee9c",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > accepts valid currentDepthLayers values",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "566262a8380c9f7793f1e3581e71a2e1581d1aa74da4999e8fc7c40285a20a29",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > accepts multiple currentDepthLayers values together",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "c9c9f267f7c54bf626bf6101101bc31be1003613faed78c4ac10504bb0d91c17",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > rejects an invalid currentDepthLayers enum value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "a57d65a11349778c1ec3ac272788005e1601cce545e4af9bb6b6b5891bc4ec9d",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > accepts zonePaintBrushRadius at minimum (1)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "4ee7817e784100b7239401abf6d174dcb073e34751027db86498c8ffed548521",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > accepts zonePaintBrushRadius at maximum (20)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "424e24fcf46ecdd06cba46577ea4656ae691e2ebfa71acc64c6acaccef71e8c7",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > rejects zonePaintBrushRadius above maximum (21)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "5ba5ffbdb4a38180163c87eb6aada57ac059475e6960806d15391e476e93c7ae",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > rejects zonePaintBrushRadius below minimum (0)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "354ea3c6b28f84ca4804d7c28494553c1487a4d531b7b82b87b214a448d30a28",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > rejects zonePaintBrushRadius as a float",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "87cbec11fd30750e3df9771f4601ffeb55bfed3ba8cdada0d1c554a8047370a0",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > accepts zonePaintSlot at minimum (0)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "9e6ccabe95d9c57bfcc1e98853a239cf2cdced148153b106d0b286857ab851d6",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > accepts zonePaintSlot at maximum (3)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "577502517c50d9ae114313db825586805598cbcfdeeebe9f53167deeb15aee2c",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > rejects zonePaintSlot above maximum (4)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "0efefff69fbd4cf96cea987128dc198b12f89d7b584409b350f0e6ac9b74de2d",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > rejects zonePaintSlot below minimum (-1)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "11f9c228ad7210fa446b9f30c7afa892eba0c1b5b1e0c1bf806b2e8a9d925d91",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > rejects zonePaintSlot as a float",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "ee307400b2bfadf3fa3b6d165e4dce07af065de4cc1e4187b508e814c5f4f960",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > accepts valid globalFontSize values",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "e3ebacd69b166d53a0993e254dd2f9af8da4e7be5dd4ef306d07c5f9c27ee432",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > rejects an invalid globalFontSize enum value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "37672be30bfe4a9ed458362c717e80f2b57235edf39852efb03444c29734334f",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > accepts valid intertidalScoreMode values",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "0b1e585ceb4940578c759b5d7ba6f0a34e76ad7927710d3537c1e3a478127e6b",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > rejects an invalid intertidalScoreMode enum value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "e1f70816a5c00eaa490ed9ba1b8dd2d609438ef9f8a5a2c542c027687b70057c",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > accepts boolean overlay toggles set to true",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "13fe66e8f1b8d5cc0e1d14aa7bb97a887168aa441b65ebed3c72fc3d68d7e7f0",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > rejects a non-boolean value for tideOverlayActive",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "da7dd2af8259b5c667272b87d16aa8f9ebdffef1d0c7539357c95fa2828451d7",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > accepts hiddenSubstrateClasses as an array of strings",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "a4b85d8c861e49179f8bbb5ddfccf57c9a5180c6ed85dd0b1ad2a046749f0b36",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > accepts hiddenSubstrateClasses as an empty array",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "444b2588fc05057f2d1f8b1c5e6def6491c0a5df68f4a7a4b74fb824e277c80d",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > rejects hiddenSubstrateClasses containing non-string items",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "2fbb1d330733d44588a54cb8299521d47825932588d6bd0b9658e7a8ae118f14",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > accepts hiddenEfhSpecies as an array of strings",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "351b748d283f9b4d0965aa0677d017e9b172bd4f44673e59003316affb7b018e",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > accepts hiddenEfhSpecies as an empty array",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "3e7fce994343816eb7e77596defd23607d27ccc4ccbe04b7cdfc97198f8b1443",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "GetSettingsResponse > rejects hiddenEfhSpecies containing non-string items",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "41e733639a8a512f55726f93f9bed4fb990902fb98d7879ffa8b3199d747689d",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostNceiSaveBody > accepts a valid body",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "148a0e59d4eb0b554f4c42f29e2392b9c05de1772aa856fc17a7f647615775f6",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostNceiSaveBody > rejects when result is missing",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "45d39bdef8c2ccd05d798aca442f9add2bf91b756070d6c544d1d6ceef8b1cd0",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostNceiSaveBody > rejects when result.id is missing",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "6b99f626163bd43d3a62a587685402c1a0842620c5afcb2d12a05e6aa15e486a",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostNceiSaveBody > rejects when result.coverageBbox is missing",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "83791a8a47450d771f96f798898d1556086afa35eab7e2c6a9d213b78141bbe7",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostNceiSaveBody > rejects when wcsAvailable is not a boolean",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "bdbb57a52ee9f0e73ad581a5fe34390518e5836fdf8043e9b707ef76664c1cee",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostDatasetsBboxQueryBody > accepts a valid body",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "e52ec833d708a564e1239a789338320bcece4dc3e1c3320a5937090b7466741e",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostDatasetsBboxQueryBody > rejects when north is missing",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "84b77b608329c19ee648a88f194b4d5e9d9b324589141056864fb0e81aed1514",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostDatasetsBboxQueryBody > rejects when south is missing",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "4a73f2e35009ba9dd865ac6acab2e46f3f36d2c5c21b5a25a6b99df90c468418",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostDatasetsBboxQueryBody > rejects north as a string (wrong type)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "9e520ab62301b99636ec6213fe4a64b874423dd85e6307eed0b857365de020ba",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostDatasetsBboxQueryBody > rejects when Infinity is provided for north",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "c81c0e6f9b8cc55b4871f8de3ae3354754d69a36f7f249dc63b1ac52eabb392d",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostDatasetsBboxQueryBody > rejects when NaN is provided for south",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "6da93346e3ff287317f7ea63d4eb19b9a5929a09c57feb6f3365abc45ca83a2c",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostDatasetsBboxQueryBody > rejects when west is Infinity",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "468537838367d350759b4d968f92fdac1f3e119702cf6d586a1815ae5b76c665",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostDatasetsBboxQueryBody > rejects an invalid dataType enum value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "969ce9d1be842b024de2c1f65f4f86cf708ae202137d8296b99bed0ad0d17f00",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostDatasetsBboxQueryBody > accepts optional dataType enum values",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "c0f3e30f3bbf22d68beaa7146696e624434aa7412e21e466e7689b543be97eb0",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostDatasetsBboxQueryBody > accepts optional waterType enum values",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "40e482ce9effbbc33193b38ae1add5d252b27d33e2905344bfdc03de85dcaf57",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostDatasetsBboxQueryBody > rejects an invalid waterType enum value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "4b52d2dc69dc3e6a49139c7115ab89a66319def235a0f199b04bbc7b4ccacb37",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "marker label/notes limits — POST and PATCH must be equal > label max is the same for PostMarkersBody and PatchMarkersIdBody",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "7eefd94e466d50c17e3f9af5ebf444770b007ffdd1d4d70685602416261c775c",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "marker label/notes limits — POST and PATCH must be equal > notes max is the same for PostMarkersBody and PatchMarkersIdBody",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "b6836a326f04a8c4830fe92b311ed9deec7e968802c032cd7e946a2de5b80a2d",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "route-facing schemas > accepts and rejects the declared routes query shape",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "bab3cff2073956cf6989a3a5c4d79ae362f90dc1e51a22641ddba239a75f729d",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "route-facing schemas > enforces route id and route body contracts",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "1a9cc9bea1198a2e219334b0ea688036aee77b7ff9c3339e325c70617cb4f3d2",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostTrailsBody > accepts a valid body",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "3a94d4898439811ead157e4c0d2f996f19341f9c1e86138dcb84665d2e39c53c",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostTrailsBody > rejects when datasetId is missing",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "6a557d1212c52fe709886d30b3835b6b36f37facb1a557ed759e0acbbc20eda8",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostTrailsBody > rejects when name is missing",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "998ad7a53b1d49292400136c24dee88e3efd0345f9444c3f76e7a56aa1bfa4f9",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostTrailsBody > rejects when startedAt is not a date-like value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "56e3df9c31197f5ea0d1f1fe7b5667c843c9ba1695089708fd66d66b7ddddfa3",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostTrailsBody > rejects when points is missing",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "aaf325569f951ef04a766f93da3426984a81020a317fb7f1bb535c3ac9d3be0b",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "PostTrailsBody > rejects when a point is missing lon",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "fcd73b1f5b6c40940a8f066aae82bd13f0e1759841d88ace0be762171393a2a4",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "DeepHealthCheckResponse > accepts a valid response",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "3fd0465e0edae00766499bf14940c96e2dbe5f112c162561c826987b81b0693f",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "DeepHealthCheckResponse > accepts a degraded response with optional fields",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "2e20f4e4f6cd49f9ff7e7d155888c4344677cf85675d97ce9e60f8456d5dbf78",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "DeepHealthCheckResponse > rejects when status is an invalid enum value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "fa33227ceb8eb11f8b034d458c5c685f79632bf31bd6758cef898a835e2fc6c1",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "DeepHealthCheckResponse > rejects when a subsystem is missing",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "2433e7e3e333507cc92ee2601a4b19592aa822b88a362e0f1e8de163d36d843f",
+      "source": "src/__tests__/schemas.test.ts",
+      "title": "DeepHealthCheckResponse > rejects when a subsystem status is an invalid enum value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    }
+  ]
+}

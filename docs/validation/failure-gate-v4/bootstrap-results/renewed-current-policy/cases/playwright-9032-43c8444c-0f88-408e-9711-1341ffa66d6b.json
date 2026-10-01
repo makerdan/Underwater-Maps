@@ -1,0 +1,384 @@
+{
+  "schemaVersion": 1,
+  "engine": "playwright",
+  "suite": "playwright",
+  "outcome": "passed",
+  "complete": true,
+  "cases": [
+    {
+      "id": "b32f30b029e4ef62646d5fa972f174df3184de3870a8bb339f3b4d3c766b0c5d",
+      "source": "tests/e2e/api-liveness.setup.ts",
+      "title": " › setup › api-liveness.setup.ts › api-server liveness: /api/healthz stable after startup",
+      "line": 30,
+      "status": "passed",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "passed",
+          "expectedStatus": "passed",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "d6596574e34f098a7e62a9e888806dfd83b1d725b3eae1ccf04a71a5c6a525d4",
+      "source": "tests/e2e/adaptive-palette.spec.ts",
+      "title": " › chromium › adaptive-palette.spec.ts › Adaptive colour palette — regression hardening › banner dismiss: stays hidden after dismissal when suggestion is re-injected for same dataset",
+      "line": 31,
+      "status": "passed",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "passed",
+          "expectedStatus": "passed",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "74e1b192253b638ed9ff616fd7a533d9d8463cf2fb782f899335b5319cd2a9f2",
+      "source": "tests/e2e/adaptive-palette.spec.ts",
+      "title": " › chromium › adaptive-palette.spec.ts › Adaptive colour palette — regression hardening › banner dismiss: a DIFFERENT dataset's suggestion still shows after ds-1 is dismissed",
+      "line": 81,
+      "status": "passed",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "passed",
+          "expectedStatus": "passed",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "bdea50210a8c479d3f4810a5c850809cbc5b70770b394e2031c48de549a76334",
+      "source": "tests/e2e/adaptive-palette.spec.ts",
+      "title": " › chromium › adaptive-palette.spec.ts › Adaptive colour palette — regression hardening › auto-apply fires on first load: colormapUserSet=false → theme changes",
+      "line": 131,
+      "status": "passed",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "passed",
+          "expectedStatus": "passed",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "dfe48126c1755883253ba5609372779f1f607043577d2db24cfdc8f8bb6331d1",
+      "source": "tests/e2e/adaptive-palette.spec.ts",
+      "title": " › chromium › adaptive-palette.spec.ts › Adaptive colour palette — regression hardening › no-overwrite: custom palette not overwritten after dataset reload when colormapUserSet=true",
+      "line": 182,
+      "status": "passed",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "passed",
+          "expectedStatus": "passed",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "1e123f6f8644a9f905c2fbf7a94ff67f12f626811554193ca62f90e171adec93",
+      "source": "tests/e2e/onboarding-tour.spec.ts",
+      "title": " › chromium › onboarding-tour.spec.ts › Onboarding tour overlay › overlay appears on first load and disappears after Skip",
+      "line": 141,
+      "status": "skipped",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "skipped",
+          "expectedStatus": "skipped",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "78186ddc7a32fce1a4f4e9b11ea672cc2e0505823c36db4ea1b19df51b90bfa2",
+      "source": "tests/e2e/onboarding-tour.spec.ts",
+      "title": " › chromium › onboarding-tour.spec.ts › Onboarding tour overlay › Skip flushes hasSeenOnboarding:true to the server immediately",
+      "line": 167,
+      "status": "skipped",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "skipped",
+          "expectedStatus": "skipped",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "b1fb3d9a31aa94e1f433165e09969600d6f2d239e12be14970b81dbd36c2df74",
+      "source": "tests/e2e/onboarding-tour.spec.ts",
+      "title": " › chromium › onboarding-tour.spec.ts › Onboarding tour overlay › Step 1 'Open Find Data' button dismisses the overlay and opens the Find Data panel",
+      "line": 204,
+      "status": "skipped",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "skipped",
+          "expectedStatus": "skipped",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "2692a7565c02a7caa91e342d33165ac4484c57c1f7650354eadcfea7d4903d3c",
+      "source": "tests/e2e/onboarding-tour.spec.ts",
+      "title": " › chromium › onboarding-tour.spec.ts › Onboarding tour overlay › Step 1 'Try demo' button dismisses the overlay and triggers a dataset switch",
+      "line": 236,
+      "status": "skipped",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "skipped",
+          "expectedStatus": "skipped",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "c997042fd455c1de7f13244cf90bcb9d268f084f2bd8bdda981129b41f6d157f",
+      "source": "tests/e2e/onboarding-tour.spec.ts",
+      "title": " › chromium › onboarding-tour.spec.ts › Onboarding tour overlay › overlay disappears after clicking Done on the final step",
+      "line": 275,
+      "status": "skipped",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "skipped",
+          "expectedStatus": "skipped",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "7ddff5df9e354e20c2c1156c2e7d05b666ab9955504434e7abbc6a88f5b7e9b3",
+      "source": "tests/e2e/onboarding-tour.spec.ts",
+      "title": " › chromium › onboarding-tour.spec.ts › Onboarding tour overlay › overlay does NOT appear when hasSeenOnboarding is already true",
+      "line": 308,
+      "status": "skipped",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "skipped",
+          "expectedStatus": "skipped",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "b40305d663dc2ce26cd9aa460ffcf2a16f7b20d23d00970d72e537e41724f639",
+      "source": "tests/e2e/onboarding-tour.spec.ts",
+      "title": " › chromium › onboarding-tour.spec.ts › Onboarding tour overlay › Replay tour button in Settings resets the flag and shows the overlay",
+      "line": 330,
+      "status": "passed",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "passed",
+          "expectedStatus": "passed",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "0af14e62072b00feba52be08bb05d484d14f48ea7241f817567a26db885ee8ba",
+      "source": "tests/e2e/onboarding-tour.spec.ts",
+      "title": " › chromium › onboarding-tour.spec.ts › Onboarding tour overlay › Take the tour link in the Help window sidebar triggers the overlay",
+      "line": 391,
+      "status": "skipped",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "skipped",
+          "expectedStatus": "skipped",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "30edc04d6a7c9465f0666b7f7d559b35b91b2c2d55e8f9393cdf9909db04640b",
+      "source": "tests/e2e/palette-cross-device-sync.spec.ts",
+      "title": " › chromium › palette-cross-device-sync.spec.ts › Depth palette cross-device sync › custom deep colour persists to server and rehydrates on a fresh device",
+      "line": 25,
+      "status": "passed",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "passed",
+          "expectedStatus": "passed",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "176335ef66e06b7fd812c1b91c1b240248e210ad9a22ae10e4babb5184182ff5",
+      "source": "tests/e2e/palette-cross-device-sync.spec.ts",
+      "title": " › chromium › palette-cross-device-sync.spec.ts › Depth palette cross-device sync › Custom-theme band colour reaches PUT /api/settings payload and rehydrates on a fresh device",
+      "line": 132,
+      "status": "passed",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "passed",
+          "expectedStatus": "passed",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "31b579bd8fd50e95ddfec6f2a0774a6d1d880791f6bb206ece0df39898f79a89",
+      "source": "tests/e2e/palette-cross-device-sync.spec.ts",
+      "title": " › chromium › palette-cross-device-sync.spec.ts › Depth palette cross-device sync › band colour PUT fires even when Settings page is never opened",
+      "line": 301,
+      "status": "passed",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "passed",
+          "expectedStatus": "passed",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "21bef35d545426b43bb60875d33566374f3380a28d42365f4c0b5373bea033e7",
+      "source": "tests/e2e/settings-cross-device-sync.spec.ts",
+      "title": " › chromium › settings-cross-device-sync.spec.ts › Settings cross-device sync › server-side setting is restored on a fresh device and Last synced updates",
+      "line": 34,
+      "status": "passed",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "passed",
+          "expectedStatus": "passed",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "01c44c454ee4c16709fb00e19c355dee4562d5642958934eda3a78981474d30f",
+      "source": "tests/e2e/settings-save-buttons.spec.ts",
+      "title": " › chromium › settings-save-buttons.spec.ts › Settings — per-section Save buttons › HUD section: edit → SAVE → SAVING… → ✓ SAVED, top-bar flashes",
+      "line": 57,
+      "status": "passed",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "passed",
+          "expectedStatus": "passed",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "cd335f9463d57877d4982a1be065291ea1d968bec1c08966ad776c42e945dcf9",
+      "source": "tests/e2e/settings-save-buttons.spec.ts",
+      "title": " › chromium › settings-save-buttons.spec.ts › Settings — per-section Save buttons › HUD section: PUT /api/settings 500 → RETRY SAVE + inline error, stays dirty",
+      "line": 103,
+      "status": "passed",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "passed",
+          "expectedStatus": "passed",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "1fccf9c64efbf52bf3788c92ee67755820baa2834b02a6642d242259fa749bb9",
+      "source": "tests/e2e/tooltips.spec.ts",
+      "title": " › chromium › tooltips.spec.ts › Viewscreen tooltips — live HUD behaviour › hover on FIND DATA shows the tooltip",
+      "line": 119,
+      "status": "skipped",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "skipped",
+          "expectedStatus": "skipped",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "d89cf9685db08b38d2eb364cb223f67fe982ba5c971778bcbcc523addac000f3",
+      "source": "tests/e2e/tooltips.spec.ts",
+      "title": " › chromium › tooltips.spec.ts › Viewscreen tooltips — live HUD behaviour › keyboard focus on FIND DATA shows the tooltip",
+      "line": 131,
+      "status": "skipped",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "skipped",
+          "expectedStatus": "skipped",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "ca348dee21b0b0119551f8315c2d0ce0c4d576cda3c8515f79182be0996741f8",
+      "source": "tests/e2e/tooltips.spec.ts",
+      "title": " › chromium › tooltips.spec.ts › Viewscreen tooltips — live HUD behaviour › disabling Settings → HUD → \"Show UI tooltips\" suppresses the tooltip",
+      "line": 143,
+      "status": "skipped",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "skipped",
+          "expectedStatus": "skipped",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "2a3eb85b1615199d41a25a071d090ef24109f68cf3cc0dfbba7fbd2c963906d3",
+      "source": "tests/e2e/tooltips.spec.ts",
+      "title": " › chromium › tooltips.spec.ts › Viewscreen tooltips — live HUD behaviour › tooltips do not swallow pointer events from the 3D canvas",
+      "line": 162,
+      "status": "skipped",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "skipped",
+          "expectedStatus": "skipped",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "c353e9f94e9798029377e7f9682ce09dc5a983c6c55c088c7e26aced05dd7637",
+      "source": "tests/e2e/zone-colour-server-sync.spec.ts",
+      "title": " › chromium › zone-colour-server-sync.spec.ts › Zone colour server-sync round-trip › saltwater slot colour persists to server and rehydrates after page reload",
+      "line": 44,
+      "status": "passed",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "passed",
+          "expectedStatus": "passed",
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "id": "a830eb4f223814686c18804154d3765c53b658c41e3a7b975ac9aa93cd98afa1",
+      "source": "tests/e2e/zone-colour-server-sync.spec.ts",
+      "title": " › chromium › zone-colour-server-sync.spec.ts › Zone colour server-sync round-trip › freshwater slot colour persists to server and rehydrates after page reload",
+      "line": 206,
+      "status": "passed",
+      "retry": 0,
+      "attempts": [
+        {
+          "rawStatus": "passed",
+          "expectedStatus": "passed",
+          "retry": 0
+        }
+      ]
+    }
+  ]
+}

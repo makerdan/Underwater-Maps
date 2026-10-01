@@ -1,0 +1,3039 @@
+{
+  "schemaVersion": 1,
+  "engine": "node-test",
+  "suite": "scripts-unit",
+  "outcome": "failed",
+  "complete": true,
+  "cases": [
+    {
+      "id": "33364f273ca47c8d4d78c36b13ca7b83800a86bbcb65230d963c8cd149d1a132",
+      "source": "node:test/1",
+      "title": "discovers direct exports, export-star barrels, and named aliases",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "4436184b999a7124a32390a73fc8682f2290c45baa1898b07a7c2338c2662a5a",
+      "source": "node:test/2",
+      "title": "reports a clear diagnostic when a source directory is missing",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "e5a11059c7884014d2d72463313597a4994dab0c10320103c4514123444d15dd",
+      "source": "node:test/3",
+      "title": "the committed CI Validation Parity skill satisfies every semantic contract",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ed44edfffc3cb757ef76e475ed4cfe6f4c490417dbaec9c23a441c1b21aa472c",
+      "source": "node:test/4",
+      "title": "semantic contract failures identify the missing safeguard and wording",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ab59b8281fd2905df5e1b28e0449789550ee509dee01716ea7d9c401db743bb0",
+      "source": "node:test/5",
+      "title": "non-text skill input produces an actionable diagnostic",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "684d0abc2726e040fa579c8215b3388d1d5d9b6aa584eb69f26fc951383e6239",
+      "source": "node:test/6",
+      "title": "accepts a well-formed runtime outcome at its baseline",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "e0aa394c36e78d8d0086ebbba70d018ee60e7f8fb180c3d7f926a1e7ae56d86c",
+      "source": "node:test/7",
+      "title": "rejects malformed outcome data before evaluating the ratchet",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "07f3ec8def5fc895fc8db1f8339094692d101644b5c03ca1d1075094fe18af75",
+      "source": "node:test/8",
+      "title": "fails when runtime skipped coverage increases",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "0abe7e4103b2b26971289b6903c5b4e030f56a2197df2c5f039cc1afca701f32",
+      "source": "node:test/9",
+      "title": "rejects a result generated for a different workflow suite",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "0dada26cae46179c5460421eb10f8396e2559a26c70c2940c2d1f151f18eef7f",
+      "source": "node:test/10",
+      "title": "accepts a downward ratchet opportunity without silently rebasing it",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "4ece33da0e9efb07eedf746f7ec4f11e165a22644014bef6842b2fe7ace60ddc",
+      "source": "node:test/11",
+      "title": "keeps the final skill materially shorter without dropping required plan decisions",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "e517c940245fbf98301a8b0a8854fda1426ba024326231bfdbe2dd93f83c35d9",
+      "source": "node:test/12",
+      "title": "lets unrelated feature work ignore documented baseline failures",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "9e8be45bc6153546a683ef7ad10528f80157aa214c184b1b4c0a28c78f8bb56a",
+      "source": "node:test/13",
+      "title": "lets validation-repair work explicitly own a documented baseline failure",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "6fd9f672bde8e47871312f3bd48a82f6c70603117098366caa3ccfb2ce954535",
+      "source": "node:test/14",
+      "title": "classifies a passing retry as intermittency rather than provenance",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "56f234fa9f4430c1899b4156b7b0de92b2359dd4f5a0812ef336119c6af94191",
+      "source": "node:test/15",
+      "title": "fails closed on unavailable tier data except for the explicit ad-hoc opt-out",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "77486ee6c606e9641e8171f4b5fa92fc74e6a078526254445ec3cf6bae4d0cad",
+      "source": "node:test/16",
+      "title": "keeps gitignored archive remediation environment-local",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "147f5e0aa4a4cb72cfff6c17d997bdc34b3cfdbccd8a636e5894a5474116e3e9",
+      "source": "node:test/17",
+      "title": "distinguishes ignored baseline failures from repairs explicitly owned by the task",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "9b30b73e623461c3536278ed4712c0a9ab190a395a02a858e11f75dc5ad79e8c",
+      "source": "node:test/18",
+      "title": "resolves an active catalog ID and keeps environment observations task-local",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ae529bdedbe7124002f8137a8f0246e9c19b58fae9501b6b8ef81fe095e4ea98",
+      "source": "node:test/19",
+      "title": "rejects unknown, needs-review, and resolved catalog IDs",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "b89a0125e0c8eedbed8a854d2487fe44065a296132616406fa7c2909ad37e117",
+      "source": "node:test/20",
+      "title": "rejects ambiguous ignored and owned declarations for the same ID",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "80ed683d4d45e2c4112efa63921dcd90cc2ae31cb38a5c66171daf1ea0fe05ed",
+      "source": "node:test/21",
+      "title": "accepts an active ID with one explicit ignored ownership declaration",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "8bf59fcda893974044d31fdf511eb4bbe289a58a166e8230b57cfd056b6d156d",
+      "source": "node:test/22",
+      "title": "accepts an active ID with one explicit owned-repair declaration",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "276ffe7b3d181456d6ac8cabfc649ba98086477b45f49f063f4094c71b593ef0",
+      "source": "node:test/23",
+      "title": "rejects unknown, inactive, and ownership-free references",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "17f6ef82d2bc8dc9828b84dfd142166ae6306ef922788dcadac59a70d68f638e",
+      "source": "node:test/24",
+      "title": "does not treat a catalog ID outside the baseline section as an ignore",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "5c6700eca991a678e545748665bab829621122f266b3dccf29266970daedb20b",
+      "source": "node:test/25",
+      "title": "refuses an implicit archive scan and accepts the explicit --archive mode",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "6c8deca31c680065db4b1ea5e89b46eff176e3b759d0a93609b2025d6af22bc4",
+      "source": "node:test/26",
+      "title": "keeps the original content when a temporary write fails after partial output",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c4c34168fd7e69ae1bd95f90a1b73032669f868640ab8f8330a2628e89d484fb",
+      "source": "node:test/27",
+      "title": "keeps the original content when replacing the plan fails",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "2d4714dfdf11483c07dfb182751b7c80878c1fbbe056f35ed99c1beb79b580b5",
+      "source": "node:test/28",
+      "title": "preserves the original permission bits after replacing the plan",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "18ef893565d19992b50ddea9f33ee8f8486569ec0e758b04397fbcdadfa92ebe",
+      "source": "node:test/29",
+      "title": "keeps the original content and mode when applying temp-file permissions fails",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "4c0bf6d05994986fd95d34bb06a508a484a849e1d4a3e95ce1a0fe9b60c4f97f",
+      "source": "node:test/30",
+      "title": "flags the 'Placeholder — review before running this task' Why wording as unfilled (exit 1)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "8fbf5c990bc04fc0dfb9ec7c3f8e1a23c6290dcd89c3964102d260a8bf0f3c1c",
+      "source": "node:test/31",
+      "title": "--stubs-only also flags the placeholder Why (exit 1)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "790a7b99ae36f492776d981a763f63f960af514d0847873b92d584833cd0a7d3",
+      "source": "node:test/32",
+      "title": "flags the '<one-line justification — …>' skill-template Why as unfilled (exit 1)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "857fd2c25d1cb87191580c82f6de58cab7177f877d74c5de7e5463876ab2b3c3",
+      "source": "node:test/33",
+      "title": "flags the '<replace with one-line justification>' Why as unfilled (exit 1)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "8e6c2fcd8908755cdfbd6168bc8a9723b054fe621482035558aa137b6e7d812a",
+      "source": "node:test/34",
+      "title": "reports invalid tier in --stubs-only mode and exits 1",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "47197d230cced69c4b037ba4545db0e28ede5ec17cc9f987620c2990f7535847",
+      "source": "node:test/35",
+      "title": "a file without \\#\\# Validation section does NOT trigger a violation in --stubs-only mode",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "e108fcf9b257b2bc821a4ab2860123cfafed80fe9f6694375f67d0138eddba8e",
+      "source": "node:test/36",
+      "title": "--fix-stub exits 0",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "f1c87b47dac2a1e722e2f9d9ab33bae2a31ff2fa3d0790f2927f7fa02a06e394",
+      "source": "node:test/37",
+      "title": "--fix-stub distinguishes changed, unchanged, and manual-repair files",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "88d440ed969a5f0f99acae6785bb4197bb77ee57ec12cd1bf7ca1899833ce17a",
+      "source": "node:test/38",
+      "title": "after --fix-stub all files have a \\#\\# Validation section",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "df88dc382a03a1d3a752d379b2b8824276f26171e81bb2b3675aef936be1eca3",
+      "source": "node:test/39",
+      "title": "strict check exits 1 (at least one violation remains after --fix-stub)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "54f6c3a154546b423cda40d5458481499f0df4d863a97b686245eed157a37e50",
+      "source": "node:test/40",
+      "title": "a plan without \\#\\# Validation is never reported as successfully line-patched",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "a39fa378aa0968e72848557ec433e2b1c5ae2c46aa4351a81e61e384ea3e3195",
+      "source": "node:test/41",
+      "title": "insertValidationLine returns unchanged content with changed=false when the section is absent",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "841dcded6316c60128593d62ceef4ff6cf0987a22ac59eda99c96c05e397c8c6",
+      "source": "node:test/42",
+      "title": "insertValidationLine returns changed content with changed=true when the section is present",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "9320940fa882ffa3b57e7ef4a85ada21d74d367b23630247bba18f5b1831d5b8",
+      "source": "node:test/43",
+      "title": "--fix-stub reports and persists each missing Validation line it inserts",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "9e5ca2d92bb8553a247aeb4c7e47bea9388b261cfd0c5f73f772a3e64138d36a",
+      "source": "node:test/44",
+      "title": "strict check reports the angle-bracket-why file as a violation",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "32a9b4017b1329b985520b8802c6cc2bbd0d7a20199378f86d79f37421bdf2ac",
+      "source": "node:test/45",
+      "title": "strict check reports the bad-tier file as a violation",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "16781c6de551fcff7a3efde23e7f873e361db10e054e68010476226c739b83b2",
+      "source": "node:test/46",
+      "title": "strict check does NOT report the fully compliant file as a violation",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "fdc133710ce325c28f9bb516a1328da0798f49d3bff7192d1df33e8a2f003532",
+      "source": "node:test/47",
+      "title": "exits 0 when TASK_PLAN_FILE points at a compliant plan",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "d0b3abdae6f28c420f11296710fdd7cd1a723afdecd23964db3c5aa783f3b16f",
+      "source": "node:test/48",
+      "title": "logs the single-file mode notice",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "67bb769420fc819008f9125a845e847b3064b1d40879c322f7f3a9d0b07964e9",
+      "source": "node:test/49",
+      "title": "does NOT report the non-compliant sibling file when linting a compliant target",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c91527091a4f06d07815b170c95843839a0f0fa797bd7c50281a15080197193a",
+      "source": "node:test/50",
+      "title": "exits 1 when TASK_PLAN_FILE points at a non-compliant plan",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "bc51ac7b17d0a90ac90f805015fac956823de2babb6d3e023b43b8902beea583",
+      "source": "node:test/51",
+      "title": "reports only the non-compliant target file, not the compliant sibling",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "6fef6b40a6c5fa6886b995173712e69b9a8ada3c59e59c5592ab28f386fe48fd",
+      "source": "node:test/52",
+      "title": "exits 1 with a descriptive error when TASK_PLAN_FILE does not exist",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "1bbb1dae2bd7142373276499739670dc6750f505a841052ef78fc6472ffb2b2c",
+      "source": "node:test/53",
+      "title": "exits 1 with a descriptive error when TASK_PLAN_FILE is not a .md file",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c5e7af5031f29211a21599cd385ee7942473d166af45a4765a24911a1d86e8eb",
+      "source": "node:test/54",
+      "title": "exits 1 and names the unreadable file",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "f1053c6915a972d1bae4608270f7a6ea70a4fc433aa8910c0d8dc0be7c9c77b9",
+      "source": "node:test/55",
+      "title": "archive scanning also exits 1 and reports the underlying read error",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "46ec6c6ff17f678f119b95bc77bb3a9cc3e67fed70f33414058bff97fdda0a1d",
+      "source": "node:test/56",
+      "title": "matches bare integer fontSize object property",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "277039a04af8aaf92d3134576f74e540dd05775f40283c664c5c41e996a8b4be",
+      "source": "node:test/57",
+      "title": "does NOT match the compliant calc() form",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ecdf4e665e92de0ca555ef14512f8254d509671748b4805f07e2459e005f5970",
+      "source": "node:test/58",
+      "title": "does NOT match JSX / TSX attribute syntax (fontSize={N})",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "4962f7de96cdfc7c09a4e7aa3bfcce01c6085a1b4b19953013ee41038f0bc906",
+      "source": "node:test/59",
+      "title": "does NOT match non-literal (variable) values",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "805c112e16bab4ff4601bcebd8493b49924984b0a2b72e498cec925ff5b18a2a",
+      "source": "node:test/60",
+      "title": "does NOT match TypeScript type annotations",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "d9f20e49972647288c3d19be1affcf8e2834eec4a027168f2a5b9e75af2d96d5",
+      "source": "node:test/61",
+      "title": "returns empty array for compliant source",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "73aa94ccd96f14c95d8a352cde7576e6a0a63fb02dc5b817ccaa0d637f148f8a",
+      "source": "node:test/62",
+      "title": "finds bare numeric fontSize violations",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "24504bb66af7da7ac922c184a1f0e3bd8062e09c26df5c429c0b46ec2b921ef8",
+      "source": "node:test/63",
+      "title": "reports the correct 1-based line number",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "2b4b865824623be9c9ec0c9455f213fba4284a861d1ab3e6108edaf289d853f8",
+      "source": "node:test/64",
+      "title": "skips comment-only lines",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "89f6ea8f2ebb57bf10f6cabc2393fcb53249a4fb8de192caae572db29bff31cd",
+      "source": "node:test/65",
+      "title": "finds multiple violations in one file",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "496b95b63b03f4d10422c4e7bb842067f8a725be8200257735ae4c813a651ff9",
+      "source": "node:test/66",
+      "title": "flags __tests__ directory paths",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "45dddc010cf1f82573dc6ee5279c0790288fbb816c7b99b782d300bfbb3bb9ef",
+      "source": "node:test/67",
+      "title": "flags .test. files",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "b60f38ee7be5b5ca366ce64da1a7f564ac14b04151921bf5fbd9df1cabb782be",
+      "source": "node:test/68",
+      "title": "flags .spec. files",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "2d4ff6cd3270c24d07aac02878c95b4f20aeeceb2b5a5a0d7d079d7dc5dfe4ec",
+      "source": "node:test/69",
+      "title": "does not flag normal source files",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ae47afb0d6ff5ba5e31aa35ad927d18bf885a12374f74b49c66408091af017f7",
+      "source": "node:test/70",
+      "title": "applies onlyUnder relative to a custom scan root",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "296706f5d12f934c04e27204e1044152048eb3a0616999610396c706ab9676dc",
+      "source": "node:test/71",
+      "title": "reports a spawn error separately from a non-zero generator exit",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "e938bf764a3e4566bf1f1c464eb2b7269969a125d77a35d392391fa6781bfdf4",
+      "source": "node:test/72",
+      "title": "reports signal termination distinctly",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "d08d2cdd9895690bbcd2c998629d9145ffdce45898de1279b5036fa02bb9848f",
+      "source": "node:test/73",
+      "title": "counts let, var, and destructured hook calls but not non-calls",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "01def40c23ce247ec721c4bf66d5aca09ffd4e5c7bcd4fe8ae0d073a37be415f",
+      "source": "node:test/74",
+      "title": "the committed Poe Setup skill satisfies the static contract",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "f32aed4844884f9f84e47bd628604a259970e226132ad2c9067c3f0c11b1688e",
+      "source": "node:test/75",
+      "title": "the approved lazy memoized getter is accepted",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "e061a90c3d2a791bf8724612a260c4eb16c971fb318cb55934e250298b17e574",
+      "source": "node:test/76",
+      "title": "rejects obsolete secret naming and an OpenAI /bot/ base URL",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "7968d39bd9553f67f259d0c2f14be7efcd9aacf81910625503ce85f53a61f7d6",
+      "source": "node:test/77",
+      "title": "rejects plainly and differently named eager clients",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ad08caa3dd1beac651d627084385a500289bdba072d502578b613987b4d9ab7c",
+      "source": "node:test/78",
+      "title": "rejects module-scope secret lookup and missing-secret validation",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "74890112b61655ba7ca2af543a1ee0d0c90945bb9d5fcfa64390ec2029b40f77",
+      "source": "node:test/79",
+      "title": "rejects import-triggered health, catalogue, and completion requests",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "03c5f42a7c5c27661b85dfa9b762a5441432999ec0dc76e376de8a3b96ad7f9f",
+      "source": "node:test/80",
+      "title": "rejects removal of every required operational safeguard",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "2420c6389567ff0087ca31880fe90feae114e6e41b5ae0e70a6a77a60f27b7ae",
+      "source": "node:test/81",
+      "title": "non-text skill input produces an actionable diagnostic",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "b6eb671c65ec3e921c34bbe988968841021fc03f4eed28e92b99536c936e5379",
+      "source": "node:test/82",
+      "title": "Phase 2 config covers both bathyscan and api-server trees",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "d7d06c9e77bbdd1c3caea746d49f82787c4b5729c0bbefdd76424b922f788e2f",
+      "source": "node:test/83",
+      "title": "Phase 1: root-relative /api/ call through a registered wrapper is flagged",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "541c3a68c32072b00f867d15c33a7d35a1cd1a06bb546fa0a738eb1ec4a9055b",
+      "source": "node:test/84",
+      "title": "Phase 1: root-relative call through a custom registered wrapper is flagged",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "a8b547e71ff1e5673bcf8c64fed762d2993d2596b77f14d6f51aeb32960a279c",
+      "source": "node:test/85",
+      "title": "Phase 1: base-path-prefixed calls, comments, and test files pass",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "d83fbd2d35ba67de8e52c72987d50bd743c34645ae71e41f739eb7b8c9148915",
+      "source": "node:test/86",
+      "title": "Phase 2: unregistered wrapper around native fetch is detected",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "b315baa5b58c14481c7a07b04721e17cf5b493e85f8682d89e5fd67b1bff852a",
+      "source": "node:test/87",
+      "title": "Phase 2: bathyscan-style helper wrapping authorizedFetch is detected",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "3c0bc94a0b282506daa91bda30217bec03b6b7939f5fc47b6e259ef027764a42",
+      "source": "node:test/88",
+      "title": "Phase 2: registered wrapper passes",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "bf65e6c275032fdff7390db6ef29b9f0e563bf5a5961baf3fcc93274cc8baf93",
+      "source": "node:test/89",
+      "title": "Phase 2: explicitly registered external-only wrapper passes",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "a97658a699676c26637b0d46058bc0f84aacf4037619ec3db9ad7e806e4003db",
+      "source": "node:test/90",
+      "title": "Phase 2: non-URL first param and fetch-free bodies are not flagged",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "675bf2b796a7757af982129d499c439929341aa9683d207ff33bddd6f6e63248",
+      "source": "node:test/91",
+      "title": "detectFetchWrappersInSource canary: known-positive source must be detected",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "2a02ea8ed0af739c014807f00fedbbfc3f494804789975fae8667009f74e1519",
+      "source": "node:test/92",
+      "title": "detectFetchWrappersInSource detects arrow, function-expression, and input-param forms",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "cc9328eb25dd11b830c8744cdceba5d6ce3b6b726386c4cff00715dde942c527",
+      "source": "node:test/93",
+      "title": "detectFetchWrappersInSource detects a line-wrapped concise arrow wrapper",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "f3604e7158a6523b858126677fef956a94c1175050085e164790970039609b31",
+      "source": "node:test/94",
+      "title": "exits 1 with a clear message naming the missing journal path",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "dd8da63172dd1009f95ed6f1c78dd8e942f78936c044497c930cc78221cbeebf",
+      "source": "node:test/95",
+      "title": "exits 1 with a clear message when the drizzle directory is missing entirely",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "a34aa9e43d1c0dd002e2e4ecb2307d79a10b46e9f669f9274f8a24ecb4fea266",
+      "source": "node:test/96",
+      "title": "throws a path-naming error for a missing file",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "7cf68dc3b619199ad06a01f592c7c14fb3d6a2f799024464d4b959a34d968b21",
+      "source": "node:test/97",
+      "title": "throws a path-naming error for malformed JSON",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "4a38a6bcf4178fc6adcd61181340b2aecdcafe0004241ca02ea769bd101234b2",
+      "source": "node:test/98",
+      "title": "parses a valid journal",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "4525cea533c9a3f2a8e056eb717600728ade4f7bc94bd4b86cbcfb50d7f9ccaa",
+      "source": "node:test/99",
+      "title": "throws a path-naming error for a missing directory",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "441dd00df1bff022c5fe5604d4427f1841705dfed6713345c71c14eed7fcf807",
+      "source": "node:test/100",
+      "title": "lists an existing directory",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "bbd05c1ec550998bff76d1630af888382ab0632d99a946976d1f622ef1b3b4db",
+      "source": "node:test/101",
+      "title": "is safe with an empty created list and a valid backup string",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "0a1709b6878d255cefade51e5be9dd9bb6e30d961b3050025ef3b395017999f7",
+      "source": "node:test/102",
+      "title": "removes created files and tolerates already-removed files",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "3c580561387bd343b4cd79c77cbf0d507b7a1af1688f30f6cf8cc7046e801ceb",
+      "source": "node:test/103",
+      "title": "does not touch the journal when the backup is not a string",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "dbdf70ee391820c4e3df09df7050b9b7787aad7d8c6d27ebc21f1869a07d877c",
+      "source": "node:test/104",
+      "title": "restores an existing snapshot rewritten by drizzle-kit",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "d047eb23f57919454d38fa540b80140735091d0636394f9dc08ef3827ad26c53",
+      "source": "node:test/105",
+      "title": "the committed Skill Compression skill satisfies every preview contract",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "46d40c4d76d809245d8a9d09307185d838167d4dd02101afbffc88915ab5d1d1",
+      "source": "node:test/106",
+      "title": "semantic contract failures identify the missing safeguard and wording",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "80613fef0518741978482556b1e622677b40b2e167cb26011eba5401ea83fb54",
+      "source": "node:test/107",
+      "title": "non-text skill input produces an actionable diagnostic",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "78390b368947ce1248233af02164a6498e121b3bf1ba5d46edb5e4c736ef0306",
+      "source": "node:test/108",
+      "title": "missing baseline → exit 1 with a clear path-naming message",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "def93a5e8c6ad7c808803ff7e86724fceeced0e38a63d524fa2a51708f422e2b",
+      "source": "node:test/109",
+      "title": "malformed baseline JSON → exit 1 with a clear message",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ee4aaa28315a4f946d6ea3633b8d331dc97d0745d024583054b2736b5128942f",
+      "source": "node:test/110",
+      "title": "JSON-valid but null baseline → exit 1 with a clear message, no stack trace",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "85ede80cf7369152adb36f91bd3c2641db6d2d7ac6c33e7c373690bd92d0b28d",
+      "source": "node:test/111",
+      "title": "baseline with a non-integer field → exit 1 naming the key, no stack trace",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c1935e62fc9e278ad0eaaca9632cdb61a8b6b2ca3571fcba9b13e43fe7609961",
+      "source": "node:test/112",
+      "title": "missing unit scan root → exit 1 naming the directory",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "a5248b8cc5594290156383446a2157b9cbf3ee1e22d7095eb72ca3b981c81864",
+      "source": "node:test/113",
+      "title": "missing e2e scan root → exit 1 naming the directory",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "0a8219cbb8b903f9d5ba82f8ee144d8823397f1da9be9234a8d34dfb26dc6c35",
+      "source": "node:test/114",
+      "title": "findMissingScanRoots flags a root that exists but is a file, and passes real dirs",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "41eb0b9648003045a27c6200b313b308e8605b81c639f2b3842fe20e044a4bc3",
+      "source": "node:test/115",
+      "title": "warns, skips the file, and keeps counting the rest (end-to-end)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "adaa82ccad4f4c02f40df6ab625692b0fd4d749136572e9a41048b7f747b925c",
+      "source": "node:test/116",
+      "title": "EACCES directory → warns and exits 1 instead of counting partial coverage",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "3cc1b5b7f73b12c80f184c48d5a36d9ea3b8f94c1889ff64ff394caa4b06c303",
+      "source": "node:test/117",
+      "title": "countMatches skips a nonexistent file and counts the rest (unit)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "e80bca9bab897b215c7722006e601b722fa7247e1e7ae72b96038a1dd7c40bd0",
+      "source": "node:test/118",
+      "title": "countMatches normalizes non-global regexes and counts every match",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "78b2d68d6e65aec7081deb5c26cd9c822b5ebd28ee918e5d7caac8e85ace4fdc",
+      "source": "node:test/119",
+      "title": "throws a path-naming error for a missing file",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "a5ebda5b6b4a735a125fde6654db97180bb5f019c174e412be927803bafbeda7",
+      "source": "node:test/120",
+      "title": "throws a clear error for malformed JSON",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "959df8ec87f2448bda1a1f8aac22482e73e48f2783e1c13e3e79c359f71d972c",
+      "source": "node:test/121",
+      "title": "throws a clear error for JSON-valid non-object shapes (null, array, scalar)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "40a2b6e4dcfbcdedee5b6c3fc8de5d28f9be48872cee8b9766e2b583c35c3389",
+      "source": "node:test/122",
+      "title": "throws a key-naming error for missing or invalid field values",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "b119e8b626ad45aa000b8f24355c6436f5c8000ad917d950613e1201a1ba8241",
+      "source": "node:test/123",
+      "title": "parses a valid baseline",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "1d43d37a84b24eebdc3976854ae7d9302054a43712a7dba3648dd8966e8e0f1f",
+      "source": "node:test/124",
+      "title": "count == baseline → exit 0 with OK lines",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "645d6ce36fbde8a20b8cc11e2b7346eab9cf4febdcf5b8034148d8ec7abbf2d2",
+      "source": "node:test/125",
+      "title": "count > baseline → exit 1 with FAIL naming the offending file",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "e9b580434d4e120e49ecbba3c62e3eb5498b18c38bf9ddc6e031dac68a4caf30",
+      "source": "node:test/126",
+      "title": "count below baseline → exit 0 with ratchet-down NOTE",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "00824d2066bd981d94955967e4be3900d31bb8e231854fe3441173b1652b5176",
+      "source": "node:test/127",
+      "title": "baseline key missing → exit 1",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "19350084e997af1d409b9a239c9f47828b2a0aa9b8e4356bf6743fedfc953e37",
+      "source": "node:test/128",
+      "title": "(a) index name only in a comment → violation",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "45f3c7b37d3832c72bb18087c89f002c75cd59cf16e3d9b4fffc150f89fabdda",
+      "source": "node:test/129",
+      "title": "(b) index name only in an unrelated table's block → violation",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "9d7dd621e6418f1a5adfa297102ecc5d46be6b1728ccf97059ed3815fd54dcf4",
+      "source": "node:test/130",
+      "title": "(c) correctly placed UNIQUE INDEX clause → passes",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "6178b7440c18926abcfc14c5b7e310eaa149fc9ee26520ee1d0fe9755a929027",
+      "source": "node:test/131",
+      "title": "accepts a CONSTRAINT <name> UNIQUE clause inside the table block",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "e9de18412fe31624d6fa17577694ef82f17283b324cda459da5f65e917973274",
+      "source": "node:test/132",
+      "title": "bare (non-UNIQUE) index name in the right block → violation",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ef0481fbc8a632730975fab90af66060e4370cff647341dea48183157ca6e735",
+      "source": "node:test/133",
+      "title": "(d) missing test-db.ts → exit 1 with a path-containing message",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ffc626b6bad3051c2dc891b9aaa3b6acaae0188709b6aec20d0be75a168beea1",
+      "source": "node:test/134",
+      "title": "(e) unreadable schema file → warning, scan continues",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "da27f8717436e27911a4daaa1bd4e1930d0d644e050a9604ca9435a23feeaa86",
+      "source": "node:test/135",
+      "title": "(f) reports missing and extra DDL columns",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "2230494d8dedc0fbfa2399dc8d1e721a7a626a8a07496593f6f18a59fca216b4",
+      "source": "node:test/136",
+      "title": "(g) accepts matching Drizzle and DDL columns",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "d64e6ac6cce8d21b8bc8fbddd889f53493735a47f881b78e703850ed65394e64",
+      "source": "node:test/137",
+      "title": "(h) reports mismatched column properties and named checks",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c0c790b782c3089892fb2c320dcd05f25c6ee94da7671be55f4899fdc1e44620",
+      "source": "node:test/138",
+      "title": "reports indexed-column drift with table and index names",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c16241104251d301a59ee159927593c227ba38457b670091d803e5a75e0a0a61",
+      "source": "node:test/139",
+      "title": "reports partial-index predicate drift with table and index names",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "0b0768d84fd47beee40b5a84c0e916904e8e0abbc9567292e2af9ad11dbdfb85",
+      "source": "node:test/140",
+      "title": "reports sort, NULL ordering, and collation drift with table and index names",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "b210a1a2d7ac071adf2734394504c294f87f25d1c9f1c3492bbaa868c73563e0",
+      "source": "node:test/141",
+      "title": "accepts matching sort, NULL ordering, and collation modifiers",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "8199f4acb55b10361a918afd80dfa4cd504913295b81c9fa599339420b471a76",
+      "source": "node:test/142",
+      "title": "reports operator-class drift with table and index names",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "5a3b67c4216245a7f1a914b2f3269e044cce2873da0284ab75e701d1b22450b2",
+      "source": "node:test/143",
+      "title": "accepts matching Drizzle and PostgreSQL operator classes",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "b0614d0c361b317e234f39873f9c12e8c949a3d4f387c568d112ba0ca66d9136",
+      "source": "node:test/144",
+      "title": "stripComments removes SQL line, block, and TS line comments",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "824f4aca75414d558a1592dbaac2eda84f3a2267da5319c6c34fee28b3357744",
+      "source": "node:test/145",
+      "title": "extractTableSlices maps each table to its own block",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c325c19e6dc82dd45135c7958aea7822ac0ea1808ab673c09a0f2245c37e0a01",
+      "source": "node:test/146",
+      "title": "sliceHasUniqueClause requires UNIQUE adjacency",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "d5ccbb85ec1140b904b581a23f243f41ff847649c3e445ebdb0981cdf6b894a9",
+      "source": "node:test/147",
+      "title": "extracts Drizzle and DDL columns without table constraints",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "5f01dbab7be5143dd159bad5baf285bb31d0e782d9692c031f6a972d885de3c8",
+      "source": "node:test/148",
+      "title": "extracts unique-index columns and deterministic predicates",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "6aebe35f8b5788908b087ddbe90c422acd42bff5024679d40661faa4b363c19c",
+      "source": "node:test/149",
+      "title": "reports unique-index column and WHERE definition drift",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "3d0533ae8aa13f9dbe0bd80295663eef95b24cbd1199667a4fdb2c067364f0bb",
+      "source": "node:test/150",
+      "title": "GUARDED_FILES is an array with at least 2 entries",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "9202025d84b4edb5376e7f28d607669a992a07f67c2e69c7bd1685b4426dbb11",
+      "source": "node:test/151",
+      "title": "GUARDED_FILE is the first entry of GUARDED_FILES (backward compat)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "a0a3a8d28163e78a7456c2fe160f626169920fcbf24ad8c8c9289f5b7fddcd01",
+      "source": "node:test/152",
+      "title": "GUARDED_FILES includes the additional surface-condition panels",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "7a34226150358f71fd26ab12babbcd8659af1e9b4b9cc29ed16db55bd8f35afd",
+      "source": "node:test/153",
+      "title": "FORBIDDEN_PATTERNS contains GENERAL_PATTERNS + TRIP_WINDOW_EXTRA_PATTERNS",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "1b242dc9abbf7a2156193b9d2c3304feda7b039f40cf6b599cc2cb76d869168c",
+      "source": "node:test/154",
+      "title": "detects single-quoted ' kn' suffix literal",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "f7386cbee1b3b45257e45be3d4a4072a75dac1d0b1bad6c3e0fc47f6ce1551b0",
+      "source": "node:test/155",
+      "title": "detects double-quoted \" kn\" suffix literal",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "bb6693aa53051fce1b0273ec524931d3d0c0f253c4161ccdfa0ee71f06e3f3bc",
+      "source": "node:test/156",
+      "title": "detects double-quoted \" kt\" speed suffix at end of string",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "f72b442fe4e0bcf2df3c1df687a2f3934cfd8d35ddb7236d8f057a47e077784a",
+      "source": "node:test/157",
+      "title": "detects single-quoted ' kt' speed suffix at end of string",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "e028037650be3c5d2e990d2aa2342d24d673bcfc2a8aa333e936547816ef94f1",
+      "source": "node:test/158",
+      "title": "detects uppercase \" KT\" speed suffix in quoted string",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "38287dfc32497961049987a77ec45b2c57db07c56474e22e77a3ad8b190f0ff9",
+      "source": "node:test/159",
+      "title": "detects single-quoted ' m ' suffix literal (mid-string)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "61dfbadf96411b12344cae42db192d465d2724725eebcd6cc587db049a54e8c1",
+      "source": "node:test/160",
+      "title": "detects double-quoted \" m \" suffix literal (mid-string)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "fb42187f643b2a0db8993c0c158bd8217866dea4eb7f123df2742ac7aa4c87ef",
+      "source": "node:test/161",
+      "title": "detects double-quoted \" m\" at end of string (reviewer-verified case)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "8b54b5a5e1aeb2c2d731285666f4ba1a23ed6824321feb4d4425192575aee387",
+      "source": "node:test/162",
+      "title": "detects single-quoted ' m' at end of string",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c8943999c6c9a5669e0d8e30296bc7d184d6cf9a566863f1394f454a233ccbf2",
+      "source": "node:test/163",
+      "title": "detects raw } kn in a template-literal interpolation",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "2b87298cd99b8b3fccc10cbb2dd895b5da14c87a6d6902892b6616f7a0ca6f27",
+      "source": "node:test/164",
+      "title": "detects } kn at end of template string",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "3b1d78f8fd1b072e490c03e64c3888173008a32fdfc3c3262cc9246af5369835",
+      "source": "node:test/165",
+      "title": "detects lowercase } kt in a template-literal interpolation",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "d9952ecffd0c357f06390c7c8d87b276fc87dc8def648af2d36dd93098eb1e9f",
+      "source": "node:test/166",
+      "title": "detects uppercase } KT in a template-literal interpolation",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c7dcab720ec7684db275da3f02ce36fcfb3df87b24eca6909b092a557c4de793",
+      "source": "node:test/167",
+      "title": "detects no-space }kt in a JSX expression",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "37aafa051c3510610c49be91133b256fc4968957d8597a70b8f3f680f7da0017",
+      "source": "node:test/168",
+      "title": "detects .toFixed() followed by } m in a template literal",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "85dd15dc581702922a69a87249a82952a583824b9325b1afbdae69d0f0bb5c44",
+      "source": "node:test/169",
+      "title": "detects .toFixed() with zero decimals followed by } m",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "5add154da0d965d31bb9ed56313a34305837f7aad0c23b709dd14e86ee08640f",
+      "source": "node:test/170",
+      "title": "detects .toFixed(1) followed by } m in JSX expression",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "b29c5b08fbbf5221c108cc0c6e381ec678a2de80e9ca349574244431a5288dd9",
+      "source": "node:test/171",
+      "title": "detects Math.round() followed by } m in a template literal",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "5507500ae2c1801b1b1d5cdeb203f0dddff1e7233cda429cfa49f48f93dc6763",
+      "source": "node:test/172",
+      "title": "detects plain variable reference followed by } m (reviewer-verified case)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "9f7237a72b411d44e8a6e6b0a20d42ef11228c79498b437a7f33d3e4caf72eda",
+      "source": "node:test/173",
+      "title": "detects no-space }m suffix in a JSX expression",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "eeb85bc5c379dddf7e94e8b9df7d9b19414ae7f89c9178047fe0545d233d8424",
+      "source": "node:test/174",
+      "title": "detects no-space }m in a saved-plan metadata label",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "f3e53328d61e04491aea198d2493ccbbff86bbc21246e1cd81f39fc06141a3f5",
+      "source": "node:test/175",
+      "title": "DOES flag } kt drift in a template literal (suppression exempts GPX lines)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "62c4e57d8db7b4a68b22ac33489acf0500b26ab03185bdb42e63107921a296ce",
+      "source": "node:test/176",
+      "title": "does NOT flag lines containing 'raw-unit-ok'",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "7b28ed579c0ac24931ee7f6a6bfe69d9560edaaad9fc3ede06514770ebc502a2",
+      "source": "node:test/177",
+      "title": "does NOT flag } m when the line is suppressed",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "15da5f021c52eadd9e22f3a1842b7da4b1bec0a62c5fc6c32af98a54826b3492",
+      "source": "node:test/178",
+      "title": "does NOT flag } km (distance, not metre alone)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "279c046d842fc524d690ba2f1824dffee2271267dd5cf227c7b0f3ac8e9eb27e",
+      "source": "node:test/179",
+      "title": "does NOT flag .toFixed() inside XML ele tag (no m suffix)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "09f74034e064dc3950d4dcf72fe7d677b7905e44f3d932274756f4d04a34b3da",
+      "source": "node:test/180",
+      "title": "does NOT flag formatSpeedFromKnots result in a template (no raw kn)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "7edb045786cc89b8aeb26a1fdf2d00dd79755fd592ebe44ffd6f94bfecab09ac",
+      "source": "node:test/181",
+      "title": "does NOT flag formatWaveHeight result in a template (no raw m)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "37a7e675804f7412f9353a449930070874be373bc04150eaa7006e9660fce28c",
+      "source": "node:test/182",
+      "title": "does NOT flag degree suffix °",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "25612be469ba18dfd59d9bbfe8ee8da093e627fca6808419c4aa3161ae06d113",
+      "source": "node:test/183",
+      "title": "does NOT flag 'kn' embedded in an identifier name",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "a55930dbe3a31dadec012bd2ab31f67338f49b259a29a39ad50ab9c4abc8c2df",
+      "source": "node:test/184",
+      "title": "detects single-quoted ' kn' suffix literal",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c15b2ad8ef401a76d16c9798b17cf89d899991ada416b6b0be7d21b2944bd307",
+      "source": "node:test/185",
+      "title": "detects double-quoted \" kn\" suffix literal",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "a87a119ea846e54ee51f53631407424a6f7dbf04be4b88da788ed360ec9d086d",
+      "source": "node:test/186",
+      "title": "detects single-quoted ' m ' suffix literal",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "7de414ea6caa508e1573a5f6e04e4dfe43476a9ebd36486c605b33f462be7f4d",
+      "source": "node:test/187",
+      "title": "detects double-quoted \" m \" suffix literal",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ce47e6cfab506d9493abb345aa6d99cdbcaf440c1da3439ff3bb698ef36c19a1",
+      "source": "node:test/188",
+      "title": "detects maxWindKt.toFixed( direct call",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "1fcc9fa25c62c5aa5d9c0a04d1834d90225a5a86b25abe61812bfdba79ccf6f0",
+      "source": "node:test/189",
+      "title": "detects maxWaveM.toFixed( direct call",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "1cf888f5ed6adf82cc88cc50dd227e2d9a9d71f9e46ba7bd419dd33d22b750d5",
+      "source": "node:test/190",
+      "title": "returns an empty array for compliant source (default patterns)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "721b2fc80264d1c3f26cd1153feb4f27da3b728ec51cccbb4eabf6b53ed3588b",
+      "source": "node:test/191",
+      "title": "returns an empty array for compliant source (GENERAL_PATTERNS)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "8651e1ddf2a1c89fed80d2fbdfab8cc0331b079c5c2a36836f867baabe79486c",
+      "source": "node:test/192",
+      "title": "reports the correct line number for each violation",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "48a4b3cecaa33c5c415c2425f838d1ccf571a111c98443c8049bf7ee8fe0938c",
+      "source": "node:test/193",
+      "title": "does NOT flag 'kn' embedded in an identifier name",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "0ea553f1386ef3c612e7014f9c5290bb79d5d975b592525cc54b49afcb411ec3",
+      "source": "node:test/194",
+      "title": "does NOT flag an 'm' that is not a standalone unit suffix",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "1faf77ef28dd479af17d19dad3649c190f999ebd4e02bf11ea089c4c4db07424",
+      "source": "node:test/195",
+      "title": "does NOT flag formatSpeedFromKnots or formatWaveHeight calls",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "083836231a566d04d2b174b83dc5aed30fe3cdbac1fab3f6e0146dd6ac00f720",
+      "source": "node:test/196",
+      "title": "GENERAL_PATTERNS does NOT flag maxWindKt.toFixed (TripWindow-only pattern)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "bd502ce045732f72440adbb7530a750732589e1c6f6ccb28ef52711810502724",
+      "source": "node:test/197",
+      "title": "GENERAL_PATTERNS does NOT flag maxWaveM.toFixed (TripWindow-only pattern)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "6836d516ff42a00cf4695ef8ac2ba2d608089355a363bcae97f72978ea0f3310",
+      "source": "node:test/198",
+      "title": "exits 0 (no violations) against the current file (full FORBIDDEN_PATTERNS)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "75d0e946ab06ab2b78baa09c13ee0de2323726e402606f68def3b3e6444a9bae",
+      "source": "node:test/199",
+      "title": "ConditionsLegend.tsx has no raw-unit literal violations",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c7ed732e5a487d54bef81885cef61ede6d6544b0eac162c0557ccd3eae4b12ba",
+      "source": "node:test/200",
+      "title": "DriftTimeline.tsx has no raw-unit literal violations",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ecfcdb44b1fce077e45cbb6366f7c7573fb9a77f88f0dd5c5445d8702a2e23af",
+      "source": "node:test/201",
+      "title": "WeatherPanel.tsx has no raw-unit literal violations",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "322a1418c85bfd676c98ead89a83b32eb598ef9b6da15b3e0275a6eb7cdc2bd6",
+      "source": "node:test/202",
+      "title": "CurrentsPanel.tsx has no raw-unit literal violations",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "a52edb00a13ce239a25146ba379bf6e76c57d613c73b1f0473f16314e9c1d56f",
+      "source": "node:test/203",
+      "title": "ManualConditionsForm.tsx has no raw-unit literal violations",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "f7398bf74799de5c5c457072f1aee8c0afc90311fd0ed2025c627bb8f764110c",
+      "source": "node:test/204",
+      "title": "TidePanel.tsx has no raw-unit literal violations",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "d01e8374ed41206655d44fb755324b37a99089640b6236a3463dee29f2dc98ee",
+      "source": "node:test/205",
+      "title": "the checked-in catalog is valid at its verification date",
+      "line": null,
+      "status": "failed"
+    },
+    {
+      "id": "e241504fe65b8f63240498ab918456f5b70d5f82a5d75a4e0c4c5cb80db63112",
+      "source": "node:test/206",
+      "title": "the CLI validates the real catalog without changing it",
+      "line": null,
+      "status": "failed"
+    },
+    {
+      "id": "012220e411860a2d6c96045ef5947b76a49bdb93353039a47fdf326e34710a5d",
+      "source": "node:test/207",
+      "title": "malformed entries report actionable schema errors",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "512aa75165f963f42859d5ae91b94b08667d4fbfdc7ecfbd874c1e9305a8766a",
+      "source": "node:test/208",
+      "title": "duplicate IDs are rejected",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "a71d1a595ef58152eb6d221537a8cc46c94054468235ee8a3b30279f1e5130ba",
+      "source": "node:test/209",
+      "title": "expired active records are rejected using an injected date",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ab366e5681e9edefce62e87d29453e61749a70133cf96d4a85b120ccd9e126eb",
+      "source": "node:test/210",
+      "title": "missing repository references are rejected",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "acccd1eb32367990b0baa07e6acc26e4ef33fc41b3aada72af8586b28a77ee4e",
+      "source": "node:test/211",
+      "title": "resolved records require resolution evidence and remain terminal",
+      "line": null,
+      "status": "failed"
+    },
+    {
+      "id": "30e980226078e67cd7732031564f4a5d494b5fb53a18e29605f02506d77b1e5e",
+      "source": "node:test/212",
+      "title": "intermittent records require both sides of the observation",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "2bdd74ebfaac79cbf779f75bac78d65ba7681c979b2a37a4faed1e9125f5112f",
+      "source": "node:test/213",
+      "title": "catalog defects never become a test suppression mechanism",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "3e0a5f22391264aa8e5c650f2c32c94ed41bd9b98b5ec3e9eea576b85fce7368",
+      "source": "node:test/214",
+      "title": "maintenance report returns no findings when active records are outside both windows",
+      "line": null,
+      "status": "failed"
+    },
+    {
+      "id": "b2589f04925f776715dcee29fc1ad4d4ba5e1c1741417510304ffa505900b434",
+      "source": "node:test/215",
+      "title": "maintenance report includes the inclusive deadline boundary",
+      "line": null,
+      "status": "failed"
+    },
+    {
+      "id": "a853c382da394668c9f183d41edf1143826ce74d09203ac75d810c7b44ee9f1c",
+      "source": "node:test/216",
+      "title": "maintenance report identifies expired deadlines and stale reviews",
+      "line": null,
+      "status": "failed"
+    },
+    {
+      "id": "71cd1955868d98227b7fcf2f1ca15b1659b9d46fbfe1c1daa3c128adbdaa59ab",
+      "source": "node:test/217",
+      "title": "maintenance validation can report expired active records while strict validation rejects them",
+      "line": null,
+      "status": "failed"
+    },
+    {
+      "id": "d20dc215b623bc92db3e1ba2befd2e2316b9cd15c2fb029e11416badda2a7740",
+      "source": "node:test/218",
+      "title": "maintenance report treats inactive records as informational",
+      "line": null,
+      "status": "failed"
+    },
+    {
+      "id": "1b55816ef7f8704e53f85b48b0daa4ada45c228ea442c0e2028b3104200c4524",
+      "source": "node:test/219",
+      "title": "maintenance CLI exits cleanly with no findings and nonzero for findings or invalid options",
+      "line": null,
+      "status": "failed"
+    },
+    {
+      "id": "8cb842b295eec76ceb798980f1427f573a18bf82a006d5912fdae1196d31cb42",
+      "source": "node:test/220",
+      "title": "records final retry outcomes and runtime skip reasons",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ff14b33a994b5e58307d00c823ddc2f2d01b57f06afb1e336b1b58fa7bfd2884",
+      "source": "node:test/221",
+      "title": "an empty new workspace starts at TASK-000001",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "b9d440df897ff4a6a2de40fea937737d77cd90d726501cdbfa9c54d2845fa5fb",
+      "source": "node:test/222",
+      "title": "a missing database cannot be recreated when tracked namespace plans prove prior allocations",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "eec541b8e87eff0623aa61ded541a127186cbbee85b5e45806dd5bc028fe0fc2",
+      "source": "node:test/223",
+      "title": "a cancelled retained ID does not authorize a missing next projected allocation",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "a20261ecae1a9b4c526ee8654fd7a0a50f699462cdea523544d1de0930f8772c",
+      "source": "node:test/224",
+      "title": "tracked high-water evidence fails closed when its ledger row is absent",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "8c72b2c2fe35859a2df79b7097d74ff65e33e40da4328fc866d11e85f9bd183b",
+      "source": "node:test/225",
+      "title": "an allocator high-water mark beyond complete retained rows is not silently accepted",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "bd4121cc448273d12b757d9fee9eea660a7db5c37ca611a747d3eba1a94690d3",
+      "source": "node:test/226",
+      "title": "complete retained history permits reservations above the tracked projection high-water mark",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "d3b4346235029f99367b0a6e6cf524623fc5bcb2d493b9c1c0c17b22520afec8",
+      "source": "node:test/227",
+      "title": "an intact accepted-source reservation remains idempotent, but source projections cannot replace the ledger",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "40c0eb6887c2c23050dbb7dacfdee837b9262139eb9a2dc362388ce4599b5f7a",
+      "source": "node:test/228",
+      "title": "malformed, conflicting, and symlinked tracked task projections fail closed",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "f138870d4b649cc4de96b732d1023928651e36effc1c7271f434feaa556302fe",
+      "source": "node:test/229",
+      "title": "concurrent writers allocate distinct monotonic task IDs",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "569edea76d96646bca68abc7864774385713189a740bc4f10ff37543b83fbd46",
+      "source": "node:test/230",
+      "title": "complete all-pass evidence with no applicable cases can be eligible",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "914718964a9dd42439e8ad260fdce2fafa0de764ada8f45bba08108d1a5aa745",
+      "source": "node:test/231",
+      "title": "each failed, skipped, unknown, and not-run discovered case is enumerated",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "7a01ab6a7d59cbe3983ce2b98f7fe5f7ac23bfcec30b6c9093af9fc82e3ce5f7",
+      "source": "node:test/232",
+      "title": "ignored baseline declarations do not classify raw failures or unlisted failures as accepted",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "0f1ccdb53c892b985e3ce3730beff6a809cd38e62265f3c02402502ef9c21259",
+      "source": "node:test/233",
+      "title": "owned repair declarations stay blocking for all-pass, absent, and skipped cases",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c7ab871d5467797b11d44d9db2115801dc9d493a7988211e49a7b0d8b87fa196",
+      "source": "node:test/234",
+      "title": "caller-supplied signatures and verified proof claims never resolve classification",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "8dee68eb216364c72990be1428d62f3bb15eaf543b7cad43717c43795ae819d2",
+      "source": "node:test/235",
+      "title": "missing or malformed retained artifacts produce an incomplete assessment",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "85c906e8827fcd28e317183d912c8842b312dd893e5a07072e2b15cfb2084053",
+      "source": "node:test/236",
+      "title": "unverified run snapshot or writer coordination blocks otherwise complete evidence",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "6b3cf64e5814d1c90e94bd93c17ccc0863b5b6869a3bcc8900e353e15e6a85aa",
+      "source": "node:test/237",
+      "title": "a pinned committed approval is bound to the exact policy, task, namespace, tier, and empty parameters",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "61a22147e4f523e48f14c65850f970e0680cf29eaf9f930c4119ad109f770ed0",
+      "source": "node:test/238",
+      "title": "missing and uncommitted bootstrap approvals are unavailable",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "621d18e5c60125f484329cd30c59f04604d31055b1bd33ef1441ecac66c3901d",
+      "source": "node:test/239",
+      "title": "a pinned bootstrap decision rejects another task, namespace, tier, parameters, and actor assertion",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "6ebb7ec09978e48d932a5b3956bdbc0031eb5855470ff04519b7f132ca7eaf2f",
+      "source": "node:test/240",
+      "title": "a changed governing policy invalidates the previously pinned bootstrap approval",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "f75fe0e8d9488d21a6952f721000bddec3a5fc8a76411a6e79efaa117bba4811",
+      "source": "node:test/241",
+      "title": "declared exact baseline is ignored only when authoritative, active, and unexpired",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "7e38c746d99a5975f6d80d1a8d5c82bdfccb1f857ca309afd1490a9c8239bb54",
+      "source": "node:test/242",
+      "title": "baseline matching preserves exact suite, test, signature, and environment distinctions",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "a9ebe6cfc25dc7164b88b6b6fe5bd8b4344cd85a1b386bd332a9bb92ed7c81b5",
+      "source": "node:test/243",
+      "title": "actual catalog-shaped records require an explicit exact applicable variant",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "b31bc7c4fea81931011c33f3c0aa9fbef47d2697a505cae64ef35074296a6134",
+      "source": "node:test/244",
+      "title": "catalog records without applicableVariants match only an exact affected tier",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "23b907ce2789000f838ff9c7c91474abb3be18587921bbfd1aa9f1e638448dd1",
+      "source": "node:test/245",
+      "title": "owned repair obligation survives expiry and is cleared only by verified discovered pass proof",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "2d62fefa5574d164d5a59f84a796ef31f2209eadee7be3f0b7117c1db96282bb",
+      "source": "node:test/246",
+      "title": "unlisted failures require three distinct authorized safe trustworthy retries and provenance",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "6f43092a1bfebb615ac40116db63bb9da8af92e2e59b79e77bbd4ccf9b53d237",
+      "source": "node:test/247",
+      "title": "passing isolation retries report intermittency only and do not stand in for pre-task provenance",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c4b2444ab46df2ddea05c4ade1d63b38c77fef11358d99217811f88fbb467834",
+      "source": "node:test/248",
+      "title": "unknown, ambiguous, malformed, or conflicting declarations fail closed without catalog promotion",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "e1cb872049bc09117335343b5f25c862ef4fb3b36230eb42f0f543474547b3e4",
+      "source": "node:test/249",
+      "title": "tier policy pins every case-report adapter and the invoking scripts package",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "57278b15c848e7f4820e9d0c75bc838006070756f0953cb32862f99524fe9dc4",
+      "source": "node:test/250",
+      "title": "canonical JSON digests ignore object insertion order and reject non-JSON plan values",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c45e928b050f205c99c566db082501a3f1ffb39c60b9d6156c91a25c51cd9d98",
+      "source": "node:test/251",
+      "title": "the default durable database path is project-local but outside the project and .local",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "57146b647489e3ad256ad50e06963511dae1b2be11f02a342c310ddca80eb602",
+      "source": "node:test/252",
+      "title": "reservations are durable and monotonic; only activation gives one registered tier",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "9e9c62f6005ff11f589d4c2034d9dea8afe32abdb079420a675465b80465ca0e",
+      "source": "node:test/253",
+      "title": "activation reads roster and decision from one pinned Git commit and audits derived status",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "54db5779e85ff925ccc312d8ddc73a58f26212d576f39c3f5d1b57e1b5aa711c",
+      "source": "node:test/254",
+      "title": "a fresh accepted project-task callback activates one exact locally bound plan without reviewer identity",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "2738202bdb4f366ee7bd72cf886f5a2b17b4fdf48ad1116ea1be6d5d07245821",
+      "source": "node:test/255",
+      "title": "accepted project-task activation is blocked without a separate pinned bootstrap approval or for another subject",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "377a9cb083c3e6eaeee8f1bd03f2b278cf860889a8822f5cf4dab7c73fed67f1",
+      "source": "node:test/256",
+      "title": "bootstrap approval rejects stale policy digests and edited uncommitted decisions",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ff1afbe69a52bb2abde60583f7b67631704c4d4c211eb59ae48cedd0e2ce3a4c",
+      "source": "node:test/257",
+      "title": "accepted project-task activation rejects substitution, plan drift, invalid state, and caller policy fields",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "b5f67ada2c82f7f7f74a839e7926adf9e09950a91302e4abcfcb2cd225e6c32c",
+      "source": "node:test/258",
+      "title": "project-task source reservation is idempotent but changed plan content gets a new local ID",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "0f0bc2e4a77e0c0c94dfe9fd8f54a8c8cc86901fdbc4157dc0f277e3b129cb16",
+      "source": "node:test/259",
+      "title": "project-task reservation creates a new local ID when its authorized tier policy changes",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "cb6e1d14bc063e31fddd4c59c468cfbba9b6ce732b6ff2ee01158c6d3adddc77",
+      "source": "node:test/260",
+      "title": "activation rejects caller-selected alternate reviewer paths even when their blobs are valid",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "a704e44509ad478dfa92e718b027037d8e20672ef63aafcc1ee35462b32b8caf",
+      "source": "node:test/261",
+      "title": "activation rejects caller-supplied tier registry digests and unregistered definitions",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "a4afbc613dec436154e87a36843dc4333ec507126fb1ce4781e24d535a87aa0d",
+      "source": "node:test/262",
+      "title": "Dan can activate a task when named in the pinned reviewer roster",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "843420f13e6a7019523ec6b11d488080b9531d3fb9acc82188dcecb509f32a3b",
+      "source": "node:test/263",
+      "title": "missing, mismatched, and non-designated committed reviewer decisions fail closed",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ba9621b9bf4eded1c4c1bc183fe1f777b7d01210b2bf0a1403ec24674122631a",
+      "source": "node:test/264",
+      "title": "corrupt plan contents are rejected rather than trusted through a stale digest",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "2db2f7d80ea1346f56a4236d1b0fb4709f5de84bd351299f5c88e92a400363bd",
+      "source": "node:test/265",
+      "title": "checked runner denies missing, escaping, and substituted plan projections before launch",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "1a492a31d10e002516ef3272da0e492e3d1acdf0e5b38101bfc78e356f468325",
+      "source": "node:test/266",
+      "title": "checked runner rejects a changed wrapper before launch against the approved digests",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "f00cf2120b1f242b586b462f0309c23b8bc92c5447b8a5b4c80702dabeac461a",
+      "source": "node:test/267",
+      "title": "preflight-only requests remain blocked despite a registered report adapter",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "4114c919164321ea3d3f829c0dcb5aafac69cda71cf0b920cac2c8c4f1dfbf4d",
+      "source": "node:test/268",
+      "title": "checked dispatch cannot launch without a digest-bound legacy plan and passing draft guards",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "14bce9964a8c83847fa7cbe5c9664223abeb4065aaa8e23d82f8074fd9412626",
+      "source": "node:test/269",
+      "title": "checked dispatch rejects Clerk substitution and selector or Node runtime controls before creating a lease",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "f364bf86ea36cd03c990ce68314168088f8f4fb06fc729e92b3740c0685e1f1a",
+      "source": "node:test/270",
+      "title": "activation and its audit event roll back together; stale or duplicate activation is rejected",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ca2d2db48affff9bf678e92742900886f0369bceddfd9048441a8730df52dd32",
+      "source": "node:test/271",
+      "title": "plan ownership is derived from the reserved plan and tracked catalog",
+      "line": null,
+      "status": "failed"
+    },
+    {
+      "id": "20f917d19ef7dffafc77c20988e0234a08befc6bccd74bccdde3ca132edc2b3b",
+      "source": "node:test/272",
+      "title": "untrusted exact identities persist as immutable blocked diagnostics",
+      "line": null,
+      "status": "failed"
+    },
+    {
+      "id": "2eb1cc01647d9011606a5d266567f1d8a1a5c8acb727e06bc5f87a9caea8d5ef",
+      "source": "node:test/273",
+      "title": "caller assertions and arbitrary isolation execution are rejected",
+      "line": null,
+      "status": "failed"
+    },
+    {
+      "id": "f4b78832059a971fa92adacad5552fc050526229857ee910e48f65036865029e",
+      "source": "node:test/274",
+      "title": "bounded Node isolation stores passing raw status, TAP discovery, and both snapshots",
+      "line": null,
+      "status": "failed"
+    },
+    {
+      "id": "8f6604c0057122408639c4f53bd9a1d6b8301b3a92e92164a06e080ae6182b69",
+      "source": "node:test/275",
+      "title": "literal exact selection records zero discovery without treating it as a pass",
+      "line": null,
+      "status": "failed"
+    },
+    {
+      "id": "e8126713b4fc060ef732708fa5676f3a837162a545fc15745d55917d1d4d4a9f",
+      "source": "node:test/276",
+      "title": "Node TAP failure status is stored for a deterministic tracked fixture",
+      "line": null,
+      "status": "failed"
+    },
+    {
+      "id": "a4b479e610cedeea2b123499bc05df16463439ce446b4aeeaab59ee56a0071b2",
+      "source": "node:test/277",
+      "title": "the exact task/failure identity rejects a fourth reserved isolation attempt",
+      "line": null,
+      "status": "failed"
+    },
+    {
+      "id": "da6340dab45aa83438cf0513b7b1be4dfc84881968db4b56d1d1c34b9b305e2b",
+      "source": "node:test/278",
+      "title": "/home/runner/workspace/scripts/__tests__/failure-gate-v4-diagnostics.test.mjs",
+      "line": null,
+      "status": "failed"
+    },
+    {
+      "id": "2f767a56c0d913deec89cc32ad6cdb2c23650f4a22d739f5cb811a409e91112b",
+      "source": "node:test/279",
+      "title": "planning guards accept an exact tier, live ignore, and persistent owned repair",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "5adeb4907af163d94771f1e38772f081fce3d165489175575cdb9d2c20bae2e3",
+      "source": "node:test/280",
+      "title": "ignore declarations fail closed for ownership, authority, expiry, applicability, and unknown IDs",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "bacf4dcdc6135b7dc38b71ed76ccaa0c77ee55f1aeb08b304996fe451f824429",
+      "source": "node:test/281",
+      "title": "tier escalation and malformed or absent gate Regression Guards are rejected",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "128aac84f247fb099b13c75318f5f002dd2a4d16d2c140457f2fcab3a1b6584d",
+      "source": "node:test/282",
+      "title": "the phrase 'this authorized tier' binds to the plan's single declared registered tier",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c1926e020c016381dfa9fbe6ee1f64172586ab13f86b0b9be1c045feb9dda117",
+      "source": "node:test/283",
+      "title": "baseline catalog must be a tracked regular project file and markdown projection is digest-bound",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "b2b529f17d46fda07b8857659411ac38d0a0d89e50fa8bd61b29dddc72b98234",
+      "source": "node:test/284",
+      "title": "baseline discovery captures a separately labeled planning-only snapshot",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "6ecb175590f139b2a4038f36c314f14ef0171a8ee84003912e3c304d64814a34",
+      "source": "node:test/285",
+      "title": "planning baseline persists after reopening the store and recorded observations are immutable",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "22a60e66abca0b7bdc5d8c9627d9f3cd5129d3dbef1047f2880d5c921a33c591",
+      "source": "node:test/286",
+      "title": "planning baseline storage rejects task and snapshot digest mismatches",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "52afc8e18ce022fecddbdcfc73e073bbc56db27eb49a08013d596463ac33d059",
+      "source": "node:test/287",
+      "title": "coordinator baseline capture is idempotent and never creates validation evidence",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "173490bfdc511ea7f5421f0530cc2cab806534e01ea44a46c1bde63cd0d81295",
+      "source": "node:test/288",
+      "title": "a live checked-run process group blocks recovery release",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "8263301a0934b4fa95eb39117297b61e3dd26f29ee86f45c0c40b63eca111292",
+      "source": "node:test/289",
+      "title": "a killed leader cannot release recovery while a descendant remains in its group",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c3ae5a47dd5bcf482876a7d0a38c350ec396815cee5d2ce403705887b5c0e66a",
+      "source": "node:test/290",
+      "title": "missing or malformed recorded process identity blocks recovery",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "54172205e3ba9104c273d4a4d12c02506e2b756e05ae5df0e52cd18b3d197aa5",
+      "source": "node:test/291",
+      "title": "an actually stopped checked-run group permits recovery release",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "4bd26de7e21fcc6ec177e503cc364206fc64934ef6cd286b4f0c58e3fe179ba3",
+      "source": "node:test/292",
+      "title": "requestRequiredValidation denies unauthorized fields before reading authorization or launching",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "b84238eb25329a33b1a0691bab8d5f1a881f0bc1d6886834622ebb7c80141f66",
+      "source": "node:test/293",
+      "title": "runRequiredValidation denies unauthorized fields before reading authorization or launching",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "89d51fb8e78bd626116e151aec27a44105cef29fd98810e210f6c2f74ced935c",
+      "source": "node:test/294",
+      "title": "run lease start is audited and exclusive; orphan quarantine holds the lease until actual stopped-process recovery",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "b3f11282bf275fbaf67f1408fbd099dd0e5ea4e6d9d9fcda5a007c11eedf9e89",
+      "source": "node:test/295",
+      "title": "completion retains full report evidence, rejects caller labels, and blocks unverified final snapshots",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "be218705b4accf478e3912a5a73178dc51278e18ea081086de14c5ce99feee6d",
+      "source": "node:test/296",
+      "title": "stored assessment cannot clear an owned repair from all-pass or undiscovered case evidence",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "f878de51c299c11a4621f372175586a2e70385d160f4bf152343e31e64fde558",
+      "source": "node:test/297",
+      "title": "unverified writer coordination can never complete a task",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "39c8035e779b120419d0a3b1af4d58319e918afb813d497c89fb2a93b3b7e522",
+      "source": "node:test/298",
+      "title": "failure releases the run lease without falsely completing; terminal cancellation leaves an audited tombstone",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "6ea3042c14e7c903ad0a535f047b3f1c8a2701f05447eec0270948d2715eab1e",
+      "source": "node:test/299",
+      "title": "Vitest configs omit the reporters property when Failure Gate reporting is disabled",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "681fa69e9609fad06cb2792199d20af29f96ad8d9277956f7c886b5131bec1dd",
+      "source": "node:test/300",
+      "title": "Playwright config uses a config-relative custom reporter path",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "492c44a3cfda87e0516eb28cfd21b4554d047bfbd757b41d88cbbe5dd8824d37",
+      "source": "node:test/301",
+      "title": "Playwright config loads with --list both with and without Failure Gate reporting",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "82c04f3e6ec82ea6b4eb2ffafd8cce98e3a419afb55c97610bdf6d368b80785a",
+      "source": "node:test/302",
+      "title": "Node TAP discovery matches the runner summary and preserves skipped results",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c3df8ed05df6d8308be747dec6fbd2b5969728441f1f2ffc8e593886b4445af8",
+      "source": "node:test/303",
+      "title": "Node TAP discovery counts nested test cases without counting suite summaries",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "1ab5930f24da4e5f9076b633aadfdc69178f161b72271089308a36dfa8595e7a",
+      "source": "node:test/304",
+      "title": "Node TAP discovery is incomplete when report totals omit a result",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "3d3079dc6f21b194ee1c61e82b9d229bb630a83c99cb05505acfeba627d93b4e",
+      "source": "node:test/305",
+      "title": "Vitest reporter writes actual discovered case outcomes with a digestable report",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "d261b31e0754124fd8efc0cc981398036d5304ba4baee4f18a42e80ca1f4263f",
+      "source": "node:test/306",
+      "title": "Vitest skipped cases are retained but cannot count as all passed",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "3f5b707f9f84f5c9b9c8d6575d2069fea46274a01ff84d8bf9c160c5a88477e0",
+      "source": "node:test/307",
+      "title": "Vitest does not accept a final pass when its result retains retry errors",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "4628ecaf4532b4b13ae4f771a608ace684ed2d8867fcd2a362dc06d5032a93d7",
+      "source": "node:test/308",
+      "title": "Playwright reporter retains retry outcomes and does not call a flaky case all passed",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "6e795b3ed54647ab898819bde8fbc7df01ca4db557292a0803780dc70f2864a3",
+      "source": "node:test/309",
+      "title": "raw Node TAP is digest-checked and unreferenced files invalidate discovery",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "31e8ec96c5a34b0d57f63a37018c42dd81cf30d58d45853ca1522b37734155eb",
+      "source": "node:test/310",
+      "title": "serializes cooperating foreground writers",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "e05f1b6887e36e25517d6cd8799d790a000fee4bbf8cea0c73e92c960902a1e4",
+      "source": "node:test/311",
+      "title": "timeout fails closed without running the protected operation",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "666d375e3e65cda16b01ada4e504a646893a05901e75cd15cb7fc476b80a6530",
+      "source": "node:test/312",
+      "title": "failed foreground commands preserve status and release the lock",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "59e9c2e31591a158c2b91b491fad9a635d3ced31366be76f50bec8664e6cc6b9",
+      "source": "node:test/313",
+      "title": "writer proofs are bound to the live lease, lock path, and exact snapshot",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "b75d2e6a134eeeea241cc0c58187cde337829671a682a48dbb60ebeee131a005",
+      "source": "node:test/314",
+      "title": "rejects a symlink lock path",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "9cb330853ba9dbdf9b4f53144fc93e6ca00eab2c5c03a80c54e1cd0c9455e0ed",
+      "source": "node:test/315",
+      "title": "final input check and terminal write exclude a waiting cooperating writer",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "15f7380c9cd86d1cda398b6cf057eab89c2d1813a2f90af277b0424385a7a026",
+      "source": "node:test/316",
+      "title": "a foreground child retains the lock if its wrapper is killed",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "5c17dfe19abf01b9bec06f8fc43a02928d291c640f38d7d770f0bc9427d071b2",
+      "source": "node:test/317",
+      "title": "rejects invalid, unknown, recursive, and production invocations",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "74d4b65f9ad3df1df45a7d461f5106dcf46c486f641b7748d235e8829c7a93f4",
+      "source": "node:test/318",
+      "title": "terminates an orphaned wrapper tree and confirms the port is free",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "002f8fa7f318a2418e8695d665862833a3ee40632d8e514daf518c26a89c215b",
+      "source": "node:test/319",
+      "title": ".replit keeps Project isolated from the four registered validation workflows",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ea4bc81f4e0a0a6b51ce8e985980dd5613bf5470976dfcdf75db18a8ec366d88",
+      "source": "node:test/320",
+      "title": "validation manifest is the exact five-command registration contract",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "6c4da48a2372631f47ef4e195adead5e3882bf3484a50a9bf6f283ad3e924bce",
+      "source": "node:test/321",
+      "title": "heavy routing stays serialized and does not add an outer lock",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "67f2bdf98b77accbaa6e44f2df6010a3fae486169637610a81818f35c65c041f",
+      "source": "node:test/322",
+      "title": "tier steps use the canonical registry and named conflict resources",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "5e4ee1eb561aa0b409fbba3be7cfca6e4de0d06efb4b2f8ffb6cbda9c92721e7",
+      "source": "node:test/323",
+      "title": "E2E startup and relocated palette ports use tests/e2e/ports.ts",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "f80eccf3f19dacb9c7f944774979fc24a285c4d2f07d523474c092aaec8358aa",
+      "source": "node:test/324",
+      "title": "cleanup contract is guarded against unsafe invocation",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "5a62d4d84e9254b35d9f52b073933bd6a8a5cf844c9539b1a103f13153021be5",
+      "source": "node:test/325",
+      "title": "published archive has the exact canonical package and no obsolete lock template",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ccd9e9ec300401b59c9754db0a37b12f8034f93f02fdbdc56c27c6b60061988c",
+      "source": "node:test/326",
+      "title": "archive skill and templates match tracked sources byte-for-byte",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "f78de17485544e3bdcdc0d19ccb2bd059a159d8e96cfd66209cca23ba292845b",
+      "source": "node:test/327",
+      "title": "extracted templates reject unsafe input and pass isolated smoke checks",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "e80d881a3de0ed740a0db5764c3737a0025475361a5040470153b329b8bda902",
+      "source": "node:test/328",
+      "title": "exits 1 with TIER-LOCK VIOLATION when --allow-no-plan is NOT passed",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "fc28da3409e7c446a83c0c53d0dfe0d612f35e67baf4a5cef0e12eac4febb877",
+      "source": "node:test/329",
+      "title": "warns and exits 0 when --allow-no-plan IS passed (opt-out for ad-hoc / non-task runs)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "a38822e7f0d7b59aa8f5574a5361abdf6860c08afca6d83f9e6ab059e537fc8b",
+      "source": "node:test/330",
+      "title": "returns an explicit unparseable result for successful output without a resolved tier",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "d87cd7619dfab8c9fac6542fbdbf76661c071180ef015b097ae5e2549b1044e0",
+      "source": "node:test/331",
+      "title": "contains only the four canonical task-locked tiers",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "3a12af9fcf2caea9e7eb8184d7a689e1fbf377f96540f2063d5355d6e28ebe4c",
+      "source": "node:test/332",
+      "title": "test-fast remains fail-closed when TASK_PLAN_FILE is absent",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "6249075e90f079995fbf2be9d202b2f15be5454f830f5bbfa5c01ed3d923c91d",
+      "source": "node:test/333",
+      "title": "test-standard remains fail-closed when TASK_PLAN_FILE is absent",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "dcff681049e02c5a00a6de6cfb9fb8e3c69e054c9b3b9465e21528ab1d673b25",
+      "source": "node:test/334",
+      "title": "test-standard-plus remains fail-closed when TASK_PLAN_FILE is absent",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "3755a127f521c2fe49a643bfec9247528573abcfdd8ea6a8c5eb53c4e8ca2e63",
+      "source": "node:test/335",
+      "title": "test-heavy remains fail-closed when TASK_PLAN_FILE is absent",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "0db9d2590f93641ba587cdc7e78d1f022b1f684bbfed0313f20e1735e896b5d0",
+      "source": "node:test/336",
+      "title": "exits 1 with TIER-LOCK VIOLATION (active plans must carry a Validation section)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "38c4e0b1b031ebd8191bb5f27a7b843ee6a9b54c11ab8759646b8a503acea372",
+      "source": "node:test/337",
+      "title": "test-fast / fast → exit 0",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "aa4575ed31a06b488b4f67fdee881934339c67610b74bd706951380b4b9528fa",
+      "source": "node:test/338",
+      "title": "test-standard / standard → exit 0",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "e996db1a4fae88ca4feca625248a2fff51ba7ff909432421a90479b7ac375d67",
+      "source": "node:test/339",
+      "title": "test-standard-plus / full → exit 0 (test-standard-plus maps to full)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "564741de4adae2b9e870980bd0191367ec92fcc7dc23df73903b79142a0ea266",
+      "source": "node:test/340",
+      "title": "test-heavy / full → exit 0 (test-heavy maps to full)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "215c585d99b3238d325fb230044515c5883b26c1933880e22ed68728de791b5c",
+      "source": "node:test/341",
+      "title": "run-tier standard with TASK_PLAN_FILE=test-heavy plan exits 1 (outer check correctly blocks wrong caller)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c0a51c89be31888a878ff07b81c2a1db7b591097e86d904c8d3abf877a0d4315",
+      "source": "node:test/342",
+      "title": "run-tier standard WITHOUT TASK_PLAN_FILE and WITH --allow-no-plan exits 0 (simulates preflight after env-var strip)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "2ec50dcdbdbbdd94299b6eda1bef48e542357d45bf7eab1b5afde4e8b38979af",
+      "source": "node:test/343",
+      "title": "plan requires test-standard but tier=fast → exit 1 with TIER-LOCK VIOLATION",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ad6302e66f3d5d3ba92cac3d857b4e556070ddb62e87c18281cb0fd5b9f4d7b7",
+      "source": "node:test/344",
+      "title": "plan requires test-fast but tier=standard → exit 1 with TIER-LOCK VIOLATION",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "76f96374914f2f6f8ba2f67f47c408a593e7cd5d8f2807f11c944492cfde8280",
+      "source": "node:test/345",
+      "title": "plan requires test-fast but tier=full → exit 1 with TIER-LOCK VIOLATION",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "f0413d660ab08da746aaa334fdda1fd2d2c075314750946a0d9978988f6c9cf3",
+      "source": "node:test/346",
+      "title": "plan requires test-standard-plus but tier=standard → exit 1 (test-standard-plus maps to full)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "af35e828f3c6f4ab457de4f663e491f027d8b36d3fe5be8ccddfad68755b695f",
+      "source": "node:test/347",
+      "title": "plan requires an unregistered placeholder tier name → TIER-LOCK VIOLATION, exits 1",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "1d31abb30857ee1321a87b4eba1bd9f4e0c16b02a37e45557827ba1cda10863e",
+      "source": "node:test/348",
+      "title": "plan with no \\#\\# Validation section → exits 1 with TIER-LOCK VIOLATION",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "72ac8692cdbc7df6c083e0389672feade091b91627b347f23eacce40c762594d",
+      "source": "node:test/349",
+      "title": "rejects a non-numeric lock timing environment value at startup",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "f257117d989c8c836f6c3ac879bb642c3b80a792a920900158030fe174501260",
+      "source": "node:test/350",
+      "title": "rejects zero timing environment values",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "61335209abd2b8afa6b65b6ce29abdcff6c5becfa1357e9676992399cbfcd4ba",
+      "source": "node:test/351",
+      "title": "rejects a missing or empty-after-sanitization resource",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "f688366efaee1a41caa7d5137912aab22571a5ddec13b8d373dd5905928b5ad1",
+      "source": "node:test/352",
+      "title": "reports lock directory creation failures without an uncaught stack",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "be91d8d69783947a8747229597fdf464d017aea491726abde200ecad27ed7a9d",
+      "source": "node:test/353",
+      "title": "reentrant execution preserves shell command behavior",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "3f235120d8963e53f3f4520921ab4f614ff9befbd652e0194663b447c063fac2",
+      "source": "node:test/354",
+      "title": "run-locked-tier rejects extra positional plan files",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "4a6e2cf3aff000bf0602019afbbbe9f79c3ddbd2138aed3f6ea9999b5f6687af",
+      "source": "node:test/355",
+      "title": "shared step list has valid entries and no duplicate names",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "d1847f315a277c8add48aa1efc60192ff65c0bfc70341ed0b28dfab3e10f2880",
+      "source": "node:test/356",
+      "title": "every step with a non-null resource uses a known resource name",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "e1c1c1a23e989d825a3fdd8bc16d96462c3ceb8a2db8e998f20e797a86232109",
+      "source": "node:test/357",
+      "title": "every step declares a non-empty, known tiers array",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c5434676563c5eb09afd564a2912ed141f30cde9363478392fe24e12f656278e",
+      "source": "node:test/358",
+      "title": "getStepsForTier throws on a step with no tier assignment",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "aa517c855a09b1630c89e34b40839a8f744c660f9e8f1e3b8e2d7291732cba86",
+      "source": "node:test/359",
+      "title": "getStepsForTier throws on empty tiers array and unknown tier tag",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "11dd2c66b30fbc967ee1f72a3b330784ce0456153a6b90ecac7e5d4f40ee7eef",
+      "source": "node:test/360",
+      "title": "getStepsForTier selects by tag preserving list order",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "747863d5dd287cc9131912c1e236660fca0ef584a5bfb5ef97050f1ed41d11da",
+      "source": "node:test/361",
+      "title": "tier structure obeys the fast⊂standard⊂full cumulative convention",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "4cb58a23a93df2bddb01a14820db4949577afe8a114f7c946cc29d6bf352bc62",
+      "source": "node:test/362",
+      "title": "check:* script missing from both CI sequence and allowlist is flagged",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "a8d609ec06d3f289a27ee276edd12c1394a2173fccf5c2450395aac17b78f709",
+      "source": "node:test/363",
+      "title": "allowlisted check:* script is not flagged",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "6b6f347ecf804d39f40d1fafcef92761aab9164106f362d49db605acf4809b24",
+      "source": "node:test/364",
+      "title": "stale allowlist entries are flagged (removed script or now in CI)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "bc29eae3bfca7dd8aae1264329f5dc6d80396cd2991182ad775536679115f1f1",
+      "source": "node:test/365",
+      "title": "GitHub parity flags a canonical step with no coverage declaration",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "7e7ba664500154009cd7a738fa059ec079e97819c1837d626d30d0e1e8a9a736",
+      "source": "node:test/366",
+      "title": "GitHub parity flags a missing workflow token and invalid exclusion contract",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "6174ea9cf729c3791324405eca49a9a63c5d82e09ce3369a0591cc3ab875db3e",
+      "source": "node:test/367",
+      "title": "GitHub parity binds tokens to the canonical command or a documented equivalent",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "d4852d7e8eb136f342b48737372cd0cd6a00872c15650355d030cf96851683c1",
+      "source": "node:test/368",
+      "title": "GitHub parity only accepts executable command positions, not comments or echo arguments",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "1dacd052fcfbb230d479c5a2e3f048f5b501264c6f7408f5fb7452c687aeae16",
+      "source": "node:test/369",
+      "title": "GitHub parity flags stale declarations and accepts documented local-only exclusions",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "7334383c6e2b21be5d76a8842ef759064c70ef1ba8b513125f24043148fe76d1",
+      "source": "node:test/370",
+      "title": "GitHub parity requires local-only exclusions to name a supported environment dependency",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "cce46c6ea5aba1f2149b6f00cb7cd6121de2f4cdc7fd1f3eb29f70f07bfaa858",
+      "source": "node:test/371",
+      "title": "GitHub parity flags an exclusion that becomes unnecessary when its command reaches PR CI",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "71043dc98a84789ee60c4af3ba18c8fd232573adb2474a5b546254cb3a3957fc",
+      "source": "node:test/372",
+      "title": "GitHub workflow extraction counts run commands but not comments or step names",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "3c33446e4b40b220f0e30d3454e7df3469276aaa8f68e268765e58cbf9568ed5",
+      "source": "node:test/373",
+      "title": "GitHub workflow text includes PR run commands and ignores main-only workflows",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "760a8f518d3b8b1ce0d19aeddbf93249c8b6bfe809a02ea04d945bd6321d7c63",
+      "source": "node:test/374",
+      "title": "fresh-database E2E workflows use schema push instead of migrations",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "b47bd4499aad451578608b1f2232de7abc4a72d116b2cdad3450e9db06d1ba40",
+      "source": "node:test/375",
+      "title": "workflow scopes separate pull-request and push commands",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "a9656d1960e61c2e6728d3b7a7801225cc1a9c9b97a93528dde1cc6e99231c4a",
+      "source": "node:test/376",
+      "title": "workflow reader returns only executable run commands",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "9f5af7e68bb170569be8ca02788b50f349883437a2431f0623f97f24a4ecea74",
+      "source": "node:test/377",
+      "title": "duplicate targeted unit and browser runs are flagged within the same event scope",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "6762cfe6132c717d5e53fa11de01cf093845d5d1fd7f2593f17f94f04ae1803f",
+      "source": "node:test/378",
+      "title": "browser suite detection normalizes pnpm exec, quotes, and continuations",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "3950d84871fdc49194fa266d2fe51a31f74ea1fa7444af61fd86a938dfc31f5a",
+      "source": "node:test/379",
+      "title": "workflow comment lines containing Playwright are not executable commands",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "e3e77cf34ff77e1461181b4397d0cb46346897f5625de7d09d30bf87fc39e960",
+      "source": "node:test/380",
+      "title": "real E2E workflows preserve the fresh-database bootstrap contract",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "e879b2e1076b7b2f0a620756736834eeff4e90fbaa1b2ed6dbe5d1995b9245d9",
+      "source": "node:test/381",
+      "title": "targeted suites on a different event scope do not count as duplicates",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "525ce05f6043d7a82bb0274a806657c751eb4356b15b85f9ebf40142bcb2df3b",
+      "source": "node:test/382",
+      "title": "a recorded overlap is accepted and stale or malformed declarations are flagged",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "5821989a6166c5c99d499837f1421609866be398a3127257c4e1e48f70fa7815",
+      "source": "node:test/383",
+      "title": "a check file referenced nowhere is flagged as an orphan",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "4cda7dc7051573f597d274b675ac78075c89f39ac57ca0663205a4c78e0ef91a",
+      "source": "node:test/384",
+      "title": "an allowlisted orphan check file is not flagged",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "5a02f3248fc3f933ba38f88c18b4aa05501e1c79b1d678412a7cff31ba7dd8ab",
+      "source": "node:test/385",
+      "title": "GitHub workflow references count as non-orphaned check-file references",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ae69929c28e02ba63af617499c31e0f4086cafaffd6322b366957e1ba4da12bd",
+      "source": "node:test/386",
+      "title": "stale orphan allowlist entries are flagged (deleted file or now referenced)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "085972ed8389267b2595adb69da34ace66ef17592a292c460fba30ac3e2982e7",
+      "source": "node:test/387",
+      "title": "all check:* scripts in package.json are covered by the shared step list or allowlist",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "96a2342f25f3cf1534c026f8f2f1bf7bcd96b97f3dc3a35d59be03fbc6a102dc",
+      "source": "node:test/388",
+      "title": "every canonical validation step has portable GitHub coverage or a documented local-only exclusion",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "23fb20f0d2a64c0e81fa3406ccf246c1fb7e9008150feaa4974525f48eab1dcf",
+      "source": "node:test/389",
+      "title": "the committed workflows have no unrecorded duplicate behavioral suite runs or stale overlap exclusions",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "0c944cbee4b58ae7148cfd4e2a19e65c931b224b82eda801d3b3cc9733f6ea55",
+      "source": "node:test/390",
+      "title": "all check-* files on disk are referenced somewhere or allowlisted",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "1c42614cf665f4120e2edefc2ab453512f318de92d248321e0f17d6ff1dcc580",
+      "source": "node:test/391",
+      "title": "unreadable reference files produce a named diagnostic and continue",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "79bbba29ddc75788122ea12480a136257a12f12b76df8ebc1e17215c51413c26",
+      "source": "node:test/392",
+      "title": "treats two builds with identical content but different fetchedAt as UNCHANGED",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "860eed1f4d2a42e49992b00e995af984a0cf545386c2c55e96bf5b750613c25d",
+      "source": "node:test/393",
+      "title": "treats two builds with different content as CHANGED even when timestamps match",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "d2288655e4474f1333edcb52842866088178baef1696803d9dbe2ab8f961a435",
+      "source": "node:test/394",
+      "title": "treats a missing baseline as CHANGED (first-ever run)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ba5b0824e3ca41dfd5012e39beb3bddfa24db3edffd230dadc923f25ad08d1a8",
+      "source": "node:test/395",
+      "title": "ignores object-key ordering differences (canonical sort)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "d6c5a955471b23b9f8a9deaae494be4caff066ba3a54a78985f5f08c72b6306f",
+      "source": "node:test/396",
+      "title": "--dry-run: valid plan resolves correct command and exits 0",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "1b0d78b8954c27c765632a0a27404703bb2f7a9d1cf0e724670f332a13a09a92",
+      "source": "node:test/397",
+      "title": "--dry-run: test-fast tier resolves to the fast command",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "cfed1af9c6b439c000a7f03a210bc384a12bd093882b37699af03199ff068497",
+      "source": "node:test/398",
+      "title": "accepts pnpm's conventional -- argument separator",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "bb60bda5702fe595db7068bb192e1cdab1570b5d36516986a71a0c205fd9640a",
+      "source": "node:test/399",
+      "title": "--dry-run: test-heavy tier resolves to the heavy command",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "58cdd6d5c71d30b4bf448ac09405f82d7a4caaa9e92809f1acdae9a34ca5db7a",
+      "source": "node:test/400",
+      "title": "--dry-run: test-standard-plus tier resolves to the standard-plus command",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "2a31d1c9d8ab10e91a68345fadeb66ae42c5924f2d30d04df3cd6d05a25caf7a",
+      "source": "node:test/401",
+      "title": "missing plan file exits 1 with a clear error",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c15d51b569745a89282ce5ba2c078ecd23453de2224466a69ccf44aaf41e36b4",
+      "source": "node:test/402",
+      "title": "no argument exits 1 with usage hint",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "0bea2e6a3b18ec4094ebce1034c74f9dbbdfa7c816f13547fddffe812243e32c",
+      "source": "node:test/403",
+      "title": "plan with no \\#\\# Validation section exits 1 with required-section error",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ef97064cc86110682f4c1b9de59b2afc2052200977c66946736754b322db694d",
+      "source": "node:test/404",
+      "title": "\\#\\# Validation present but no **Command:** line exits 1",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "9348f578fdc81c3be7f66efbe1125093378b240e8528ae5057b5e1983f79a051",
+      "source": "node:test/405",
+      "title": "**Command:** present but no backtick-quoted value exits 1",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "370d8436d531c16fef1c3129a954486b1813216cd5be6e8bab1045fa4558e428",
+      "source": "node:test/406",
+      "title": "unrecognised tier name exits 1 with valid tier list",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "06ae8174ac12019d0a95c326d84bcfa045ab0c751d8eff646f0c1c48d42e2037",
+      "source": "node:test/407",
+      "title": "--dry-run does not launch the actual validation command",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "5c1b87e7ad91a57438518fe8cc27b96d2bec4e7b5114b85062825a335d5406f7",
+      "source": "node:test/408",
+      "title": "task validation scopes the exact plan without mutating .replit",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "4187efa8ed850aee2a9359acf2539e169e3d023edb223d72c836f621ae97a335",
+      "source": "node:test/409",
+      "title": "managed task validation passes the exact plan to its selected registered tier without changing workflow definitions",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "a1ed440fa70fed9adfdee449b6e0db3a3f7bcb651c3f8e833fd6eb789490ef84",
+      "source": "node:test/410",
+      "title": "managed task validation does not launch a tier when the supplied plan is unreadable",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "f83e7e938d9a0e9394aa649bc6a524696dadecb6ee73ef696b3d3bc60767f838",
+      "source": "node:test/411",
+      "title": "unit entry points use dedicated timeout guards",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "79bbb53d5c120691c97fe60a376a5a2403904c1aabc441fa5201c2421eeb57ab",
+      "source": "node:test/412",
+      "title": "normal completion preserves the wrapped command exit code",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "690d44dcfa26411719dfcb32abfa936d1508debda3e8bbc23f6bca356ed14d31",
+      "source": "node:test/413",
+      "title": "budget breach remains exit 124",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "e32d883126e04e9e20b4a5ca1641c7bfc744c52d2f679d466dfb9ccbf22eabc2",
+      "source": "node:test/414",
+      "title": "interrupting an outer wrapper cleans up nested detached child groups",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "41b4dcec1dd93536f842f731433bde57399d76973e6e7c61b4e5e2cd7cd519a3",
+      "source": "node:test/415",
+      "title": "acquires lock, runs command, propagates exit code, releases lock",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "7f3d56f4714b5b8f0e2e9513f4e346321be2c5b4a99f84252d7c4005c36044d6",
+      "source": "node:test/416",
+      "title": "write failure cleans up the partial lock and does not acquire it",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c781e09039cb37a055688ff63eea972776bf95d8e0c9c5c96ce985d85a0c3ad5",
+      "source": "node:test/417",
+      "title": "cleanup failure during lock creation reports a non-acquired lock",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "d3e36329c3f90822995f5c58b92583f54f72ea571aaf3d020166d7f195dc8978",
+      "source": "node:test/418",
+      "title": "second process queues behind holder and runs after release",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "156781efa6772a5900932d67185c424baad1e2d1e5b2025113ba9a0d31584e87",
+      "source": "node:test/419",
+      "title": "reclaims a stale lock whose recorded pid is dead",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "2ce2c243df460f72f7f172d5ae2ebf66636ef22f412a330fcb6800c97d282de0",
+      "source": "node:test/420",
+      "title": "reclaims a lock with a stale heartbeat even if pid is alive (pid reuse)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "228d0aa3f5759f7d8f69d3d4564b0bc94559c084c891b3f3018b26c76c81ab41",
+      "source": "node:test/421",
+      "title": "holder heartbeat keeps lock fresh; waiter does not reclaim",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "c7faf06233e14461ae5dd4116033226fa691ded34b6f9572559f2e7a14d0de16",
+      "source": "node:test/422",
+      "title": "max-hold-age safety valve reclaims a hung-but-alive holder",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "dc0bdfcd616d7f974c11c3fec47ea00b529de8ce51c9b882253c83f9da1ea0ea",
+      "source": "node:test/423",
+      "title": "nested wrapper under a lock-holding ancestor runs without re-acquiring (no self-deadlock)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "622a1553b2e268fe65a1c2b9dab1844a82f165ff4f96ddbc0eb0fd68db8ac770",
+      "source": "node:test/424",
+      "title": "SIGTERM releases the lock and terminates the wrapped command",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "5e5ebf4cdaf9ced153dbba6dbd70818d403e99341889ae07ea62ed1d8e9c150c",
+      "source": "node:test/425",
+      "title": "--resource gives each resource its own lock file",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "441fe06cf30dcb3f13901b541bb5acc89d4d8ce188551167abcb0443e32d9a04",
+      "source": "node:test/426",
+      "title": "two processes competing for the same named resource serialize",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "b7625b34597056adcdd1113d1372a8423107f362621de0e791f37ee515c01546",
+      "source": "node:test/427",
+      "title": "processes for different named resources do not block each other",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "1726de74cdf877846e7f0947243d2d5cd1f4971c770e72d7d79b1c18bfe57236",
+      "source": "node:test/428",
+      "title": "reentrancy per named resource: nested wrapper for same resource skips re-acquire",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "90bf8b526f31d2bc685a1dc25bbeb5972bd8c77299d4028e56f8fbf68c40e7d1",
+      "source": "node:test/429",
+      "title": "outer codegen lock exports only CODEGEN env var, not UNIT_CPU (correct per-resource env)",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "ee72f8d33e6b92b6225030dfcf180ab3ef5492903f3b6679dae916caa09ba659",
+      "source": "node:test/430",
+      "title": "higher-priority waiter acquires lock before lower-priority waiter",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "b5dd1578f3d114356d18ba65b19fc68a1987bc1bc443ad3585cc18c11e637f09",
+      "source": "node:test/431",
+      "title": "waiter manifest entry is removed after lock acquisition",
+      "line": null,
+      "status": "passed"
+    },
+    {
+      "id": "676ee4e40dc9d65606ee881193bfeb9cf6ff68777093048d0dc46a9ceda4664e",
+      "source": "node:test/432",
+      "title": "waiter manifest entry is removed on SIGTERM (before acquisition)",
+      "line": null,
+      "status": "passed"
+    }
+  ],
+  "reportedCaseCount": 432,
+  "rawExitStatus": 1,
+  "rawReport": {
+    "reference": "node-tap-3581-33a2cda9-df4c-456a-b8f3-8319a2804ad7.tap",
+    "digest": "c0035f0513ab034f55097ea84c93be9c1dee271553b1cc7f450ae5833a9174b3"
+  }
+}

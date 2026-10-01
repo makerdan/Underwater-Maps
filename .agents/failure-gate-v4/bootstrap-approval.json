@@ -1,0 +1,14 @@
+{
+  "format": "failure-gate-v4-bootstrap-approval-v1",
+  "decision": "approved-installation-bootstrap",
+  "source": "explicit-conversation-approval",
+  "approvedAt": "2026-10-01T18:22:33.000Z",
+  "projectNamespace": "bathyscan-failure-gate-v4",
+  "taskRef": "#4803",
+  "title": "Complete Failure Gate v4 locally",
+  "descriptionDigest": "c454d6a1d6eb7ae4ebced475940f02c3c19f570dddd13989ebcd0d2c3409874c",
+  "tier": "test-heavy",
+  "parameters": {},
+  "policySnapshotDigest": "17fbc4a47b24288f3ae150e29aadc50cb75a9d3a18fef847b4ae95c9e9e9454d",
+  "ordinaryActivation": false
+}

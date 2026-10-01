@@ -19,10 +19,25 @@
  *  - DEFAULT_SETTINGS ↔ PutSettingsBody key parity — fails when a field is added to one but not the other
  */
 import { defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
 import budgets from "../../tests/timeout-guard/budgets.json";
 
 export default defineConfig({
   test: {
+    ...(process.env.FAILURE_GATE_TEST_CASE_REPORT_DIR
+      ? {
+          reporters: [
+            "default",
+            [
+              fileURLToPath(new URL("../../scripts/failure-gate-v4/vitest-reporter.mjs", import.meta.url)),
+              {
+                outputDirectory: process.env.FAILURE_GATE_TEST_CASE_REPORT_DIR,
+                suite: "api-server-validation",
+              },
+            ],
+          ],
+        }
+      : {}),
     name: "validation-regression",
     environment: "node",
     globals: true,

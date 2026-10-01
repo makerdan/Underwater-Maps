@@ -17,6 +17,7 @@ import { setTimeout as delay } from "node:timers/promises";
 const FLOCK_EXECUTABLE = "/usr/bin/flock";
 const CONTENTION_EXIT_CODE = 75;
 const RETRY_DELAY_MS = 20;
+const activeProofs = new WeakMap();
 
 export class WriterLockError extends Error {
   constructor(message, options) {
@@ -125,11 +126,53 @@ async function acquire(lockPath, timeoutMs) {
 export async function withWriterLock(lockPath, operation, { timeoutMs = 30_000 } = {}) {
   validateArguments(lockPath, operation, timeoutMs);
   const { handle, stablePath } = await acquire(lockPath, timeoutMs);
+  const lease = { active: true, lockPath: stablePath };
   try {
-    return await operation({ fd: handle.fd, lockPath: stablePath });
+    return await operation({
+      fd: handle.fd,
+      lockPath: stablePath,
+      createProof({ snapshotDigest, snapshotIntegrity, adapterId }) {
+        if (!/^[0-9a-f]{64}$/.test(snapshotDigest ?? "")) {
+          throw new TypeError("writer proof requires a snapshot SHA-256 digest");
+        }
+        if (typeof snapshotIntegrity !== "string" || !snapshotIntegrity ||
+            typeof adapterId !== "string" || !adapterId) {
+          throw new TypeError("writer proof requires snapshot integrity and an adapter id");
+        }
+        const proof = Object.freeze({});
+        activeProofs.set(proof, {
+          lease,
+          snapshotDigest,
+          snapshotIntegrity,
+          adapterId,
+        });
+        return proof;
+      },
+    });
   } finally {
+    lease.active = false;
     await handle.close();
   }
+}
+
+export function assertActiveWriterProof(proof, {
+  lockPath,
+  snapshotDigest,
+  snapshotIntegrity,
+} = {}) {
+  const record = proof && typeof proof === "object" ? activeProofs.get(proof) : null;
+  if (!record || !record.lease.active ||
+      (lockPath !== undefined && record.lease.lockPath !== lockPath) ||
+      (snapshotDigest !== undefined && record.snapshotDigest !== snapshotDigest) ||
+      (snapshotIntegrity !== undefined && record.snapshotIntegrity !== snapshotIntegrity)) {
+    throw new WriterLockError("completion requires an active writer-lock proof bound to the exact final snapshot");
+  }
+  return Object.freeze({
+    lockPath: record.lease.lockPath,
+    snapshotDigest: record.snapshotDigest,
+    snapshotIntegrity: record.snapshotIntegrity,
+    adapterId: record.adapterId,
+  });
 }
 
 /**

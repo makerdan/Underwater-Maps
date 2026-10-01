@@ -1,0 +1,657 @@
+{
+  "schemaVersion": 1,
+  "engine": "vitest",
+  "suite": "poe-unit",
+  "outcome": "passed",
+  "complete": true,
+  "cases": [
+    {
+      "id": "210542bf0a5ea98312aa977aa03161f084161e14f6ed9af6586f4e7187ed008c",
+      "source": "src/__tests__/cache.test.ts",
+      "title": "PoeCache > stores and retrieves a value",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "ef0e1eb61e6d842169ec76064a2e715a886274ab5eccca6a0b89dc4fdd1e1139",
+      "source": "src/__tests__/cache.test.ts",
+      "title": "PoeCache > returns undefined for missing keys",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "6e0e66700a52148fec56415ac6c27362a6190556dc54c77a4f30763ee6a8652e",
+      "source": "src/__tests__/cache.test.ts",
+      "title": "PoeCache > has() returns true for existing key, false otherwise",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "67cef91b22b6e3ab45e6bad838950a41a7ac8e3fbedb8b6ac70a9830e4625b58",
+      "source": "src/__tests__/cache.test.ts",
+      "title": "PoeCache > delete() removes a key",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "0bbbe805eed18d6f395c5d0a5c579a52f8301d11eedb4dd6ea1d5ffb7cfc6924",
+      "source": "src/__tests__/cache.test.ts",
+      "title": "PoeCache > clear() empties the cache",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "06f13efcf06fc64c948eff245e01f47fb54b5b474b1ae44b9645bc42351449f9",
+      "source": "src/__tests__/cache.test.ts",
+      "title": "PoeCache > expires entries after TTL",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "c9ea809c90df39c1caddcd23043c99dfe31dce297f5c4cdd2f83f94fa1a4c577",
+      "source": "src/__tests__/cache.test.ts",
+      "title": "PoeCache > evicts oldest entry when over capacity",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "1352b90f037838fd2b99652e2bdb89da77aca648214d28e197a6a19669dd3806",
+      "source": "src/__tests__/cache.test.ts",
+      "title": "hashCacheKey > returns a non-empty hex string",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "422aa307d4dfc4b41837f6d4761b44c68b725c7daee32b132cd24799b194a9c7",
+      "source": "src/__tests__/cache.test.ts",
+      "title": "hashCacheKey > is deterministic",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "4e344570249db4372d79cd95ba29be0ecf3be77a90da9bca3754496906553f66",
+      "source": "src/__tests__/cache.test.ts",
+      "title": "hashCacheKey > differs for different inputs",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "6cd66c2268c197205555c4b6be0c2ae03ad6252ddc1c1c1a3aa90d47e65aa7ee",
+      "source": "src/__tests__/client.test.ts",
+      "title": "getPoeClient > throws when POE_API_KEY is not set",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "8f31a5ca610785c56de32d8b9ffcf174315365490a395a1dc955b0e49ace5beb",
+      "source": "src/__tests__/client.test.ts",
+      "title": "getPoeClient > returns an OpenAI client instance when POE_API_KEY is set",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "826fe1f2bf516724afc5bed37f0adb372bcf48d1485575525cb67672cb601622",
+      "source": "src/__tests__/client.test.ts",
+      "title": "getPoeClient > returns the same singleton on repeated calls",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "00785b8a484cd1416509564944aecfb1665dd7583eb833adb41ccaf7ecc0f763",
+      "source": "src/__tests__/client.test.ts",
+      "title": "getPoeClient > resets the singleton with resetPoeClient()",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "aa82eead5a6be4f3026a84a777d74d69067e113e4606b2200e6e1de60f5fb0e8",
+      "source": "src/__tests__/client.test.ts",
+      "title": "getPoeClient > client baseURL points at Poe API",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "5e65dfac2903151ef736c3d21f9bb430321db4097328ed1c7d312f35f02be9a6",
+      "source": "src/__tests__/completions.test.ts",
+      "title": "poeComplete > returns trimmed text content",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "2afb7c6900d1fc6a2279568fb139dac02b761c9f8fad6bd5a178f96205a581a9",
+      "source": "src/__tests__/completions.test.ts",
+      "title": "poeComplete > parses tool_calls when present",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "5fced873c1211236de214e02ce78fc0d9afece47b0d71581a99a575de9f1a4cd",
+      "source": "src/__tests__/completions.test.ts",
+      "title": "poeCompleteText > returns just the text string",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "d33db503faafd5cea9cdd506105105d715ca41ce228ea7a22c7bf5b87654e85e",
+      "source": "src/__tests__/errors.test.ts",
+      "title": "PoeCreditsError > has correct httpStatus and name",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "315cae798c9c971b95692257a6ffda50424235e73b5e402c9d70dc6c7748e8ed",
+      "source": "src/__tests__/errors.test.ts",
+      "title": "PoeRateLimitError > has correct httpStatus and name",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "96c4b8eaf634bf4cd0162df9cb862aff1d1a620efa1a5f01da3d6be58b1266bb",
+      "source": "src/__tests__/errors.test.ts",
+      "title": "PoeAuthError > has correct httpStatus and name",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "4605edd0d217c91c98fb7dee1383b28cc593009ea989d0323cc0bfe9839f45a9",
+      "source": "src/__tests__/errors.test.ts",
+      "title": "PoeInvalidRequestError > has correct httpStatus and name",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "2d6da382bf5ef3842f1c280f703ae5870252a07c83e922acf513bc65ef562f35",
+      "source": "src/__tests__/errors.test.ts",
+      "title": "ZoneParseError > has correct name",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "6af545ba37ec472146ee729e74fa6e956a055c02a018c557252d7139b2c3d5af",
+      "source": "src/__tests__/errors.test.ts",
+      "title": "mapHttpStatusToError > maps 401 to PoeAuthError",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "6e480e1d99b6b4830391a24884602ad48e8e384cbc88d0565505c9268f26dc7e",
+      "source": "src/__tests__/errors.test.ts",
+      "title": "mapHttpStatusToError > maps 402 to PoeCreditsError",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "635057866d9bdeb5cc283083854d4d2b37d8a55bd89c1bb1d0b1cb39f3f5a748",
+      "source": "src/__tests__/errors.test.ts",
+      "title": "mapHttpStatusToError > maps 429 to PoeRateLimitError",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "3caef01c548c9d5454498aec8a5258d496c357dc1f3b2c7bed2185df53835ba6",
+      "source": "src/__tests__/errors.test.ts",
+      "title": "mapHttpStatusToError > maps 400 to PoeInvalidRequestError",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "8585f96f1585139df4d37272c7ad224fabfbabf83c775a0b16d2956fb9632f97",
+      "source": "src/__tests__/errors.test.ts",
+      "title": "mapHttpStatusToError > maps unknown status to generic Error",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "49380e389576fb01e77ca713fa3fefd48aa0c975ced1c8414f265e2d0a9fac88",
+      "source": "src/__tests__/errors.test.ts",
+      "title": "normalizePoeError > returns stable, client-safe codes for registry failures",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "2311725ebe00454dbc1c7aafe22bfa3748502a9187658b9878bc531c1f3da51f",
+      "source": "src/__tests__/errors.test.ts",
+      "title": "normalizePoeError > does not expose arbitrary provider error messages",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "aedd918ea7045a16a2c4aa2a95cb200383d64d523f77f38e964b48ecdf1d3cad",
+      "source": "src/__tests__/errors.test.ts",
+      "title": "Poe verification diagnostics > counts repeated registry failures without retaining sensitive details",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "d58c2618c2411672e4c29cd00da66f4bbf0818bb07253a86a240c6dd6e535e63",
+      "source": "src/__tests__/errors.test.ts",
+      "title": "Poe verification diagnostics > keeps cardinality bounded and collapses unknown routes",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "106a83bc2525af1e74d58f6edc7ae81cfefe1f1205b2aa282597a2683e105852",
+      "source": "src/__tests__/errors.test.ts",
+      "title": "Poe verification diagnostics > expires old entries and supports a clean reset",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "1cb7478b44aa178a2fb1159ac7600399407411a32ebe32f84e356e450dee072f",
+      "source": "src/__tests__/errors.test.ts",
+      "title": "Poe verification diagnostics > retains aggregated diagnostics in the configured store after local state resets",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "53625151a759d350c180b28f1beec87fc4e9ec9ccea7c8a11b7482c906b4a3c3",
+      "source": "src/__tests__/errors.test.ts",
+      "title": "Poe verification diagnostics > ignores unrelated Poe failures",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "80a31855c3c32f9070a237a7898c4d0a49fe8770e6a89fbb2a30d5d036d04c0e",
+      "source": "src/__tests__/models.test.ts",
+      "title": "POE_MODELS > has required model keys",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "a9848c81d8d1c9f6be3a59eb4c33e779ab994b4261877eb5de9248c2d19efaea",
+      "source": "src/__tests__/models.test.ts",
+      "title": "MODEL_DEFAULTS > Claude-Sonnet-4.6 supports vision and tools",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "9e6c33493d3796540246925248ef4338785b8f4499989602dc65006eaf858aca",
+      "source": "src/__tests__/models.test.ts",
+      "title": "MODEL_DEFAULTS > Claude-Haiku-4.5 does not support reasoning",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "8160d36be5aded52ac03aa943f9365b9c54b94dcd2abd419ccd782654bb2e1f8",
+      "source": "src/__tests__/models.test.ts",
+      "title": "MODEL_DEFAULTS > DeepSeek-R1 does not support vision",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "688fecbae8d8de86b245e67d84b4aad6cdc5a50bf8e48c2bb4fd7b63dd73589a",
+      "source": "src/__tests__/models.test.ts",
+      "title": "getModelDefaults > returns defaults for known model",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "3251f734ceb2ca16c28ec581dcb6c044f1fc4bd74b3677652e832458fe17fc35",
+      "source": "src/__tests__/models.test.ts",
+      "title": "getModelDefaults > returns fallback for unknown model",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "669e2ff9dc9f1b657694bdebfedbc7376e84a96e1dfee68e268212df978dae26",
+      "source": "src/__tests__/models.test.ts",
+      "title": "Poe capability registry > has a live-verified registry entry for each production Poe route",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "c06f74cff62362ef22a6ffb9e5a93569b94d1a8dcee915ea17047b23a5e8186c",
+      "source": "src/__tests__/models.test.ts",
+      "title": "Poe capability registry > preserves exact live catalogue IDs and rejects a retired primary",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "9541eb4bcebdc527db0b67db4a9f4093462ae5c0830409936d82593c189fb7e3",
+      "source": "src/__tests__/models.test.ts",
+      "title": "Poe capability registry > validates catalogue payloads without contacting Poe",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "9d403fed6b9026bfa46db7490a574b9c645b8d44a83a2b9b763f7940fbafe2fe",
+      "source": "src/__tests__/models.test.ts",
+      "title": "Poe capability registry > fails closed for malformed catalogue entries",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "8dbb5537d63325baee51b961deaa384c46c0851f3d1053bc4b4809753b83b44e",
+      "source": "src/__tests__/models.test.ts",
+      "title": "Poe capability registry > rejects endpoint, capability, and parameter mismatches",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "0a348fe4b71a3ba37802f0a23e5f8d22b3ff655f5eca37ab1fedabc537831d18",
+      "source": "src/__tests__/models.test.ts",
+      "title": "Poe capability registry > selects only an explicit fallback and otherwise fails closed",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "13b597f5f444c097fb1367519a6f68629149b75b7262447b8f31c475f165f3ad",
+      "source": "src/__tests__/responses.test.ts",
+      "title": "poeRespond > returns text, id, and usage",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "cc9e74cc77b672d17ee9230b44f443dd72b9d9fc939d0a5092d59e4b0d614da2",
+      "source": "src/__tests__/responses.test.ts",
+      "title": "poeRespond > accepts valid JSON when jsonSchema is set",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "c97e5822b6f7a26c54386ad8481e90be8626c0a31b70fa856d9d5dbaf6ed9791",
+      "source": "src/__tests__/responses.test.ts",
+      "title": "poeRespond > throws ZoneParseError when output_text is empty and jsonSchema is set",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "c6212f0dcd17c518c4e32fc1164149283985ecc286bebe9701203f12388ea238",
+      "source": "src/__tests__/responses.test.ts",
+      "title": "poeRespond > throws ZoneParseError when output_text is a refusal string and jsonSchema is set",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "3fe8f5dca1a0ba75580106493afcf96ad4ec248d48f98b0f4317ef11ad997588",
+      "source": "src/__tests__/responses.test.ts",
+      "title": "poeRespond > throws ZoneParseError when Poe returns invalid JSON with a jsonSchema",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "4d94ff396c989da617b2b1013ed87df5fc928b846d625b844b6ca139cc319006",
+      "source": "src/__tests__/responses.test.ts",
+      "title": "poeRespond > throws ZoneParseError when Zod validation fails",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "4819a0edec32825e8befa4154c274be94d7d0c17b2c99df7fdf2e1722aff77d6",
+      "source": "src/__tests__/responses.test.ts",
+      "title": "poeRespond > passes when Zod validation succeeds",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "422e2423422fefb95ee1b296ac648e36781254e119297c9825114095cbe641fa",
+      "source": "src/__tests__/responses.test.ts",
+      "title": "validateWithSchema > parses and validates valid JSON",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "dedf7b5dbf96e7b60c336d9d1b07aeb49d183da2162694c0cceb1e6df732e192",
+      "source": "src/__tests__/responses.test.ts",
+      "title": "validateWithSchema > throws ZoneParseError for invalid JSON",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "474c3e3928dc98f795862d43f3c91f4daf218cca55a158c0a2db1268f5182511",
+      "source": "src/__tests__/responses.test.ts",
+      "title": "validateWithSchema > throws ZoneParseError for JSON that fails schema",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "cad9e59508bea78b264e88a945b11774b7bcef4d841eeeae02fb215f26608c7f",
+      "source": "src/__tests__/retry.test.ts",
+      "title": "withRetry > returns value on first success",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "cf87cc38c25a20f1d305ca8e56a6b1eccb58f1bd6530d04f96c4cee65aa963b8",
+      "source": "src/__tests__/retry.test.ts",
+      "title": "withRetry > throws PoeCreditsError immediately on 402 without retrying",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "ed02df3325e5a87d228882d85f533bfdc8f635abdabc750143ba9f5a98adb881",
+      "source": "src/__tests__/retry.test.ts",
+      "title": "withRetry > throws PoeAuthError immediately on 401",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "bde7dc79c88be9491eda661abf6e0a464a7de9e245d316cacefb1c04e20ac7c2",
+      "source": "src/__tests__/retry.test.ts",
+      "title": "withRetry > throws ZoneParseError immediately without any retries",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "e8947af6acf82026f3df0918e913e7fe242b085e8e26488a695abad0aea14c83",
+      "source": "src/__tests__/retry.test.ts",
+      "title": "withRetry > retries on 429 and eventually succeeds",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "c0a2dc50631c890cf28c18bdfdcb7cc0ef9c58b2bba35e7a5ec4eb3d76f43cee",
+      "source": "src/__tests__/retry.test.ts",
+      "title": "withRetry > throws PoeRateLimitError after exhausting retries on 429",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "1083a4af1621e14812631d39685e65af4180af1894036018b34d85fd530d1251",
+      "source": "src/__tests__/vision.test.ts",
+      "title": "buildVisionInput > returns two items: text then image",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "e4f646728dde4aaa68e33977c6dce851ae75777c0c3ab61658e9669935a990ff",
+      "source": "src/__tests__/vision.test.ts",
+      "title": "buildMultiModalMessages > returns system + user messages",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "c6359a8f85df3135567c9e72eac24ee64e0d5ea06393fbadf0ad00f54e2b2396",
+      "source": "src/__tests__/vision.test.ts",
+      "title": "buildMultiModalMessages > includes both text and image in user message",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "91c387d517ba40525ef7fd2a3074697a50887184c9a59a8c069b66b6a14d8553",
+      "source": "src/__tests__/vision.test.ts",
+      "title": "depthGridToBase64Png > returns a PNG data URL string",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "e0e2ee9f9b6f5cffb485b17f629777d61f2dbec3a78caa040d8bcfbf9c7b2ee8",
+      "source": "src/__tests__/vision.test.ts",
+      "title": "depthGridToBase64Png > output is a valid base64 string",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "0fb1b022b0553943b2ae86920376030fdb9390ff265bf65fef0a01d500a5ec2b",
+      "source": "src/__tests__/vision.test.ts",
+      "title": "depthGridToBase64Png > starts with PNG magic bytes",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "81ad50bd6e7f9c3f9c0f007ab1d66d87db1dd556eb3fc982f3c47e3d368dce65",
+      "source": "src/__tests__/vision.test.ts",
+      "title": "depthGridToBase64Png > flat depth grid produces uniform grey pixels",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "203117c81a3687bb3c1ba3edc23e0b1924b4f29454b0d295e1e554b75f18c995",
+      "source": "src/__tests__/vision.test.ts",
+      "title": "depthGridToBase64Png > works with min/max depth range of zero (avoids NaN)",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    },
+    {
+      "id": "2e00cff6077614bbaba631f0bf9826fab151474bee95298dceada42977209323",
+      "source": "src/__tests__/vision.test.ts",
+      "title": "depthGridToBase64Png > handles a larger grid",
+      "line": null,
+      "status": "passed",
+      "reportedStatus": "passed",
+      "errorCount": 0
+    }
+  ]
+}

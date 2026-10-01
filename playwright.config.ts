@@ -59,7 +59,18 @@ export default defineConfig({
   // in a row still fails. CI uses 2 retries for headroom under load.
   retries: process.env["CI"] ? 2 : 1,
   workers: 1,
-  reporter: "list",
+  reporter: process.env.FAILURE_GATE_TEST_CASE_REPORT_DIR
+    ? [
+        ["list"],
+        [
+          "./scripts/failure-gate-v4/playwright-reporter.mjs",
+          {
+            outputDirectory: process.env.FAILURE_GATE_TEST_CASE_REPORT_DIR,
+            suite: process.env.FAILURE_GATE_VALIDATION_TIER ?? "playwright",
+          },
+        ],
+      ]
+    : "list",
   use: {
     baseURL: process.env["E2E_BASE_URL"] ?? E2E_WEB_URL,
     trace: "on-first-retry",

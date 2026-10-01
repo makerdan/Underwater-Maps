@@ -19,6 +19,9 @@
  * Single-step mode (used by the lock wrapper itself):
  *   node scripts/run-tier.mjs --step <name>
  *
+ * Write a complete JSON per-step run report (including steps not reached):
+ *   node scripts/run-tier.mjs standard --report <path>
+ *
  * Step skipping (used by test-heavy-serial.mjs so its PREFLIGHT can run the
  * standard tier without duplicating test:unit, which the heavy runner runs
  * itself with its own locking):
@@ -38,6 +41,14 @@ import { getValidationSteps, getStepsForTier } from "./validation-steps.mjs";
 import { runTierLockDryRun } from "./lib/tier-lock-check.mjs";
 import { cleanStaleValidationLocks } from "./clean-stale-validation-locks.mjs";
 import { checkTestDependencies } from "./lib/check-test-dependencies.mjs";
+import { collectTestCaseDiscovery } from "./failure-gate-v4/test-case-report.mjs";
+import { ENGINE_EVIDENCE_STEPS } from "./failure-gate-v4/engine-evidence.mjs";
+import {
+  createStepRecord,
+  createStepReport,
+  parseReportOption,
+  writeStepReport,
+} from "./lib/step-report.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -53,7 +64,15 @@ const TIER_PRIORITY = { fast: 1, standard: 2, full: 3 };
 // Argument parsing
 // ---------------------------------------------------------------------------
 
-const args = process.argv.slice(2);
+let reportPath = null;
+let args;
+try {
+  ({ argv: args, reportPath } = parseReportOption(process.argv.slice(2)));
+} catch (error) {
+  console.error(`[run-tier] ${error.message}`);
+  process.exit(2);
+}
+reportPath ??= process.env.VALIDATION_REPORT_FILE || null;
 
 // --step mode is handled later (after ALL_STEPS is initialised); skip tier
 // validation for that path so we don't emit a spurious "invalid tier" error.
@@ -286,16 +305,25 @@ function runSingleStep(name) {
       writeFileSync(process.env.VALIDATION_STEP_START_FILE, String(Date.now()));
     } catch { /* best-effort — caller falls back to spawn-start timing */ }
   }
-  const exitCode = execStep(step);
+  const { exitCode } = execStep(step);
   process.exit(exitCode);
 }
 
 function execStep(step) {
   if (typeof step.cmd === "function") {
-    return step.cmd();
+    const exitCode = step.cmd();
+    return { exitCode, rawExitStatus: exitCode, signal: null };
   }
-  const res = spawnSync(step.cmd, { shell: true, stdio: "inherit" });
-  return res.status ?? 1;
+  const res = spawnSync(step.cmd, {
+    shell: true,
+    stdio: "inherit",
+    env: stepEnvironment(step),
+  });
+  return {
+    exitCode: res.status ?? 1,
+    rawExitStatus: res.status,
+    signal: res.signal ?? null,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -313,7 +341,7 @@ function execStep(step) {
 function runStep(step, tierPriority) {
   if (!step.resource) {
     const startMs = Date.now();
-    return { exitCode: execStep(step), startMs };
+    return { ...execStep(step), startMs };
   }
 
   // Steps with resources are invoked via the lock wrapper which calls back
@@ -336,7 +364,7 @@ function runStep(step, tierPriority) {
   ];
   const res = spawnSync(lockCmd[0], lockCmd.slice(1), {
     stdio: "inherit",
-    env: { ...process.env, VALIDATION_STEP_START_FILE: stampFile },
+    env: { ...stepEnvironment(step), VALIDATION_STEP_START_FILE: stampFile },
   });
   let startMs = spawnStart;
   try {
@@ -344,7 +372,7 @@ function runStep(step, tierPriority) {
     if (Number.isFinite(stamped) && stamped >= spawnStart) startMs = stamped;
   } catch { /* stamp missing (child died before writing) — fall back to spawn time */ }
   rmSync(stampFile, { force: true });
-  return { exitCode: res.status ?? 1, startMs };
+  return { exitCode: res.status ?? 1, rawExitStatus: res.status, signal: res.signal ?? null, startMs };
 }
 
 // ---------------------------------------------------------------------------
@@ -354,7 +382,8 @@ function runStep(step, tierPriority) {
 // Tier membership is declared explicitly per step (tiers array) in
 // scripts/validation-steps.mjs; getStepsForTier throws if any step lacks a
 // tier assignment, so a new step can never silently run in zero tiers.
-let steps = getStepsForTier(ALL_STEPS, tier);
+const tierSteps = getStepsForTier(ALL_STEPS, tier);
+let steps = tierSteps;
 if (skippedSteps.length > 0) {
   for (const name of skippedSteps) {
     if (!ALL_STEPS.some((s) => s.name === name)) {
@@ -370,7 +399,15 @@ const tierPriority = TIER_PRIORITY[tier];
 console.log(`\n[run-tier] tier="${tier}" priority=${tierPriority} — running ${steps.length} step(s): ${steps.map((s) => s.name).join(", ")}`);
 
 const overallStart = Date.now();
+const reportStartedAt = new Date(overallStart).toISOString();
 const timings = [];
+const reportSteps = tierSteps.map((step) => createStepRecord({
+  name: step.name,
+  phase: "tier",
+  status: skippedSteps.includes(step.name) ? "skipped" : "not_reached",
+  reason: skippedSteps.includes(step.name) ? "explicitly skipped by --skip" : null,
+}));
+const reportStepByName = new Map(reportSteps.map((step) => [step.name, step]));
 
 if (tier === "full") {
   await runFullTier();
@@ -378,16 +415,18 @@ if (tier === "full") {
   for (const step of steps) {
     const loopNow = Date.now();
     console.log(`\n[run-tier] ▶ step "${step.name}" starting (total elapsed ${((loopNow - overallStart) / 1000).toFixed(0)}s)`);
-    const { exitCode, startMs } = runStep(step, tierPriority);
-    recordStep(step, exitCode, startMs);
+    const result = runStep(step, tierPriority);
+    recordStep(step, result);
+    const { exitCode } = result;
     if (exitCode !== 0) {
-      printSummary();
+      process.exitCode = exitCode;
+      await printSummary();
       process.exit(exitCode);
     }
   }
 }
 
-printSummary();
+await printSummary();
 
 /**
  * The full static tier is commonly run by a managed validation lifecycle that
@@ -404,8 +443,9 @@ async function runFullTier() {
     for (const step of steps) {
       const loopNow = Date.now();
       console.log(`\n[run-tier] ▶ step "${step.name}" starting (total elapsed ${((loopNow - overallStart) / 1000).toFixed(0)}s)`);
-      const { exitCode, startMs } = runStep(step, tierPriority);
-      recordStep(step, exitCode, startMs);
+      const result = runStep(step, tierPriority);
+      recordStep(step, result);
+      const { exitCode } = result;
       if (exitCode !== 0) {
         process.exitCode = exitCode;
         break;
@@ -419,8 +459,9 @@ async function runFullTier() {
   for (const step of preUnitSteps.filter((candidate) => candidate.name === "typecheck")) {
     const loopNow = Date.now();
     console.log(`\n[run-tier] ▶ step "${step.name}" starting (total elapsed ${((loopNow - overallStart) / 1000).toFixed(0)}s)`);
-    const { exitCode, startMs } = runStep(step, tierPriority);
-    recordStep(step, exitCode, startMs);
+    const result = runStep(step, tierPriority);
+    recordStep(step, result);
+    const { exitCode } = result;
     if (exitCode !== 0) firstFailure ||= exitCode;
   }
 
@@ -438,8 +479,9 @@ async function runFullTier() {
   )) {
     const loopNow = Date.now();
     console.log(`\n[run-tier] ▶ step "${step.name}" starting (total elapsed ${((loopNow - overallStart) / 1000).toFixed(0)}s)`);
-    const { exitCode, startMs } = runStep(step, tierPriority);
-    recordStep(step, exitCode, startMs);
+    const result = runStep(step, tierPriority);
+    recordStep(step, result);
+    const { exitCode } = result;
     if (exitCode !== 0) firstFailure ||= exitCode;
   }
 
@@ -458,23 +500,34 @@ async function runFullTier() {
     parallelSteps.map((step) => runStepAsync(step, tierPriority)),
   );
   for (const result of parallelResults) {
-    recordStep(result.step, result.exitCode, result.startMs);
+    recordStep(result.step, result);
     if (result.exitCode !== 0) firstFailure ||= result.exitCode;
   }
 
   for (const step of steps.slice(unitIndex + 1)) {
     const loopNow = Date.now();
     console.log(`\n[run-tier] ▶ step "${step.name}" starting (total elapsed ${((loopNow - overallStart) / 1000).toFixed(0)}s)`);
-    const { exitCode, startMs } = runStep(step, tierPriority);
-    recordStep(step, exitCode, startMs);
+    const result = runStep(step, tierPriority);
+    recordStep(step, result);
+    const { exitCode } = result;
     if (exitCode !== 0) firstFailure ||= exitCode;
   }
   if (firstFailure) process.exitCode = firstFailure;
 }
 
-function recordStep(step, exitCode, startMs) {
-  const secs = ((Date.now() - startMs) / 1000).toFixed(1);
+function recordStep(step, result) {
+  const { exitCode, rawExitStatus, signal, startMs } = result;
+  const finishedMs = Date.now();
+  const secs = ((finishedMs - startMs) / 1000).toFixed(1);
   timings.push({ name: step.name, secs });
+  Object.assign(reportStepByName.get(step.name), {
+    status: exitCode === 0 ? "passed" : "failed",
+    rawExitStatus,
+    signal,
+    startedAt: new Date(startMs).toISOString(),
+    finishedAt: new Date(finishedMs).toISOString(),
+    durationMs: Math.max(0, finishedMs - startMs),
+  });
   console.log(`[run-tier] ■ step "${step.name}" finished in ${secs}s (exit ${exitCode})`);
 }
 
@@ -507,7 +560,7 @@ function runStepAsync(step, tierPriority) {
     const child = spawn(command, args, {
       shell: !lockArgs,
       stdio: "inherit",
-      env: { ...process.env, VALIDATION_STEP_START_FILE: stampFile },
+      env: { ...stepEnvironment(step), VALIDATION_STEP_START_FILE: stampFile },
     });
     child.once("exit", (code) => {
       let startMs = spawnStart;
@@ -516,14 +569,62 @@ function runStepAsync(step, tierPriority) {
         if (Number.isFinite(stamped) && stamped >= spawnStart) startMs = stamped;
       } catch { /* child died before writing — use spawn time */ }
       rmSync(stampFile, { force: true });
-      resolveResult({ step, exitCode: code ?? 1, startMs });
+      resolveResult({
+        step,
+        exitCode: code ?? 1,
+        rawExitStatus: code,
+        signal: child.signalCode ?? null,
+        startMs,
+      });
     });
-    child.once("error", () => resolveResult({ step, exitCode: 1, startMs: spawnStart }));
+    child.once("error", () => resolveResult({
+      step,
+      exitCode: 1,
+      rawExitStatus: null,
+      signal: null,
+      startMs: spawnStart,
+    }));
   });
 }
 
-function printSummary() {
+function stepEnvironment(step) {
+  const env = {
+    ...process.env,
+    // Reporter step context is owned by this runner, never inherited from a
+    // fixture or caller-provided FAILURE_GATE_TEST_STEP value.
+    FAILURE_GATE_TEST_STEP: ENGINE_EVIDENCE_STEPS.includes(step.name) ? step.name : "",
+  };
+  if (step.name === "test:unit") env.FAILURE_GATE_TEST_CASE_SUITE = "scripts-unit";
+  return env;
+}
+
+async function printSummary() {
   console.log(`\n[run-tier] tier="${tier}" step timing summary:`);
   for (const t of timings) console.log(`  ${t.secs.padStart(7)}s  ${t.name}`);
   console.log(`  total: ${((Date.now() - overallStart) / 1000).toFixed(1)}s`);
+  if (reportPath) {
+    const testCases = await collectTestCaseDiscovery(
+      process.env.FAILURE_GATE_TEST_CASE_REPORT_DIR,
+      { required: steps.some((step) => ["test:unit", "test:e2e", "e2e-palette"].includes(step.name)) },
+    );
+    const finishedAt = new Date().toISOString();
+    const report = createStepReport({
+      runner: "run-tier",
+      tier,
+      startedAt: reportStartedAt,
+      finishedAt,
+      rawExitStatus: process.exitCode ?? 0,
+      discovery: {
+        registeredSteps: {
+          available: true,
+          source: "scripts/validation-steps.mjs",
+          names: tierSteps.map((step) => step.name),
+        },
+        testCases,
+      },
+      steps: reportSteps,
+    });
+    writeStepReport(reportPath, report);
+    console.log(`[run-tier] machine-readable report written to ${resolve(reportPath)}`);
+  }
 }

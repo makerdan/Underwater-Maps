@@ -1,79 +1,154 @@
-# Failure Gate v4 coordinator foundation
+# Failure Gate v4: local coordinator, not an ordinary-task cutover
 
-This is a project-local coordinator foundation, not a live validation cutover.
-The implemented subset provides:
+This is a cooperative project-local implementation. It does not control
+Replit's Task Board, validation lifecycle or merge/completion decisions. The
+earlier plan-file route (`pnpm task:validate`) remains the sole ordinary-task
+route. The user has authorized an identity-agnostic source mode: a fresh
+Agent-side `getProjectTask` result in `IN_PROGRESS` may approve only the exact
+task plan and its one declared registered tier. This records the accepted
+source, not who clicked or authenticated reviewer identity. The separate
+pinned-Git-review path requires a real committed decision with the restricted
+`activationScope: "installation-demonstration"` while cutover is blocked.
+Ordinary or unscoped decisions and caller scope flags cannot enable it;
+fixture reviews are not authorization.
 
-- a Node 24 built-in `node:sqlite` durable store, per-workspace namespace check,
-  transactional monotonic local ID reservations, canonical JSON plan and parameter
-  digests, compare-and-swap activation, and same-transaction audit events;
-- a single authoritative active tier with per-tier statuses derived from that
-  assignment; and
-- reviewer decisions loaded with the reviewer roster from blobs in one pinned Git
-  commit, with exact task/plan/tier/policy/version binding and a reviewer restricted
-  to `admin` or `Dan`, distinct from the supplied task-agent identity;
-- a checked required-run preflight that verifies the local task ID, exact canonical
-  plan projection, active assignment, and digests derived from the host's real
-  `VALIDATION_COMMANDS`, `validation-steps.mjs`, runner, timeout, resource-lock,
-  package, and policy inputs; and
-- a transactional blocked-attempt record containing registry/wrapper/tier
-  digests, a tracked-plus-untracked content manifest, a safe runtime/environment
-  identity, explicit `NOT_STARTED` step records, and the block reason.
+Accepted state is not renewed approval of changed governing code. Until cutover,
+the accepted-source route also requires a separately approved installation
+decision at `.agents/failure-gate-v4/bootstrap-approval.json`, pinned in Git and
+matching the exact task, full description, registered `test-heavy` tier, empty
+parameters, namespace and current governing-policy digest. Missing approval,
+an uncommitted edit or policy drift blocks activation, execution and completion.
+The record must be captured from an actual explicit approval; do not create it
+from this documentation or an earlier consumed bootstrap approval.
 
-By default the database is stored under `~/.failure-gate-v4/`, keyed by the resolved
-project root and configured namespace (not in `.local/` or the repository). The
-coordinator uses SQLite WAL, a five-second busy timeout, full synchronous commits,
-and owner-only file/directory permissions where the host permits. Back up the
-database with the coordinator closed or use a SQLite-consistent backup mechanism.
-It is local to one workspace; it does not coordinate independent clones. Live
-state is not tracked or suitable for branch merging.
+## Implemented boundaries
 
-The default committed reviewer source paths are
-`.agents/failure-gate-v4/reviewers.json` with
-`{"reviewers":[{"id":"admin","active":true},{"id":"Dan","active":true}]}`-shaped
-content and `.agents/failure-gate-v4/decisions/<TASK-ID>.json`. A decision must
-contain `decision: "approved"`, `reviewerId`, a non-empty real `reference`, and
-the exact identity/digest/version fields returned by a reserved task. These are
-reviewable committed contents, not cryptographic proof of reviewer identity.
-Do not add approval-shaped fixtures to a production repository; the tests create
-their own temporary Git repositories.
+- The Node 24 SQLite store is outside the repository under
+  `~/.failure-gate-v4/`, keyed by workspace root and namespace. It reserves
+  monotonic IDs transactionally, stores plans, one tier assignment, pinned
+  reviewer or accepted-project-task source and audit history; terminal IDs
+  are retained. A Git commit pins reviewer roster and decision content, **not
+  reviewer identity**.
+  Initialization and reservation fail closed if recognized namespace-scoped
+  tracked JSON projections disagree with retained rows or allocator high-water
+  history. Deleted/recreated history is not reconstructed or renumbered from
+  projections. This detects available conflicts, not loss of all evidence.
+- `agent-task-bridge.mjs` consumes the Agent-side task callback result, derives
+  a plan projection from the exact title and description, reserves a local ID,
+  and activates only the plan-declared registered tier with empty parameters.
+  Activation, required execution and completion re-check the accepted source
+  snapshot; runs retain its source digest. Changed title/description, a
+  non-accepted state or a different task blocks the route. Project-local code
+  cannot authenticate that the supplied JSON came from Replit; use this bridge
+  only with the actual callback result, and do not infer who accepted it.
+- Draft planning guards and baseline discovery are separate from required-tier
+  evidence. The JSON plan must bind the local ID, tier, substantive rationale,
+  no-escalation ceiling, baseline ownership and regression guard. The optional
+  tracked Markdown projection is bound by digest and semantic validation; a
+  checked run currently *requires* it to preserve the existing tier guards.
+  Baseline observations persist immutably with their full manifest/environment,
+  digests, capture time and audit event. Repeated capture returns the original;
+  a snapshot captured after edits cannot prove that a failure predates them.
+- Tier policies bind the registered command and steps, wrappers and report
+  adapters. `run-tier.mjs` and `test-heavy-serial.mjs` can emit versioned JSON
+  reports with raw step exit statuses, not-reached/skipped markers and known
+  discovery. Heavy preserves the standard preflight and serial heavy suites.
+  Node event, Vitest, and Playwright adapters write v2 per-case discovery bound
+  to retained raw engine bytes, stable source/full-title identities, safe
+  environment identity, failure signatures, and actual step. Legacy v1 remains
+  readable but cannot establish trusted case observations. Exact coverage
+  requires all six unit suites, both API shards, and distinct palette/full
+  browser obligations. Recursive unit execution retains the existing suite
+  set and uses `--no-bail` to collect later suites after a package failure.
+  Heavy reports are atomically checkpointed throughout execution; interrupted
+  work stays unknown rather than inheriting a nested fixture report.
+  The checked runner verifies report references and discovery summaries. These
+  adapters have focused tests, but their complete output has not yet been
+  demonstrated in an approved full-tier run.
+- `FailureGateCheckedRunner.runRequiredValidation({taskId,planReference,projectTask})`
+  checks the approved projections/policy and, for an accepted project task, a
+  fresh Agent-side source snapshot. It takes a cooperative lock, records a
+  run lease, invokes the registered tier and persists raw step/report
+  evidence. Its result is **INCOMPLETE** when discovery, required reports,
+  all steps, input stability or effective writer coordination is missing.
+  `requestRequiredValidation` remains a preflight-only blocked-request API.
+  Direct tier and platform-managed results are not v4 evidence.
+- Task-local classification can check exact catalog ignores, owned repairs
+  and bounded three-retry/direct-provenance rules. Diagnostic references must
+  first be verified against trusted local records; caller-supplied `verified`
+  booleans do not establish evidence. Catalog promotion is not supported.
+  `diagnostics.mjs` persists task-local requests and bounded Node test isolation
+  results separately from full-tier attempts. Unsupported isolation or absent
+  trustworthy earlier failure/corroboration records stays blocked; three
+  retries cannot manufacture provenance.
+  `agent-task-bridge.mjs` exposes `assess-local` with only `taskId` and
+  `attemptId`. The store revalidates canonical input/evidence digests and raw
+  report artifacts, derives baseline declarations from its plan, and audits the
+  assessment. `stored-classification.mjs` resolves canonical stored selectors,
+  exact active catalog matches, three distinct safe isolation retries, direct
+  pre-task failure plus independent corroboration, and exact repair-pass
+  references. Classification/repair references persist immutably and are
+  re-resolved at completion. Required-tier and isolation purposes are distinct;
+  only retry slots can use isolation. Missing genuine snapshot/provenance
+  evidence stays unresolved. Owned repairs cannot be cleared by all-pass,
+  missing, skipped or deleted cases.
+  `classify-stored`, `repair-stored`, and `isolate-stored` bridge actions accept
+  only stored selectors. Node isolation uses a fixed executor and a persistent
+  three-attempt budget per task/failure identity, not per report. Its actual
+  writer/snapshot integrity remains unknown; equal before/after hashes are
+  observations, not an attestation. Completion independently recomputes
+  obligations and rechecks safe environment identity under its terminal lock.
+  An eligible assessment is only a nonterminal evidence candidate; fresh source,
+  final inputs and effective writer coverage still have to be verified.
+- Leases exclude another run; orphan quarantine prevents blind relaunch.
+  Explicit stopped-process reconciliation releases an orphan, and failure
+  or cancellation retains an audit trail and terminal tombstone. A successful
+  run finalizes only that run. Local `completeTask` re-checks an accepted task
+  source when applicable, captures the final snapshot and performs its
+  terminal compare-and-swap plus audit write while holding the same live
+  cooperative writer-lock lease. The store checks the proof against the exact
+  snapshot. Current snapshots and writer coverage remain unverified, so
+  completion still blocks and records the reason.
+  The Agent bridge exposes `complete-local` using only the local task/run
+  identifiers and fresh task source, deriving authorization/input digests from
+  the stored attempt. `reconcile-orphan` does not accept a caller assertion that
+  a process stopped: recovery requires a recorded Linux boot/start-time/process
+  group identity, no live group members, and the stable writer lease. Missing
+  identity in legacy attempts requires investigation, not a duplicate launch.
+- `run-writer.mjs` exposes fixed `codegen-generate`, `codegen-stale`,
+  `schema-drift`, and `generated-docs` routes under the stable writer lease.
+  It retains versioned audit, fixed argv, executable/entrypoint digests, and
+  process birth identity; cancellation/orphan handling does not blindly release
+  a live process. Nested lease borrowing is unsupported and fails explicitly.
+  Existing direct routes are unchanged; editor/Agent/direct/background and
+  dependency/application writers still have no verified common boundary.
 
-`FailureGateCheckedRunner.requestRequiredValidation()` currently validates that
-the supplied local task is active and that its exact `planReference` is a regular,
-tracked, project-relative JSON projection whose canonical bytes, namespace, task
-ID, version, and digest match the approved SQLite record. A second task's valid
-plan is not interchangeable. It recomputes separate registry, wrapper, and tier
-definition digests using the host's actual `VALIDATION_COMMANDS` and step list;
-drift from what the reviewer-approved tier digest covers denies the request.
+## Cutover blockers
 
-**Required-tier execution is deliberately blocked.** The existing registered
-commands stream human-readable console output rather than a complete versioned
-machine report containing every required step, raw result, and expected report
-artifact. `test-heavy` has additional preflight and serial-suite semantics in
-`test-heavy-serial.mjs` that cannot be accepted by simply treating its process
-exit code as full-tier evidence. No report adapter is registered. The checked
-preflight therefore launches no command and acquires no run lease. It
-transactionally stores a distinct blocked-attempt record (not a run lease) with
-all steps `NOT_STARTED` and null raw exit status/report references, plus its
-reason codes, plan/auth versions, registry/tier/wrapper digests, manifest, and
-safe environment identity. This is a blocked request, not a validation run and
-not task evidence. It does not treat direct, diagnostic, ad-hoc, or
-platform-managed results as required-tier evidence.
+There is no committed *real* reviewer decision for an ordinary local-ID task,
+no demonstrated live reviewed run, no approved full-tier confirmation of the
+new per-case reports, and no verified participation by all relevant writers
+(editors, codegen and background work). The lock-race test proves only that
+participating processes serialize on this filesystem; it does not prove that
+all workspace writers participate. Snapshots explicitly retain `unknown`
+integrity. Do not forge a decision, set `integrity: verified` from a caller
+flag, or interpret a passing process code as completion. Do not switch the
+ordinary route or activate v4 for ordinary tasks until a real review, complete
+reports, and live final-write coordination prove the full path.
 
-The workspace manifest hashes tracked and non-ignored untracked regular files,
-including generated inputs, and records safe runtime/environment identifiers
-without environment secret values. Secret-bearing files are not read into the
-manifest; their presence makes the snapshot unknown. Ignored paths are listed
-and classified. Snapshot hashes describe an observation, not immutable
-execution: there is no integrated writer lock, so integrity is explicitly
-`unknown` and the request remains blocked. No successful execution snapshot or
-artifact parser is claimed.
+The latest approved installation bootstrap ran through the prior checked route,
+not v4, and hit its configured 50-minute deadline. Completed partial reports
+and an explicitly untrusted nested-fixture overwrite are retained in
+`docs/validation/failure-gate-v4/bootstrap-results/renewed-current-policy/`.
+It is incomplete, not passing evidence. Subsequent governing changes require
+new approval. The original namespace-matching ledger is unavailable; tracked
+projections are not allocator, audit or lease backups and cannot reconstruct it.
+The specific loss cause has not been established. Home-only state outside the
+project is not automatically carried through project checkpoints/task merges.
+No approval, history recovery or successful live cutover is implied by fixtures.
 
-Still unavailable: authenticated task-agent identity; a host-approved plan
-authoring/projection flow; a machine-readable complete report adapter and
-required-tier executor/run lease; immutable run isolation/effective writer
-coordination; post-run evidence/report persistence; validation result assessment;
-diagnostics, failure classification, and baseline governance; amendments and
-terminal completion/release; recovery/orphan handling; capability discovery; and
-bootstrap/cutover. In particular, do not use this foundation to authorize
-ordinary validation or claim local completion. It does not bind or control
-Replit Agent platform tasks or completion.
+The local store is per workspace, not shared between clones. Keep its SQLite
+file and stable lock inode intact during active work; use a SQLite-consistent
+backup while closed or with a backup mechanism. An agent with shell access
+can bypass local tooling and an out-of-band writer can bypass advisory locks.
+Never describe this as authenticated reviewer identity or platform enforcement.

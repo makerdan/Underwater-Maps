@@ -19,12 +19,19 @@ export const TIER_POLICY_FILES = Object.freeze([
   ".npmrc",
   "pnpm-workspace.yaml",
   "package.json",
+  "scripts/package.json",
   "pnpm-lock.yaml",
   "playwright.config.ts",
   "scripts/register-validation-commands.mjs",
   "scripts/validation-steps.mjs",
   "scripts/codegen-freshness.mjs",
   "scripts/run-tier.mjs",
+  "scripts/lib/step-report.mjs",
+  "scripts/run-locked-tier.mjs",
+  "scripts/lib/tier-lock-check.mjs",
+  "scripts/lib/task-validation-launch.mjs",
+  "scripts/check-failure-gate.mjs",
+  "scripts/check-regression-guard.mjs",
   "scripts/run-with-timeout.mjs",
   "scripts/validation-lock.mjs",
   "scripts/clean-stale-validation-locks.mjs",
@@ -34,6 +41,7 @@ export const TIER_POLICY_FILES = Object.freeze([
   "lib/api-spec/scripts/validate-openapi.mjs",
   "tests/timeout-guard/budgets.json",
   "tests/e2e/ports.ts",
+  "docs/validation/failure-baseline.json",
   "artifacts/api-server/vitest.config.ts",
   "artifacts/api-server/vitest.config.validation.ts",
   "artifacts/bathyscan/vite.config.ts",
@@ -44,16 +52,41 @@ export const TIER_POLICY_FILES = Object.freeze([
   "lib/db/vitest.config.ts",
   "lib/poe/vitest.config.ts",
   "scripts/failure-gate-v4/canonical.mjs",
+  "scripts/failure-gate-v4/engine-evidence.mjs",
+  "scripts/failure-gate-v4/assessment.mjs",
+  "scripts/failure-gate-v4/classification.mjs",
+  "scripts/failure-gate-v4/stored-classification.mjs",
+  "scripts/failure-gate-v4/planning.mjs",
   "scripts/failure-gate-v4/coordinator.mjs",
+  "scripts/failure-gate-v4/run-context.mjs",
   "scripts/failure-gate-v4/git-review.mjs",
   "scripts/failure-gate-v4/policy.mjs",
   "scripts/failure-gate-v4/runner.mjs",
+  "scripts/failure-gate-v4/agent-task-bridge.mjs",
+  "scripts/failure-gate-v4/bootstrap-policy.mjs",
+  "scripts/failure-gate-v4/diagnostics.mjs",
+  "scripts/failure-gate-v4/suite-coverage.mjs",
+  "scripts/failure-gate-v4/recovery.mjs",
+  "scripts/failure-gate-v4/replit-task.mjs",
   "scripts/failure-gate-v4/snapshot.mjs",
   "scripts/failure-gate-v4/store.mjs",
   "scripts/failure-gate-v4/writer-lock.mjs",
+  "scripts/failure-gate-v4/node-tap-report.mjs",
+  "scripts/failure-gate-v4/node-test-reporter.mjs",
+  "scripts/failure-gate-v4/playwright-reporter.mjs",
+  "scripts/failure-gate-v4/run-node-test-suite.mjs",
+  "scripts/failure-gate-v4/run-writer.mjs",
+  "scripts/failure-gate-v4/test-case-report.mjs",
+  "scripts/failure-gate-v4/vitest-reporter.mjs",
+  "scripts/failure-gate-v4/writer-routes.mjs",
 ]);
 
-const STEP_REPORT_ADAPTERS = Object.freeze({});
+const STEP_REPORT_ADAPTERS = Object.freeze({
+  "test-fast": "run-tier-report-v2",
+  "test-standard": "run-tier-report-v2",
+  "test-standard-plus": "run-tier-report-v2",
+  "test-heavy": "test-heavy-report-v2",
+});
 
 function rootFile(root, path) {
   const candidate = resolve(root, path);
@@ -101,10 +134,17 @@ export function getRegisteredTierPolicy(projectRoot, tierName) {
     "scripts/register-validation-commands.mjs": new URL("../register-validation-commands.mjs", import.meta.url),
     "scripts/validation-steps.mjs": new URL("../validation-steps.mjs", import.meta.url),
     "scripts/failure-gate-v4/canonical.mjs": new URL("./canonical.mjs", import.meta.url),
+    "scripts/failure-gate-v4/assessment.mjs": new URL("./assessment.mjs", import.meta.url),
     "scripts/failure-gate-v4/coordinator.mjs": new URL("./coordinator.mjs", import.meta.url),
     "scripts/failure-gate-v4/git-review.mjs": new URL("./git-review.mjs", import.meta.url),
     "scripts/failure-gate-v4/policy.mjs": new URL("./policy.mjs", import.meta.url),
     "scripts/failure-gate-v4/runner.mjs": new URL("./runner.mjs", import.meta.url),
+    "scripts/failure-gate-v4/suite-coverage.mjs": new URL("./suite-coverage.mjs", import.meta.url),
+    "scripts/failure-gate-v4/agent-task-bridge.mjs": new URL("./agent-task-bridge.mjs", import.meta.url),
+    "scripts/failure-gate-v4/replit-task.mjs": new URL("./replit-task.mjs", import.meta.url),
+    "scripts/failure-gate-v4/bootstrap-policy.mjs": new URL("./bootstrap-policy.mjs", import.meta.url),
+    "scripts/failure-gate-v4/diagnostics.mjs": new URL("./diagnostics.mjs", import.meta.url),
+    "scripts/failure-gate-v4/recovery.mjs": new URL("./recovery.mjs", import.meta.url),
     "scripts/failure-gate-v4/snapshot.mjs": new URL("./snapshot.mjs", import.meta.url),
     "scripts/failure-gate-v4/store.mjs": new URL("./store.mjs", import.meta.url),
     "scripts/failure-gate-v4/writer-lock.mjs": new URL("./writer-lock.mjs", import.meta.url),
@@ -119,7 +159,14 @@ export function getRegisteredTierPolicy(projectRoot, tierName) {
     stepDefinitions,
   });
   const wrapperDigest = digestJson(fileDigests);
-  const selectedStepNames = selectedSteps.map((step) => step.name);
+  const selectedStepNames = tierName === "test-heavy"
+    ? [
+        "PREFLIGHT",
+        ...getStepsForTier(allSteps, "standard")
+          .filter((step) => step.name !== "test:unit").map((step) => step.name),
+        "test:unit", "e2e-palette", "test:e2e",
+      ]
+    : selectedSteps.map((step) => step.name);
   const tierDefinitionDigest = digestJson({
     tierName,
     command,

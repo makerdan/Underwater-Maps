@@ -1,17 +1,19 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import {
-  copyFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync,
+  appendFileSync, copyFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { canonicalJson, digestJson } from "../failure-gate-v4/canonical.mjs";
+import { canonicalJson, digestJson, sha256 } from "../failure-gate-v4/canonical.mjs";
 import { FailureGateCoordinator, FailureGateStore } from "../failure-gate-v4/coordinator.mjs";
 import {
   getRegisteredTierPolicy, getRegisteredValidationPolicy, TIER_POLICY_FILES,
 } from "../failure-gate-v4/policy.mjs";
 import { FailureGateCheckedRunner, verifyApprovedPlanProjection } from "../failure-gate-v4/runner.mjs";
+import { REPLIT_TASK_POLICY_ID } from "../failure-gate-v4/replit-task.mjs";
+import { BOOTSTRAP_APPROVAL_REFERENCE } from "../failure-gate-v4/bootstrap-policy.mjs";
 import { defaultDatabasePath } from "../failure-gate-v4/store.mjs";
 
 const scratch = mkdtempSync(join(tmpdir(), "failure-gate-v4-coordinator-"));
@@ -73,6 +75,7 @@ function decisionFor(task, projectRoot, overrides = {}) {
     policyVersion: task.policyVersion,
     authorizationVersion: task.authorizationVersion + 1,
     decision: "approved",
+    activationScope: "installation-demonstration",
     reviewerId: "admin",
     reference: "conversation:reviewed-exact-plan",
     ...overrides,
@@ -107,8 +110,56 @@ function installPolicyFixture(root) {
     mkdirSync(join(target, ".."), { recursive: true });
     copyFileSync(join(projectRoot, file), target);
   }
+  const baselineTarget = join(root, "docs/validation/failure-baseline.json");
+  mkdirSync(join(baselineTarget, ".."), { recursive: true });
+  copyFileSync(join(projectRoot, "docs/validation/failure-baseline.json"), baselineTarget);
   git(root, "add", ".");
   git(root, "commit", "--quiet", "-m", "validation policy fixture");
+}
+
+function acceptedProjectTask(overrides = {}) {
+  return {
+    taskRef: "#91001",
+    title: "Accepted platform plan",
+    state: "IN_PROGRESS",
+    createdAt: "2026-09-30T12:00:00.000Z",
+    updatedAt: "2026-09-30T12:15:00.000Z",
+    description: [
+      "## Validation",
+      "**Command:** `test-heavy`",
+      "**Why:** The heavy tier runs the exact approved installation bootstrap validation.",
+      "**Do not escalate:** Run only this authorized tier; focused checks are diagnostics.",
+      "",
+      "## Regression Guard",
+      "**Covers:** The API behavior and saved dataset integration.",
+      "**Test location:** `scripts/__tests__/failure-gate-v4-coordinator.test.mjs`",
+      "**What it checks:** Wrong-task plans, tier drift, missing reports, and writer races remain blocked.",
+      "",
+    ].join("\n"),
+    ...overrides,
+  };
+}
+
+function commitBootstrapApproval(context, projectTask, overrides = {}) {
+  const approval = {
+    format: "failure-gate-v4-bootstrap-approval-v1",
+    decision: "approved-installation-bootstrap",
+    source: "explicit-conversation-approval",
+    approvedAt: "2026-09-30T12:30:00.000Z",
+    projectNamespace: context.store.projectNamespace,
+    taskRef: projectTask.taskRef,
+    title: projectTask.title,
+    descriptionDigest: sha256(Buffer.from(projectTask.description, "utf8")),
+    tier: "test-heavy",
+    parameters: {},
+    policySnapshotDigest: getRegisteredValidationPolicy(context.root).snapshotDigest,
+    ordinaryActivation: false,
+    ...overrides,
+  };
+  writeJson(join(context.root, BOOTSTRAP_APPROVAL_REFERENCE), approval);
+  git(context.root, "add", BOOTSTRAP_APPROVAL_REFERENCE);
+  git(context.root, "commit", "--quiet", "-m", "pin synthetic bootstrap approval fixture");
+  return approval;
 }
 
 function createApprovedRunnerTask(context, { planReference = "plans/task.json", title = "Runner evidence fixture" } = {}) {
@@ -134,6 +185,26 @@ function createApprovedRunnerTask(context, { planReference = "plans/task.json", 
   });
   return { task, activated, tierPolicy };
 }
+
+test("tier policy pins every case-report adapter and the invoking scripts package", () => {
+  for (const file of [
+    "scripts/package.json",
+    "docs/validation/failure-baseline.json",
+    "scripts/failure-gate-v4/engine-evidence.mjs",
+    "scripts/failure-gate-v4/node-test-reporter.mjs",
+    "scripts/failure-gate-v4/node-tap-report.mjs",
+    "scripts/failure-gate-v4/playwright-reporter.mjs",
+    "scripts/failure-gate-v4/run-node-test-suite.mjs",
+    "scripts/failure-gate-v4/run-writer.mjs",
+    "scripts/failure-gate-v4/stored-classification.mjs",
+    "scripts/failure-gate-v4/suite-coverage.mjs",
+    "scripts/failure-gate-v4/test-case-report.mjs",
+    "scripts/failure-gate-v4/vitest-reporter.mjs",
+    "scripts/failure-gate-v4/writer-routes.mjs",
+  ]) {
+    assert.ok(TIER_POLICY_FILES.includes(file), `tier policy must bind ${file}`);
+  }
+});
 
 test("canonical JSON digests ignore object insertion order and reject non-JSON plan values", () => {
   assert.equal(canonicalJson({ z: 1, a: { y: 2, x: 3 } }), '{"a":{"x":3,"y":2},"z":1}');
@@ -232,6 +303,253 @@ test("activation reads roster and decision from one pinned Git commit and audits
     "test-standard-plus": "NOT ALLOWED",
     "test-heavy": "NOT ALLOWED",
   });
+  coordinator.close();
+  store.close();
+});
+
+test("ordinary activation stays blocked for a pinned decision without installation-demonstration scope", () => {
+  const { root, store, coordinator } = createContext("activation-scope");
+  const task = createTask(store);
+  const revision = commitDecision(root, task, { activationScope: "ordinary" });
+  assert.throws(() => coordinator.activateTask({
+    taskId: task.taskId,
+    revision,
+    taskAgent: "task-agent",
+  }), /ordinary v4 activation is blocked.*installation-demonstration/);
+  assert.equal(store.getTask(task.taskId).status, "draft");
+  coordinator.close();
+  store.close();
+});
+
+test("a fresh accepted project-task callback activates one exact locally bound plan without reviewer identity", async () => {
+  const { root, store, coordinator } = createContext("accepted-project-task");
+  const snapshot = acceptedProjectTask({ approvedBy: "ignored-unverified-actor" });
+  const reserved = await coordinator.reserveAcceptedProjectTask(snapshot);
+  const bootstrap = commitBootstrapApproval({ root, store }, snapshot);
+  assert.equal(reserved.taskId, "TASK-000001");
+  assert.equal(reserved.requestedTier, "test-heavy");
+  assert.equal(reserved.plan.validation.tier, "test-heavy");
+  assert.equal(bootstrap.tier, reserved.requestedTier);
+  assert.equal(reserved.policyVersion, REPLIT_TASK_POLICY_ID);
+  assert.deepEqual(reserved.parameters, {});
+  assert.deepEqual(reserved.plan.projectTaskSource, {
+    provider: "replit-project-tasks",
+    taskRef: snapshot.taskRef,
+    title: snapshot.title,
+    descriptionDigest: sha256(Buffer.from(snapshot.description, "utf8")),
+    policyId: REPLIT_TASK_POLICY_ID,
+  });
+  assert.equal(
+    git(root, "ls-files", "--error-unmatch", "--", reserved.planReference),
+    reserved.planReference,
+  );
+
+  const changedTimestamp = {
+    ...snapshot,
+    updatedAt: "2026-09-30T12:30:00.000Z",
+    approvedBy: "another-ignored-actor",
+  };
+  const activated = await coordinator.activateAcceptedProjectTask({
+    taskId: reserved.taskId,
+    projectTask: changedTimestamp,
+  });
+  assert.equal(activated.status, "active");
+  assert.equal(activated.authorizedTier, "test-heavy");
+  assert.equal(activated.approval.sourceKind, "replit-project-task");
+  assert.equal(activated.approval.decision, "platform_accepted");
+  assert.equal(activated.approval.identityAttestation, false);
+  assert.equal(Object.hasOwn(activated.approval, "reviewerId"), false);
+  assert.equal(Object.hasOwn(activated.approval, "approvedBy"), false);
+  assert.deepEqual(activated.approval.sourceSnapshot, {
+    taskRef: changedTimestamp.taskRef,
+    title: changedTimestamp.title,
+    description: changedTimestamp.description,
+    state: changedTimestamp.state,
+    createdAt: changedTimestamp.createdAt,
+    updatedAt: changedTimestamp.updatedAt,
+  });
+  assert.equal(activated.approvalSourceKind, "replit-project-task");
+  assert.equal(activated.approvalSourceDigest, digestJson(activated.approval.sourceSnapshot));
+  assert.equal(activated.approvalSourceRevision, null);
+  assert.equal(activated.approval.bootstrapApproval.sourceDigest, digestJson(bootstrap));
+  assert.match(activated.approval.bootstrapApproval.revision, /^[0-9a-f]{40}$/);
+  const checkedRunner = new FailureGateCheckedRunner({ store });
+  await assert.rejects(
+    checkedRunner.runRequiredValidation({ taskId: reserved.taskId }),
+    /requires a fresh Agent-side project-task snapshot/,
+  );
+  await assert.rejects(
+    coordinator.completeTask({ taskId: reserved.taskId }),
+    /requires a fresh Agent-side project-task snapshot/,
+  );
+  assert.deepEqual(store.tierStatuses(reserved.taskId), {
+    "test-fast": "NOT ALLOWED",
+    "test-standard": "NOT ALLOWED",
+    "test-standard-plus": "NOT ALLOWED",
+    "test-heavy": "ALLOWED",
+  });
+  const activationEvent = store.auditEvents(reserved.taskId).find((event) => event.action === "activated");
+  assert.equal(activationEvent.details.approvalSourceKind, "replit-project-task");
+  assert.equal(activationEvent.details.approvalSourceDigest, activated.approvalSourceDigest);
+  assert.equal(activationEvent.details.projectTaskRef, snapshot.taskRef);
+  assert.equal(activationEvent.details.identityAttestation, false);
+  assert.equal(activationEvent.details.bootstrapApprovalSourceRevision, activated.approval.bootstrapApproval.revision);
+  assert.equal(activationEvent.details.bootstrapApprovalSourceDigest, activated.approval.bootstrapApproval.sourceDigest);
+  assert.equal(Object.hasOwn(activationEvent.details, "bootstrapApprovalActor"), false);
+  coordinator.close();
+  store.close();
+});
+
+test("accepted project-task activation is blocked without a separate pinned bootstrap approval or for another subject", async () => {
+  const context = createContext("accepted-project-task-bootstrap-subject");
+  const source = acceptedProjectTask({ taskRef: "#91006" });
+  const task = await context.coordinator.reserveAcceptedProjectTask(source);
+  await assert.rejects(
+    context.coordinator.activateAcceptedProjectTask({ taskId: task.taskId, projectTask: source }),
+    /ordinary v4 activation is blocked; current pinned bootstrap approval unavailable/,
+  );
+
+  commitBootstrapApproval(context, acceptedProjectTask({ taskRef: "#91007" }));
+  await assert.rejects(
+    context.coordinator.activateAcceptedProjectTask({ taskId: task.taskId, projectTask: source }),
+    /pinned bootstrap decision does not approve this exact installation plan and tier/,
+  );
+  assert.equal(context.store.getTask(task.taskId).status, "draft");
+  context.coordinator.close();
+  context.store.close();
+});
+
+test("bootstrap approval rejects stale policy digests and edited uncommitted decisions", async () => {
+  const stale = createContext("accepted-project-task-bootstrap-stale");
+  const source = acceptedProjectTask({ taskRef: "#91008" });
+  commitBootstrapApproval(stale, source);
+  appendFileSync(join(stale.root, ".gitignore"), "\n# bootstrap policy drift fixture\n");
+  git(stale.root, "add", ".gitignore");
+  git(stale.root, "commit", "--quiet", "-m", "change governing bootstrap policy");
+  const staleTask = await stale.coordinator.reserveAcceptedProjectTask(source);
+  await assert.rejects(
+    stale.coordinator.activateAcceptedProjectTask({ taskId: staleTask.taskId, projectTask: source }),
+    /governing policy changed; a renewed separate bootstrap approval is required/,
+  );
+  stale.coordinator.close();
+  stale.store.close();
+
+  const edited = createContext("accepted-project-task-bootstrap-edited");
+  const editedSource = acceptedProjectTask({ taskRef: "#91009" });
+  const editedTask = await edited.coordinator.reserveAcceptedProjectTask(editedSource);
+  commitBootstrapApproval(edited, editedSource);
+  writeJson(join(edited.root, BOOTSTRAP_APPROVAL_REFERENCE), {
+    ...JSON.parse(readFileSync(join(edited.root, BOOTSTRAP_APPROVAL_REFERENCE), "utf8")),
+    approvedAt: "2026-10-01T12:30:00.000Z",
+  });
+  await assert.rejects(
+    edited.coordinator.activateAcceptedProjectTask({ taskId: editedTask.taskId, projectTask: editedSource }),
+    /working bootstrap decision differs from the pinned committed source/,
+  );
+  edited.coordinator.close();
+  edited.store.close();
+});
+
+test("accepted project-task activation rejects substitution, plan drift, invalid state, and caller policy fields", async () => {
+  const { store, coordinator } = createContext("accepted-project-task-denials");
+  const firstSource = acceptedProjectTask({ taskRef: "#91002" });
+  const secondSource = acceptedProjectTask({ taskRef: "#91003" });
+  const first = await coordinator.reserveAcceptedProjectTask(firstSource);
+  const second = await coordinator.reserveAcceptedProjectTask(secondSource);
+
+  await assert.rejects(
+    coordinator.activateAcceptedProjectTask({
+      taskId: first.taskId,
+      projectTask: secondSource,
+    }),
+    /does not match the exact reserved local plan/,
+  );
+  await assert.rejects(
+    coordinator.activateAcceptedProjectTask({
+      taskId: first.taskId,
+      projectTask: { ...firstSource, description: `${firstSource.description}\nchanged` },
+    }),
+    /does not match the exact reserved local plan/,
+  );
+  await assert.rejects(
+    coordinator.activateAcceptedProjectTask({
+      taskId: first.taskId,
+      projectTask: { ...firstSource, title: "Changed title" },
+    }),
+    /does not match the exact reserved local plan/,
+  );
+  await assert.rejects(
+    coordinator.activateAcceptedProjectTask({
+      taskId: first.taskId,
+      projectTask: { ...firstSource, state: "PROPOSED" },
+    }),
+    /not accepted and active/,
+  );
+  await assert.rejects(
+    coordinator.activateAcceptedProjectTask({
+      taskId: first.taskId,
+      projectTask: firstSource,
+      tier: "test-heavy",
+    }),
+    /does not permit caller-selected authorization fields/,
+  );
+  assert.equal(store.getTask(first.taskId).status, "draft");
+  assert.equal(store.getTask(second.taskId).status, "draft");
+  assert.throws(() => store.reserveTask({
+    plan: first.plan,
+    planReference: first.planReference,
+    tier: first.requestedTier,
+    tierDefinitionDigest: first.tierDefinitionDigest,
+  }), /must be derived through reserveAcceptedProjectTask/);
+  coordinator.close();
+  store.close();
+});
+
+test("project-task source reservation is idempotent but changed plan content gets a new local ID", async () => {
+  const { store, coordinator } = createContext("accepted-project-task-reservation-idempotence");
+  const original = acceptedProjectTask({ taskRef: "#91004" });
+  const first = await coordinator.reserveAcceptedProjectTask(original);
+  const repeated = await coordinator.reserveAcceptedProjectTask(original);
+  assert.equal(repeated.taskId, first.taskId);
+  assert.equal(repeated.planDigest, first.planDigest);
+
+  const updated = await coordinator.reserveAcceptedProjectTask({
+    ...original,
+    title: "Updated platform plan",
+  });
+  assert.notEqual(updated.taskId, first.taskId);
+  assert.notEqual(updated.planDigest, first.planDigest);
+  assert.equal(updated.planVersion, 1);
+  assert.equal(store.getTask(first.taskId).status, "draft");
+  coordinator.close();
+  store.close();
+});
+
+test("project-task reservation creates a new local ID when its authorized tier policy changes", async () => {
+  const { root, store, coordinator } = createContext("accepted-project-task-policy-renewal");
+  const source = acceptedProjectTask({ taskRef: "#91005" });
+  commitBootstrapApproval({ root, store }, source);
+  const first = await coordinator.reserveAcceptedProjectTask(source);
+
+  appendFileSync(join(root, "scripts/package.json"), "\n");
+  git(root, "add", "scripts/package.json");
+  git(root, "commit", "--quiet", "-m", "change fixture policy input");
+
+  const renewed = await coordinator.reserveAcceptedProjectTask(source);
+  assert.notEqual(renewed.taskId, first.taskId);
+  assert.notEqual(renewed.tierDefinitionDigest, first.tierDefinitionDigest);
+  assert.notEqual(renewed.planReference, first.planReference);
+  assert.equal(renewed.status, "draft");
+  await assert.rejects(
+    coordinator.activateAcceptedProjectTask({ taskId: renewed.taskId, projectTask: source }),
+    /governing policy changed; a renewed separate bootstrap approval is required/,
+  );
+  commitBootstrapApproval({ root, store }, source);
+  const renewedActivation = await coordinator.activateAcceptedProjectTask({
+    taskId: renewed.taskId,
+    projectTask: source,
+  });
+  assert.equal(renewedActivation.authorizedTier, "test-heavy");
   coordinator.close();
   store.close();
 });
@@ -413,7 +731,7 @@ test("checked runner rejects a changed wrapper before launch against the approve
   context.store.close();
 });
 
-test("runner records a blocked required-tier attempt rather than launching an unparseable legacy command", async () => {
+test("preflight-only requests remain blocked despite a registered report adapter", async () => {
   const context = createContext("runner-no-report-adapter");
   const { task, tierPolicy } = createApprovedRunnerTask(context);
   const runner = new FailureGateCheckedRunner({ store: context.store });
@@ -423,8 +741,8 @@ test("runner records a blocked required-tier attempt rather than launching an un
   assert.equal(result.commandLaunched, false);
   assert.equal(result.leaseAcquired, false);
   assert.equal(result.rawExitStatus, null);
-  assert.equal(result.reportAdapterId, null);
-  assert.ok(result.reasons.includes("required_report_adapter_missing"));
+  assert.equal(result.reportAdapterId, "run-tier-report-v2");
+  assert.ok(result.reasons.includes("no_checked_executor_is_registered_for_the_report_adapter"));
   assert.ok(result.reasons.includes("writer_coordination_adapter_unavailable"));
   assert.equal(result.snapshotIntegrity, "unknown");
   assert.ok(result.stepResults.length > 0);
@@ -437,7 +755,7 @@ test("runner records a blocked required-tier attempt rather than launching an un
   assert.equal(persisted.purpose, "required_tier_validation");
   assert.equal(persisted.status, "blocked");
   assert.equal(persisted.leaseAcquired, false);
-  assert.equal(persisted.reportAdapterId, null);
+  assert.equal(persisted.reportAdapterId, "run-tier-report-v2");
   assert.equal(persisted.tierDefinitionDigest, tierPolicy.tierDefinitionDigest);
   assert.equal(persisted.registryDigest, tierPolicy.registryDigest);
   assert.equal(persisted.wrapperDigest, tierPolicy.wrapperDigest);
@@ -450,8 +768,55 @@ test("runner records a blocked required-tier attempt rather than launching an un
   assert.equal(persisted.rawExitStatus, null);
   assert.ok(context.store.auditEvents(task.taskId).some((event) =>
     event.action === "required_run_blocked" &&
-    event.details.reasonCodes.includes("required_report_adapter_missing"),
+    event.details.reasonCodes.includes("no_checked_executor_is_registered_for_the_report_adapter"),
   ));
+  context.coordinator.close();
+  context.store.close();
+});
+
+test("checked dispatch cannot launch without a digest-bound legacy plan and passing draft guards", async () => {
+  const context = createContext("checked-dispatch-denies-unguarded-plan");
+  const { task } = createApprovedRunnerTask(context);
+  const runner = new FailureGateCheckedRunner({ store: context.store });
+  await assert.rejects(
+    runner.runRequiredValidation({ taskId: task.taskId }),
+    /ENOENT|catalog|checked execution requires passing plan guards/,
+  );
+  assert.deepEqual(context.store.validationAttempts(task.taskId), []);
+  await assert.rejects(
+    runner.runRequiredValidation({ taskId: task.taskId, planReference: "plans/other.json" }),
+    /does not match the task's exact approved plan reference/,
+  );
+  assert.deepEqual(context.store.validationAttempts(task.taskId), []);
+  context.coordinator.close();
+  context.store.close();
+});
+
+test("checked dispatch rejects Clerk substitution and selector or Node runtime controls before creating a lease", async () => {
+  const context = createContext("checked-dispatch-environment-controls");
+  const { task } = createApprovedRunnerTask(context);
+  const runner = new FailureGateCheckedRunner({ store: context.store });
+  const priorClerk = process.env.E2E_REAL_CLERK;
+  const priorNodeOptions = process.env.NODE_OPTIONS;
+  try {
+    process.env.E2E_REAL_CLERK = "1";
+    await assert.rejects(
+      runner.runRequiredValidation({ taskId: task.taskId }),
+      /coverage-reducing environment controls: E2E_REAL_CLERK/,
+    );
+    delete process.env.E2E_REAL_CLERK;
+    process.env.NODE_OPTIONS = "--require=unapproved-runtime-hook";
+    await assert.rejects(
+      runner.runRequiredValidation({ taskId: task.taskId }),
+      /coverage-reducing environment controls: NODE_OPTIONS/,
+    );
+  } finally {
+    if (priorClerk === undefined) delete process.env.E2E_REAL_CLERK;
+    else process.env.E2E_REAL_CLERK = priorClerk;
+    if (priorNodeOptions === undefined) delete process.env.NODE_OPTIONS;
+    else process.env.NODE_OPTIONS = priorNodeOptions;
+  }
+  assert.deepEqual(context.store.validationAttempts(task.taskId), []);
   context.coordinator.close();
   context.store.close();
 });
