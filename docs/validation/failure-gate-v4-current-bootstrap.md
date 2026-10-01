@@ -258,3 +258,46 @@ This is one real installation-run approval, not authenticated identity, a
 local-ID task review, a catalog ignore/promotion, a budget/tier increase, an
 ordinary activation or cutover. The matching bootstrap record is committed
 before launch. No new required-tier run is authorized after this one is consumed.
+
+## Task #4806 Git-history evidence check
+
+The local Git object database was checked on October 1, 2026, including all
+available refs and unreachable objects. The clean task checkout was
+fast-forwarded from `cb52e0c1` to the already-merged `d6e1da5a` state so the
+retained reports could be inspected in the active checkout. This was a
+fast-forward only; no report, database, plan, approval, or source history was
+created or reconstructed.
+
+- The exact string
+  `catalog.catalogDate 2026-09-28 cannot be after asOf 2026-08-30` appears in
+  the retained Task #4803 bootstrap history, first in merge `e4008666`. No
+  earlier occurrence was found across available refs or unreachable commits.
+- The retained bootstrap JSON files match the SHA-256 values in
+  `bootstrap-results/README.md`:
+  `2026-10-01-preflight-failed.json` is
+  `3673fb8bfd97183aa4afa448fe47aa59799a9d5c9ab477e71ddcba2e0ec7f077`;
+  `2026-10-01-heavy-failed.json` is
+  `2f6b598e587cd4842c94db4cd19741b5ef708fe2cfac06ebab0f9a2980027f85`.
+  Those reports do not retain all referenced case artifacts.
+- The later retained Node TAP report records the nine catalog-related
+  assertions, including the exact date mismatch. Its report/case data does not
+  bind the original run to the required safe environment identity or provide
+  independent pre-task corroboration. The existing three isolation attempts
+  remain exhausted; this search did not rerun them.
+- No allocator database path was found in reachable or unreachable Git trees.
+  The 361 unreachable commit tips contained no relevant ledger or earlier
+  report paths. Scanning the 517 unreachable blobs found no SQLite file
+  signature, checked environment/provenance marker, or earlier copy of the
+  exact catalog failure. The default home ledger directory is also absent in
+  this checkout. This does not establish why the original ledger disappeared.
+- The only committed task plans and pinned bootstrap approval found are for
+  Task #4803. They do not authorize Task #4806 or another heavy run.
+
+The capability matrix remains unchanged: the fixed cooperative routes
+participate in the lock, while editor, Agent, direct, background,
+dependency, and application writers remain outside the demonstrated boundary.
+The recorded negative final-write race is not whole-host coverage. No test tier
+was run for Task #4806 because no independent approval exists. The original
+ledger, qualifying earlier failure evidence, all-writer coverage, and a
+Task #4806 local-ID review remain unavailable; v4 activation and cutover stay
+blocked.
