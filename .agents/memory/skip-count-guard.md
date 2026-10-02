@@ -8,4 +8,3 @@ Rule: never add `it.skip`/`test.skip`/`describe.skip` to unit tests (baseline is
 
 **How to apply:** `pnpm run check:skip-count` (scripts/check-skip-count.mjs) runs in the fast validation tier and fails when either count rises above baseline; it prints a ratchet-down note when counts drop.
 
-**Self-scan gotcha:** any `*.test.mjs` under scripts/ is itself scanned by the ratchet — test fixtures must never contain the literal skip-call substrings; build them by concatenation (e.g. `["it","skip("].join(".")`) or the real ratchet counts the fixture strings.

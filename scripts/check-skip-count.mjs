@@ -94,8 +94,11 @@ function* walk(dir) {
 
 /**
  * Count executable test.skip()/it.skip()/describe.skip() calls across files.
- * TypeScript's parser ignores comments and string literals, so documentation
- * cannot satisfy or mask the source-level ratchet.
+ * Comments, strings, template text and regex literals are not calls;
+ * executable template interpolations are traversed.
+ * Documentation cannot satisfy or mask the source-level ratchet.
+ * An unreadable file is warned about and
+ * skipped — one bad file must not abort counting for all the others.
  */
 export function countSkipCalls(files, identifiers) {
   const skipIdentifiers = new Set(identifiers);

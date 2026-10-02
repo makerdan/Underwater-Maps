@@ -13,6 +13,13 @@ comment-only `test.skip()` reference in `pwa-offline.spec.ts`. The five PWA
 offline canvas gates share one explicit auth-only skip; after the authenticated
 shell is present, a missing canvas fails the test instead of skipping it.
 
+The earlier 2026-09-30 standalone scanner correction measured 238 actual
+calls before those test-harness repairs, including 15 PWA calls rather than
+16 raw-text matches. The merged PWA spec now has 11 actual calls. Comments,
+quoted strings, template text and regex literals do not count; executable
+template interpolations do. Whitespace or comments between call tokens do
+not conceal actual calls. The zero-static-unit baseline is unchanged.
+
 Baseline reduced 2026-09-28 from 241 to 239: the real-upload offline-reload
 check now asserts service-worker registration and page control instead of
 skipping on either failure. Both are prerequisites for the offline behavior

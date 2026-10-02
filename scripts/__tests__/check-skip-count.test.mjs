@@ -15,9 +15,8 @@
  * plus the unchanged normal ratchet behaviour (count ≤ baseline → OK,
  * count > baseline → exit 1).
  *
- * NOTE: this file is itself scanned by the ratchet (a *.test.mjs under
- * scripts/), so skip-call fixtures are built by string concatenation —
- * never written literally — or they would count against the baseline.
+ * This file is itself scanned by the ratchet. Quoted skip-call fixtures must
+ * not count against its baseline.
  */
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -96,6 +95,75 @@ function assertNoRawStackTrace(result) {
     `stderr should not contain a raw Node.js stack trace.\nstderr: ${result.stderr}`,
   );
 }
+
+describe("syntax-aware skip counting", () => {
+  it("ignores comments, strings, template text and regex literals", () => {
+    const repo = makeFakeRepo("non-code");
+    writeFileSync(join(repo, "tests", "e2e", "examples.ts"), String.raw`
+// test.skip("line comment");
+/* test.skip("block comment"); it.skip("unit example"); */
+const single = 'test.skip("single quoted")';
+const double = "test.skip('double quoted')";
+const escaped = "quote: \" test.skip('still a string')";
+const template = ` + "`test.skip('template text') ${\"test.skip('quoted interpolation')\"}`" + String.raw`;
+const pattern = /test.skip\(/;
+const patternWithCommentMarkers = /[//]test.skip\(/;
+`);
+    // TSX is parsed according to its extension in the unit tree.
+    writeFileSync(join(repo, "artifacts", "examples.test.tsx"),
+      '<div>it.skip("JSX text")</div>; const quoted = "describe.skip(";');
+    const result = runScript(repo);
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(result.stdout.includes("e2e conditional test.skip call sites: 0"));
+    assert.ok(result.stdout.includes("unit static skips (it/test/describe.skip): 0"));
+  });
+
+  it("counts calls with whitespace/comments and executable template interpolations", () => {
+    const repo = makeFakeRepo("real-calls");
+    writeFileSync(join(repo, "tests", "e2e", "calls.ts"), `
+test.skip(true, "ordinary");
+test /* comment */ . skip /* another */ (
+  true, "multiline"
+);
+const value = ` + "`text test.skip('ignored') ${test.skip(true, 'executed')}`" + `;
+const nested = ` + "`outer ${`inner ${test.skip(true, 'nested')}`}`" + `;
+// These are not E2E test.skip receivers:
+it.skip("unit only"); describe.skip("unit only");
+other.test.skip(true, "not a direct test call");
+test.skipIf(true); test.skip;
+`);
+    writeFileSync(join(repo, "artifacts", "calls.test.ts"), `
+it.skip("one"); test . skip ("two"); describe
+  . /* comment */ skip ("three");
+it.skipIf(true); describe.skipIf(true); other.it.skip("not a direct call");
+`);
+    writeBaseline(repo, { unitStaticSkips: 3, e2eSkipSites: 4 });
+    const result = runScript(repo);
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(result.stdout.includes("unit static skips (it/test/describe.skip): 3"));
+    assert.ok(result.stdout.includes("e2e conditional test.skip call sites: 4"));
+  });
+
+  it("removing a commented example cannot conceal a newly added real call", () => {
+    const repo = makeFakeRepo("comment-removal-ratchet");
+    const file = join(repo, "tests", "e2e", "gate.ts");
+    writeFileSync(file, '// test.skip(true, "example");\ntest.skip(true, "existing");');
+    writeBaseline(repo, { unitStaticSkips: 0, e2eSkipSites: 1 });
+    assert.equal(runScript(repo).status, 0);
+    writeFileSync(file, 'test.skip(true, "existing");\ntest.skip(true, "new gate");');
+    const result = runScript(repo);
+    assert.equal(result.status, 1);
+    assert.ok(result.stderr.includes("2 skip site(s), baseline is 1"));
+    assert.ok(result.stderr.includes("2× tests/e2e/gate.ts"));
+  });
+
+  it("does not count the real offline-PWA helper comment", () => {
+    const file = resolve(__dirname, "../../tests/e2e/pwa-offline.spec.ts");
+    const result = countSkipCalls([file], ["test"]);
+    assert.equal(result.total, 11);
+    assert.deepEqual(result.perFile, [{ file, count: 11 }]);
+  });
+});
 
 // ── (a) baseline guards ────────────────────────────────────────────────────
 
