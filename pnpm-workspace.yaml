@@ -37,11 +37,10 @@ catalog:
   vite: 7.3.6
   # vitest pinned (see toolchain note above); consumed via catalog: by all
   # test-bearing packages. Companion packages (@vitest/coverage-v8, @vitest/ui)
-  # must stay on the same major.minor.patch as vitest — a major mismatch
-  # produces unmet peer warnings and can silently break coverage runs / the UI.
-  vitest: 3.2.7
-  '@vitest/coverage-v8': 3.2.7
-  '@vitest/ui': 3.2.7
+  # must stay on the same major.minor.patch as vitest.
+  vitest: 4.1.11
+  '@vitest/coverage-v8': 4.1.11
+  '@vitest/ui': 4.1.11
   wouter: ^3.10.0
   zod: 3.25.76
 
@@ -71,7 +70,8 @@ overrides:
   #     arbitrary file read on Windows dev server only; exact vite pin in catalog
   #     prevents bumping esbuild under vite; Linux-only deployment is not affected.
   #     api-server direct esbuild dep is bumped to ^0.28.1 in its package.json.
-  # All moderate/high/critical findings are resolved via the overrides below.
+  # This override list is not a clean-audit guarantee; check:audit reports the
+  # current dependency advisories, including packages outside these overrides.
   # @babel/core <=7.29.0 (GHSA-4x5r-pxfx-6jf8): sourceMappingURL arbitrary file
   # read via eslint-plugin-react-hooks; dev/lint toolchain only. Overridden to
   # close the finding proactively; remove once eslint-plugin-react-hooks bumps its
@@ -99,6 +99,8 @@ overrides:
   esbuild@<0.28.1: '^0.28.1'
   # uuid <11.1.1: credential exposure via predictable UUIDs
   uuid@<11.1.1: '^11.1.1'
+  # jsdom -> undici: test-only HTTP client, pinned to the patched release.
+  undici: '8.10.2'
   # nanoid: insecure randomness in older versions
   nanoid: '3.3.18'
   # Security: pin vulnerable transitive deps to patched versions (2025-07-17)

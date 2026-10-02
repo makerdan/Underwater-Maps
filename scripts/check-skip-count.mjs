@@ -35,6 +35,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import { IGNORED_DIRS } from "./lib/ignored-dirs.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -44,11 +45,11 @@ const BASELINE_PATH = resolve(root, "tests/skip-baseline.json");
 
 const UNIT_DIRS = ["artifacts", "lib", "scripts"];
 const UNIT_FILE_RE = /\.test\.(ts|tsx|mjs)$/;
-const UNIT_SKIP_RE = /\b(?:it|test|describe)\.skip\(/g;
+const UNIT_SKIP_IDENTIFIERS = ["it", "test", "describe"];
 
 const E2E_DIR = "tests/e2e";
-const E2E_FILE_RE = /\.ts$/;
-const E2E_SKIP_RE = /\btest\.skip\(/g;
+const E2E_FILE_RE = /\.tsx?$/;
+const E2E_SKIP_IDENTIFIERS = ["test"];
 
 // IGNORED_DIRS is imported from ./lib/ignored-dirs.mjs — do not re-declare locally.
 
@@ -92,13 +93,12 @@ function* walk(dir) {
 }
 
 /**
- * Count regex matches across files. An unreadable file is warned about and
- * skipped — one bad file must not abort counting for all the others.
+ * Count executable test.skip()/it.skip()/describe.skip() calls across files.
+ * TypeScript's parser ignores comments and string literals, so documentation
+ * cannot satisfy or mask the source-level ratchet.
  */
-export function countMatches(files, re) {
-  // String#match only returns the first match for a non-global regex; clone it
-  // with `g` so every skip site is counted regardless of the caller's flags.
-  const matchRe = re.flags.includes("g") ? re : new RegExp(re.source, `${re.flags}g`);
+export function countSkipCalls(files, identifiers) {
+  const skipIdentifiers = new Set(identifiers);
   const perFile = [];
   let total = 0;
   for (const f of files) {
@@ -111,7 +111,56 @@ export function countMatches(files, re) {
       );
       continue;
     }
-    const n = (text.match(matchRe) ?? []).length;
+    const extension = f.slice(f.lastIndexOf(".") + 1).toLowerCase();
+    const scriptKind = extension === "tsx"
+      ? ts.ScriptKind.TSX
+      : extension === "ts"
+        ? ts.ScriptKind.TS
+        : ts.ScriptKind.JS;
+    const sourceFile = ts.createSourceFile(
+      f,
+      text,
+      ts.ScriptTarget.Latest,
+      true,
+      scriptKind,
+    );
+    if (sourceFile.parseDiagnostics.length > 0) {
+      const details = sourceFile.parseDiagnostics
+        .map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"))
+        .join("; ");
+      hadErrors = true;
+      console.error(
+        `[check-skip-count] WARN — could not parse ${f}: ${details}; ` +
+          "refusing to compare a partial skip count.",
+      );
+      continue;
+    }
+
+    let n = 0;
+    const visit = (node) => {
+      if (ts.isCallExpression(node)) {
+        const expression = node.expression;
+        if (
+          ts.isPropertyAccessExpression(expression) &&
+          expression.name.text === "skip" &&
+          ts.isIdentifier(expression.expression) &&
+          skipIdentifiers.has(expression.expression.text)
+        ) {
+          n += 1;
+        } else if (
+          ts.isElementAccessExpression(expression) &&
+          ts.isIdentifier(expression.expression) &&
+          skipIdentifiers.has(expression.expression.text) &&
+          expression.argumentExpression &&
+          ts.isStringLiteral(expression.argumentExpression) &&
+          expression.argumentExpression.text === "skip"
+        ) {
+          n += 1;
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
     if (n > 0) {
       perFile.push({ file: f, count: n });
       total += n;
@@ -214,16 +263,16 @@ function main() {
   );
   const e2eFiles = [...walk(resolve(root, E2E_DIR))].filter((f) => E2E_FILE_RE.test(f));
 
+  const unit = countSkipCalls(unitFiles, UNIT_SKIP_IDENTIFIERS);
+  const e2e = countSkipCalls(e2eFiles, E2E_SKIP_IDENTIFIERS);
+
   if (hadErrors) {
     console.error(
-      "[check-skip-count] FAIL — could not inspect one or more scan entries; " +
+      "[check-skip-count] FAIL — could not inspect or parse one or more scan entries; " +
         "refusing to compare a partial skip count.",
     );
     process.exit(1);
   }
-
-  const unit = countMatches(unitFiles, UNIT_SKIP_RE);
-  const e2e = countMatches(e2eFiles, E2E_SKIP_RE);
 
   let failed = false;
 

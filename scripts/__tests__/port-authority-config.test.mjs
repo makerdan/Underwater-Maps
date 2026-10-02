@@ -9,6 +9,7 @@ import { getValidationSteps } from "../validation-steps.mjs";
 
 const root = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const read = (relativePath) => readFileSync(resolve(root, relativePath), "utf8");
+const budgets = JSON.parse(read("tests/timeout-guard/budgets.json"));
 
 test(".replit keeps Project isolated from the four registered validation workflows", () => {
   const { runButton, workflows } = parseReplitWorkflows(read(".replit"));
@@ -58,7 +59,7 @@ test("validation manifest is the exact five-command registration contract", () =
   );
   assert.equal(
     commands["test-heavy"],
-    "node scripts/run-with-timeout.mjs aggregate -- node scripts/test-heavy-serial.mjs",
+    "node scripts/run-with-timeout.mjs aggregate --owns-e2e-ports -- node scripts/test-heavy-serial.mjs",
   );
   assert.equal(
     commands["audit-marker-bbox"],
@@ -73,14 +74,50 @@ test("validation manifest is the exact five-command registration contract", () =
 test("heavy routing stays serialized and does not add an outer lock", () => {
   const manifest = read("scripts/register-validation-commands.mjs");
   const heavySource = read("scripts/test-heavy-serial.mjs");
+  const packageScripts = JSON.parse(read("package.json")).scripts;
   assert.match(manifest, /name: "test-heavy"[\s\S]*test-heavy-serial\.mjs/);
   assert.doesNotMatch(
     VALIDATION_COMMANDS.find(({ name }) => name === "test-heavy").command,
     /validation-lock\.mjs/,
   );
+  assert.match(
+    VALIDATION_COMMANDS.find(({ name }) => name === "test-heavy").command,
+    /--owns-e2e-ports/,
+  );
+  assert.match(heavySource, /PLAYWRIGHT_CI_SUITE=main-full/);
+  assert.match(heavySource, /PLAYWRIGHT_CI_RESULTS=/);
+  assert.match(heavySource, /ci-playwright-reporter\.mjs/);
+  assert.match(heavySource, /check-e2e-runtime-skips\.mjs/);
+  assert.match(heavySource, /runtime-skip-baseline\.json/);
+  assert.match(heavySource, /exit \$\(\(status \|\| checker\)\)/);
+  assert.match(packageScripts["test-all"], /run-with-timeout\.mjs aggregate/);
+  assert.doesNotMatch(
+    packageScripts["test-all"],
+    /--owns-e2e-ports/,
+    "test-all does not run Playwright and must not sweep E2E ports",
+  );
   assert.match(heavySource, /wrapWithLocks/);
   assert.match(heavySource, /"unit-cpu", "e2e-port"/);
   assert.match(heavySource, /include-own-tree/);
+});
+
+test("aggregate budget covers the serialized heavy-stage allowances", () => {
+  const required =
+    budgets.tierStandard.runBudgetMs +
+    budgets.rootUnit.runBudgetMs +
+    budgets.e2e.runBudgetMs * 2;
+  assert.ok(
+    budgets.aggregate.totalBudgetMs >= required,
+    `aggregate budget must cover preflight + unit + palette + full e2e (${required}ms)`,
+  );
+});
+
+test("database Vitest project registers its configured file-budget guard", () => {
+  const config = read("lib/db/vitest.config.ts");
+  const setup = read("lib/db/src/__tests__/setup.ts");
+  assert.match(config, /setupFiles:\s*\["\.\/src\/__tests__\/setup\.ts"\]/);
+  assert.match(setup, /installFileBudgetGuard\("libDbUnit"\)/);
+  assert.equal(budgets.libDbUnit.fileBudgetMs, 60000);
 });
 
 test("tier steps use the canonical registry and named conflict resources", () => {

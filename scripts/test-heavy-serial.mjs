@@ -319,7 +319,10 @@ const steps = [
       wrapWithTimeout(
         [
           "bash", "-c",
-           `set -o pipefail; E2E_WEB_PORT=${palettePorts.web} E2E_API_PORT=${palettePorts.api} npx playwright test ` +
+           `set -o pipefail; PLAYWRIGHT_CI_SUITE=palette-settings-sync ` +
+           `PLAYWRIGHT_CI_RESULTS=.local/tmp/palette-runtime-skips.json ` +
+           `E2E_WEB_PORT=${palettePorts.web} E2E_API_PORT=${palettePorts.api} npx playwright test ` +
+           "--reporter=list,./scripts/ci-playwright-reporter.mjs " +
           "tests/e2e/palette-cross-device-sync.spec.ts " +
           "tests/e2e/onboarding-tour.spec.ts " +
           "tests/e2e/settings-cross-device-sync.spec.ts " +
@@ -327,7 +330,13 @@ const steps = [
           "tests/e2e/zone-colour-server-sync.spec.ts " +
           "tests/e2e/tooltips.spec.ts " +
           "tests/e2e/adaptive-palette.spec.ts " +
-          "2>&1 | tee .local/tmp/palette-e2e.log",
+           "2>&1 | tee .local/tmp/palette-e2e.log; " +
+           "status=${PIPESTATUS[0]}; " +
+           "node scripts/check-e2e-runtime-skips.mjs " +
+           "--results .local/tmp/palette-runtime-skips.json " +
+           "--baseline tests/e2e/runtime-skip-baseline.json " +
+           "--suite palette-settings-sync; " +
+           "checker=$?; exit $((status || checker))",
         ],
         "e2e",
         "e2e-palette",
@@ -337,11 +346,27 @@ const steps = [
     ),
   },
   {
-    // Use test:e2e:run (unwrapped inner command) — locking is handled here.
+    // Keep the same port pre-cleanup and E2E timeout as test:e2e:run, adding
+    // local machine-readable skip reporting and the runtime skip ratchet.
     name: "test:e2e",
     cmd: wrapWithLocks(
       wrapWithTimeout(
-        ["pnpm", "run", "test:e2e:run"],
+        [
+          "bash", "-c",
+          `set -o pipefail; ` +
+          `node scripts/kill-port-holders.mjs --e2e && ` +
+          `PLAYWRIGHT_CI_SUITE=main-full ` +
+          `PLAYWRIGHT_CI_RESULTS=.local/tmp/main-full-runtime-skips.json ` +
+          `node scripts/run-with-timeout.mjs e2e --label "playwright e2e" -- ` +
+          `npx playwright test --reporter=list,html,./scripts/ci-playwright-reporter.mjs ` +
+          `2>&1 | tee .local/tmp/main-full-e2e.log; ` +
+          `status=\${PIPESTATUS[0]}; ` +
+          `node scripts/check-e2e-runtime-skips.mjs ` +
+          `--results .local/tmp/main-full-runtime-skips.json ` +
+          `--baseline tests/e2e/runtime-skip-baseline.json ` +
+          `--suite main-full; ` +
+          `checker=$?; exit $((status || checker))`,
+        ],
         "e2e",
         "test:e2e",
       ),

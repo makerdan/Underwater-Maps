@@ -316,7 +316,9 @@ describe("GET /tidal", () => {
 
       // Count how many fetch calls the first stale request consumed
       // (two station-list refetches + at least one prediction call).
-      const upstreamCallsAfterStale = fetchSpy.mock.calls.filter((c) =>
+      const upstreamCallsAfterStale = (
+        fetchSpy.mock.calls as Parameters<typeof globalThis.fetch>[]
+      ).filter((c) =>
         String(c[0]).includes("/mdapi/prod/webapi/stations.json"),
       ).length;
       expect(upstreamCallsAfterStale).toBe(2);
@@ -331,7 +333,9 @@ describe("GET /tidal", () => {
         expect(res.status).toBe(200);
         expect(res.body.heightsStation).toEqual({ id: station.id, name: station.name });
       }
-      const stationListCalls = fetchSpy.mock.calls.filter((c) =>
+      const stationListCalls = (
+        fetchSpy.mock.calls as Parameters<typeof globalThis.fetch>[]
+      ).filter((c) =>
         String(c[0]).includes("/mdapi/prod/webapi/stations.json"),
       ).length;
       expect(stationListCalls).toBe(upstreamCallsAfterStale);

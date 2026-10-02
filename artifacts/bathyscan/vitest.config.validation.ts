@@ -16,12 +16,13 @@ import budgets from "../../tests/timeout-guard/budgets.json";
 
 export default defineConfig({
   plugins: [react()],
-  // Explicit automatic JSX runtime: @vitejs/plugin-react >=5.2 stopped applying
-  // its transform under vitest, so files without `import React` crashed with
-  // "React is not defined". esbuild handles the transform independently.
-  esbuild: {
-    jsx: "automatic",
-    jsxImportSource: "react",
+  // Keep JSX explicit under Vitest 4, which uses Vite 8's Oxc transformer.
+  // Relying on the legacy esbuild options makes Vitest report that they are ignored.
+  oxc: {
+    jsx: {
+      runtime: "automatic",
+      importSource: "react",
+    },
   },
   test: {
     ...(process.env.FAILURE_GATE_TEST_CASE_REPORT_DIR

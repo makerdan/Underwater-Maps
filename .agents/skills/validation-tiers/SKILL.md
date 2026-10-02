@@ -17,7 +17,7 @@ BathyScan has four registered validation commands. Pick the **lowest** tier that
 | `test-fast` | `node scripts/run-with-timeout.mjs tierFast -- node scripts/run-tier.mjs fast` | typecheck, lint, check:lock-skill-sync, check:root-relative-api, check:deps-suppression | ~5 min |
 | `test-standard` | `node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard` | fast steps + test:unit, check:docs-stale, check:catalog-coverage, check:schema-stale | ~20 min |
 | `test-standard-plus` | `node scripts/run-with-timeout.mjs tierStandardPlus -- node scripts/run-tier.mjs full` | all standard steps + check:e2e-user-ids, check:e2e-cjs-globals, check:e2e-panel-collapse, check:fixture-freshness, check:ports, check:port-drift, check:audit, check:bare-pino-http-mock — no Playwright | ~35 min |
-| `test-heavy` | `node scripts/run-with-timeout.mjs aggregate -- node scripts/test-heavy-serial.mjs` | preflight (standard tier minus test:unit) + test:unit + e2e-palette + test:e2e | ~45 min |
+| `test-heavy` | `node scripts/run-with-timeout.mjs aggregate --owns-e2e-ports -- node scripts/test-heavy-serial.mjs` | preflight (standard tier minus test:unit) + test:unit + e2e-palette + test:e2e | ~45 min |
 
 **All steps and checks (across all tiers):**
 1. `typecheck` — codegen freshness check + tsc across all packages
@@ -42,7 +42,7 @@ BathyScan has four registered validation commands. Pick the **lowest** tier that
 
 **test-standard-plus structure**: runs `run-tier.mjs full` which executes all steps 1–19 in order, including all full-tier check:* guards. No Playwright suites (e2e-palette and test:e2e are handled only by `test-heavy`).
 
-**test-heavy structure**: runs `run-tier.mjs standard --skip test:unit` as a fail-fast preflight (steps 1–7 plus 9–11; test:unit is skipped because the heavy runner runs it itself) before launching the three serialized heavy suites (test:unit, e2e-palette, test:e2e). Heavy suites run with no-fail-fast so all three are reported in one pass. The test:unit heavy step has no per-step budget — it is covered by the outer `aggregate` budget.
+**test-heavy structure**: runs `run-tier.mjs standard --skip test:unit` as a fail-fast preflight (steps 1–7 plus 9–11; test:unit is skipped because the heavy runner runs it itself) before launching the three serialized heavy suites (test:unit, e2e-palette, test:e2e). Heavy suites run with no-fail-fast so all three are reported in one pass. The unit step has its own `rootUnit` run budget, each browser suite has the `e2e` run budget, and the outer `aggregate` budget covers their serialized sum plus orchestration overhead.
 
 ## Trivial Change Fast-Track
 
@@ -110,7 +110,7 @@ Time budgets are defined in `tests/timeout-guard/budgets.json`:
 - `tierFast.runBudgetMs` — 300 000 ms (5 min)
 - `tierStandard.runBudgetMs` — 1 200 000 ms (20 min)
 - `tierStandardPlus.runBudgetMs` — 2 100 000 ms (35 min)
-- `aggregate.totalBudgetMs` — 3 000 000 ms (50 min)
+- `aggregate.totalBudgetMs` — 12 000 000 ms (200 min maximum; covers preflight + unit + palette + full E2E stage allowances)
 
 ## Implementation
 

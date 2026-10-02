@@ -31,7 +31,7 @@ test.describe("Offline help pack — images", () => {
     const helpBtn = page.getByTestId("help-button");
     const btnVisible = await helpBtn.isVisible({ timeout: 15_000 }).catch(() => false);
     if (!btnVisible) {
-      test.skip();
+      test.skip(true, "Help button did not become visible after app startup.");
       return;
     }
 

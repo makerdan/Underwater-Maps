@@ -7,6 +7,7 @@
  */
 
 import { Worker } from "worker_threads";
+import { existsSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { gridPoints, parseXyzCsv, type TerrainGrid } from "../../lib/terrain.js";
@@ -57,13 +58,26 @@ export class TerrainInsufficientDataError extends Error {
   }
 }
 
-const PARSE_WORKER_PATH = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "lib",
-  "parseWorker.mjs",
-);
+/**
+ * Resolve the worker in both layouts supported by the server:
+ *
+ * - source execution: src/domains/terrain -> src/lib
+ * - esbuild output: dist[/dist-e2e]/index.mjs -> dist[/dist-e2e]/lib
+ *
+ * The build emits parseWorker.mjs next to the bundled entrypoint's `lib`
+ * directory. Prefer that path so the regular and redirected E2E builds use
+ * the same output contract, while retaining the source layout for tests and
+ * non-bundled development execution.
+ */
+export function resolveParseWorkerPath(): string {
+  const bundleDir = path.dirname(fileURLToPath(import.meta.url));
+  const emittedPath = path.join(bundleDir, "lib", "parseWorker.mjs");
+  if (existsSync(emittedPath)) return emittedPath;
+
+  return path.join(bundleDir, "..", "..", "lib", "parseWorker.mjs");
+}
+
+const PARSE_WORKER_PATH = resolveParseWorkerPath();
 
 /**
  * Run the bounded parse + grid pipeline in the dedicated worker thread.

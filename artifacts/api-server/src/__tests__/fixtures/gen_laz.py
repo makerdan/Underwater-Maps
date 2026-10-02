@@ -7,7 +7,7 @@ laz-perf v0.0.7 can decompress without a mock.
 
 Points mirror the buildLaz() definition in generate.mjs:
   scale XY = 1e-6 deg, Z = 0.001 m; offset X=-133, Y=55, Z=0
-  15 records; index 10 has depth=0 (zi=0) — parseLasLaz must skip it.
+4096 records covering a 64×64 grid; index 10 has depth=0 (zi=0).
 
 Run:  python3 artifacts/api-server/src/__tests__/fixtures/gen_laz.py
 """
@@ -25,22 +25,10 @@ OFFSET_Y =  55.0
 OFFSET_Z =  0.0
 
 RAW_PTS = [
-    (-132.500000, 55.200000, 1250),
-    (-132.500100, 55.200100, 1300),
-    (-132.500200, 55.200200, 1420),
-    (-132.500300, 55.200300, 1380),
-    (-132.500400, 55.200400, 1500),
-    (-132.500500, 55.200500, 1600),
-    (-132.500600, 55.200600, 1750),
-    (-132.500700, 55.200700, 1800),
-    (-132.500800, 55.200800, 1900),
-    (-132.500900, 55.200900, 2000),
-    (-132.501000, 55.201000,    0),  # depth=0 -> zi=0 -> valid intertidal point, included by parseLasLaz
-    (-132.501100, 55.201100, 2100),
-    (-132.501200, 55.201200, 2200),
-    (-132.501300, 55.201300, 2300),
-    (-132.501400, 55.201400, 2400),
+    (-132.50 + col * 0.001, 55.20 + row * 0.001, 1250 + row * 8 + col * 2)
+    for row in range(64) for col in range(64)
 ]
+RAW_PTS[10] = (-132.50 + 10 * 0.001, 55.20, 0)
 
 header = laspy.LasHeader(point_format=0, version="1.2")
 header.offsets   = np.array([OFFSET_X, OFFSET_Y, OFFSET_Z])

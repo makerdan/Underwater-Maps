@@ -1,10 +1,17 @@
 # E2E conditional-skip audit
 
-Last audited: 2026-09-28. The static call-site baseline is **239**:
-`node scripts/check-skip-count.mjs` finds 0 static unit skips and 239
-conditional `test.skip(` sites under `tests/e2e/`. Runtime GitHub-runner skips
-are measured separately in `runtime-skip-baseline.json`; they must never be
-used to raise this source-level baseline.
+Last audited: 2026-10-01. The static call-site baseline is **211**:
+`node scripts/check-skip-count.mjs` parses test source and finds 0 static unit
+skips and 211 executable conditional `test.skip()` calls under `tests/e2e/`.
+Comments and strings do not count. Runtime GitHub-runner skips are measured
+separately in `runtime-skip-baseline.json`; they must never be used to raise
+this source-level baseline.
+
+Baseline reduced 2026-10-01 from 239 to 211 after the verified test-harness
+repairs removed obsolete conditional skips. The AST scan also excludes a
+comment-only `test.skip()` reference in `pwa-offline.spec.ts`. The five PWA
+offline canvas gates share one explicit auth-only skip; after the authenticated
+shell is present, a missing canvas fails the test instead of skipping it.
 
 Baseline reduced 2026-09-28 from 241 to 239: the real-upload offline-reload
 check now asserts service-worker registration and page control instead of
@@ -81,11 +88,10 @@ explaining the gate. None of them are unconditional dead tests.
    accordion is gated on signed-in state + panel layout; same auth-bypass root
    cause as category 1, checked closer to the interaction point.
 
-4. **Sparse-fixture short-circuits** (9 sites)
-   "survey.{tif,nc,laz,bag} fixture is sparse at res=64 — sparse-rejection
-   path is covered by NMEA/GPX tests". Intentional de-duplication: the
-   sparse-rejection behaviour is asserted once in the NMEA/GPX specs; format
-   specs skip rather than re-assert on fixtures that trip the sparse gate.
+4. **Parser success fixtures** (0 skip sites)
+   LAZ, GeoTIFF, and NetCDF success-path tests now require accepted responses
+   from representative fixtures. A sparse or invalid fixture is a test failure,
+   not a reason to skip parser success coverage.
 
 5. **Headless-parse timeout guards** (4 sites)
    "TIFF/NetCDF/LAZ/BAG upload timed out after 75–90 s — server parse too

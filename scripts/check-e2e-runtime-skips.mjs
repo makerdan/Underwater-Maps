@@ -9,6 +9,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+const GENERIC_SKIP_REASON = "No skip reason was supplied by Playwright.";
+
 function readJson(path, label) {
   let raw;
   try {
@@ -56,6 +58,11 @@ export function parseRuntimeOutcome(input, source = "runtime result") {
     if (!skip || typeof skip.reason !== "string" || !skip.reason.trim()) {
       throw new Error(`${source}.skips[${index}].reason must be a non-empty string.`);
     }
+    if (skip.reason === GENERIC_SKIP_REASON) {
+      throw new Error(
+        `${source}.skips[${index}].reason must not use Playwright's generic missing-reason fallback.`,
+      );
+    }
   }
   return input;
 }
@@ -71,6 +78,22 @@ export function parseRuntimeBaseline(input, source = "runtime-skip baseline") {
   for (const [suite, entry] of Object.entries(input.suites)) {
     if (!entry || !nonNegativeInteger(entry.skipped)) {
       throw new Error(`${source}.suites.${suite}.skipped must be a non-negative integer.`);
+    }
+    if (!Array.isArray(entry.tests)) {
+      throw new Error(`${source}.suites.${suite}.tests must be an array.`);
+    }
+    for (const [index, test] of entry.tests.entries()) {
+      if (typeof test !== "string" || !test.trim()) {
+        throw new Error(`${source}.suites.${suite}.tests[${index}] must be a non-empty string.`);
+      }
+    }
+    if (new Set(entry.tests).size !== entry.tests.length) {
+      throw new Error(`${source}.suites.${suite}.tests must not contain duplicates.`);
+    }
+    if (entry.tests.length !== entry.skipped) {
+      throw new Error(
+        `${source}.suites.${suite}.tests length must equal skipped.`,
+      );
     }
   }
   return input;
@@ -94,12 +117,41 @@ export function compareRuntimeSkips(outcome, baseline, suite) {
         "review its emitted test/reason and update tests/e2e/runtime-skip-baseline.json deliberately.",
     };
   }
+
+  const expected = new Set(entry.tests);
+  const actualTests = new Set(outcome.skips.map((skip) => skip.test));
+  if (actualTests.size !== outcome.skips.length) {
+    return {
+      ok: false,
+      message: `runtime result for ${suite} contains duplicate skipped-test identities.`,
+    };
+  }
+  const unexpected = [...actualTests].filter((test) => !expected.has(test));
+  const missing = [...expected].filter((test) => !actualTests.has(test));
+  if (unexpected.length) {
+    return {
+      ok: false,
+      message:
+        `runtime skip identities changed for ${suite}. ` +
+        `Unexpected: ${unexpected.join(", ")}. ` +
+        "Review the emitted test/reason and update tests/e2e/runtime-skip-baseline.json deliberately.",
+    };
+  }
   if (actual < entry.skipped) {
     return {
       ok: true,
       message:
         `runtime skips decreased for ${suite}: ${actual}, baseline ${entry.skipped}. ` +
+        (missing.length ? `Removed: ${missing.join(", ")}. ` : "") +
         "Ratchet the checked-in baseline down in the same change to preserve the improvement.",
+    };
+  }
+  if (missing.length) {
+    return {
+      ok: false,
+      message:
+        `runtime skip identities changed for ${suite}. Missing: ${missing.join(", ")}. ` +
+        "Review the emitted test/reason and update tests/e2e/runtime-skip-baseline.json deliberately.",
     };
   }
   return { ok: true, message: `runtime skips match ${suite} baseline: ${actual}.` };

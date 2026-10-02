@@ -3,7 +3,8 @@
  * Layer 4/5 total-run timeout wrapper.
  *
  * Usage:
- *   node scripts/run-with-timeout.mjs <budgetKey|milliseconds> [--label NAME] -- <command...>
+ *   node scripts/run-with-timeout.mjs <budgetKey|milliseconds> [--label NAME]
+ *     [--owns-e2e-ports] -- <command...>
  *
  * <budgetKey> resolves `runBudgetMs` (or `totalBudgetMs` for "aggregate")
  * from tests/timeout-guard/budgets.json. A raw millisecond number is also
@@ -22,6 +23,7 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { emitBreachReport } from "../tests/timeout-guard/report.mjs";
+import { collectDescendantPids } from "./lib/child-process-tree.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const budgets = JSON.parse(readFileSync(resolve(here, "../tests/timeout-guard/budgets.json"), "utf8"));
@@ -38,6 +40,9 @@ const budgetKeyOrMs = head[0];
 let label = command.join(" ");
 const labelIdx = head.indexOf("--label");
 if (labelIdx !== -1 && head[labelIdx + 1]) label = head[labelIdx + 1];
+// Port ownership is explicit. Aggregate is also used by test-all, which has
+// no browser step and must never clean up another run's ports.
+const ownsE2ePorts = head.includes("--owns-e2e-ports");
 
 let budgetMs;
 if (/^\d+$/.test(budgetKeyOrMs)) {
@@ -56,13 +61,12 @@ if (/^\d+$/.test(budgetKeyOrMs)) {
 }
 
 const layer = budgetKeyOrMs === "aggregate" ? "aggregate" : "run";
-// E2E runs boot Playwright webServers on the fixed E2E ports; a SIGKILL of
-// such a run can orphan those servers. Detect both a direct playwright
-// invocation and the aggregate (test-all) layer, which includes the e2e step.
+// Direct Playwright invocations retain the historical safe detection. Aggregate
+// callers must opt in explicitly because test-all also uses that budget.
 const isE2eRun =
   command.some((part) => part.includes("playwright")) ||
   budgetKeyOrMs === "e2e" ||
-  layer === "aggregate";
+  ownsE2ePorts;
 const start = Date.now();
 console.log(`[timeout-guard] ${layer} budget ${(budgetMs / 1000).toFixed(0)}s for: ${label}`);
 
@@ -109,9 +113,17 @@ function captureLoadContext() {
         excludedPgids.add(cur.pgid);
         cur = byPid.get(cur.ppid);
       }
+      // Detached nested timeout wrappers may have a different process group.
+      // Exclude their full PID-descendant tree without excluding unrelated
+      // processes that happen to share one of those detached groups.
+      const excludedPids = collectDescendantPids(rows, [
+        String(process.pid),
+        String(child.pid),
+        ...ancestorPids,
+      ]);
       otherRunners = rows
         .filter((r) => /vitest|playwright|run-with-timeout|test-heavy-serial/.test(r.args))
-        .filter((r) => !excludedPgids.has(r.pgid) && !ancestorPids.has(r.pid))
+        .filter((r) => !excludedPids.has(r.pid) && !excludedPgids.has(r.pgid))
         .filter((r) => !r.args.includes("ps -eo"))
         .map((r) => `${r.pid} ${r.args}`)
         .slice(0, 10);

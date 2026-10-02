@@ -60,3 +60,12 @@ test("records final retry outcomes and runtime skip reasons", () => {
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("rejects skipped tests without an explicit reason", () => {
+  const reporter = new CiPlaywrightReporter();
+  const skipped = testCase("missing-reason", "tests/e2e/gated.spec.ts", 30, "missing reason");
+  assert.throws(
+    () => reporter.onTestEnd(skipped, { status: "skipped", retry: 0 }),
+    /has no explicit reason/,
+  );
+});

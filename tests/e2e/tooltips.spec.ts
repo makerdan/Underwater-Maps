@@ -32,10 +32,8 @@ const TOOLTIP_LABEL = "Browse datasets, markers and habitats";
  *
  * When `returnHome` is true (default) we navigate to "/" afterwards so the
  * caller can interact with the HUD button under test, and we use that visit
- * to perform the canvas-visible sign-in check (skipping the test if the dev
- * auth bypass is inactive). This replaces the previous pattern of a separate
- * `ensureSignedIn()` helper that did its own throwaway `goto("/")` before
- * `setTooltipsViaSettings` immediately navigated away to `/settings`.
+ * to establish the authenticated app shell before checking the canvas. This
+ * keeps a rendering failure from being mislabeled as an auth limitation.
  */
 async function setTooltipsViaSettings(
   page: Page,
@@ -87,11 +85,21 @@ async function setTooltipsViaSettings(
   // for the HUD assertions instead of warming up "/" a second time. The
   // canvas-visibility poll below has its own 15s budget, so a separate
   // `waitForLoadState("networkidle")` on the heavy 3D route is redundant.
-  const canvas = page.locator("canvas").first();
-  const visible = await canvas.isVisible({ timeout: 15_000 }).catch(() => false);
-  if (!visible) {
-    test.skip(true, "Canvas not visible — E2E auth bypass not active in this environment");
+  const shell = page.locator("[data-testid='sidebar-mode-tabs']");
+  const landing = page.getByRole("button", { name: "Sign In to Explore", exact: true });
+  await expect
+    .poll(async () => (await shell.isVisible().catch(() => false)) || (await landing.isVisible().catch(() => false)), {
+      timeout: 15_000,
+    })
+    .toBe(true);
+  if (await landing.isVisible().catch(() => false)) {
+    test.skip(true, "Authenticated app shell not available — E2E auth bypass is inactive in this environment");
+    return;
   }
+  await expect(shell).toBeVisible();
+  // The HUD assertions below require WebGL; once auth is established this is
+  // deliberately a failure, not another auth skip.
+  await expect(page.locator("canvas").first()).toBeVisible({ timeout: 15_000 });
 }
 
 /**

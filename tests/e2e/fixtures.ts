@@ -17,10 +17,9 @@ export type { APIRequestContext, Page, Request };
  * default values that specs care about, so each spec starts from a clean
  * baseline without duplicating the reset logic.
  *
- * If the API server is unreachable (e.g. during isolated settings-only runs
- * where the server process was not started), the fixture logs a warning and
- * proceeds rather than hard-failing every test. Settings-only specs rely on
- * localStorage (Zustand persist), so they remain valid without server resets.
+ * A reset that cannot be confirmed is a fixture failure. Specs that need to
+ * run without the API server must use a separate fixture and must not claim
+ * server-state isolation.
  *
  * ─── USER IDENTITY RULE ────────────────────────────────────────────────────
  * Never write a raw user-ID string literal ("e2e-user", "dev-user-bypass",
@@ -82,6 +81,7 @@ export async function waitForAuthenticatedSettingsReady(
 }
 export const E2E_USER_ID =
   process.env["E2E_USER_ID"] ?? `dev-user-bypass${E2E_RUN_SUFFIX}`;
+export const E2E_BYPASS_SECRET = "e2e-playwright-secret";
 
 export const DEFAULT_SETTINGS = {
   units: "metric",
@@ -230,17 +230,13 @@ export const test = base.extend<{ resetSettings: void; fileBudgetGuard: void; su
   ],
   resetSettings: [
     async ({ request }, use) => {
-      try {
-        await request.put(`${API_URL}/api/settings`, {
-          headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
-          data: DEFAULT_SETTINGS,
-        });
-      } catch (err) {
-        // The API server may not be running during isolated settings-only
-        // runs. Settings specs read localStorage directly, so this is safe
-        // to skip — log a warning and continue.
-        console.warn(
-          `[resetSettings] API server unreachable at ${API_URL} — skipping server-side reset (${(err as Error).message})`,
+      const response = await request.put(`${API_URL}/api/settings`, {
+        headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": E2E_BYPASS_SECRET },
+        data: DEFAULT_SETTINGS,
+      });
+      if (!response.ok()) {
+        throw new Error(
+          `[resetSettings] settings reset failed with HTTP ${response.status()}: ${await response.text()}`,
         );
       }
       await use();

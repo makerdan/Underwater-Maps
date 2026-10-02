@@ -37,6 +37,34 @@ async function goOnline(page: import("@playwright/test").Page) {
   });
 }
 
+/**
+ * Confirm the auth prerequisite separately from scene rendering. An inactive
+ * E2E auth bypass is an environment skip; once the authenticated shell exists,
+ * a missing canvas is a real readiness failure for these offline flows.
+ */
+async function ensureSignedInScene(page: import("@playwright/test").Page): Promise<boolean> {
+  const shell = page.locator("[data-testid='sidebar-mode-tabs']");
+  const landing = page.getByRole("button", { name: "Sign In to Explore", exact: true });
+  await expect
+    .poll(
+      async () =>
+        (await shell.isVisible().catch(() => false)) ||
+        (await landing.isVisible().catch(() => false)),
+      { timeout: 15_000 },
+    )
+    .toBe(true);
+  if (await landing.isVisible().catch(() => false)) {
+    test.skip(
+      true,
+      "Authenticated app shell not available — E2E auth bypass is inactive in this environment.",
+    );
+    return false;
+  }
+  await expect(shell).toBeVisible();
+  await expect(page.locator("canvas").first()).toBeVisible({ timeout: 15_000 });
+  return true;
+}
+
 // ── Manifest & meta tags ─────────────────────────────────────────────────────
 
 test.describe("PWA manifest & meta tags", () => {
@@ -92,17 +120,7 @@ test.describe("Offline indicator & query panel", () => {
   test("offline badge appears when offline event is dispatched", async ({ page }) => {
     await page.goto(BASE, { waitUntil: "domcontentloaded" });
 
-    // Wait briefly for the canvas to mount — `page.$` is a one-shot probe
-    // and races the React app's first render under sequential suite load.
-    const canvasVisible = await page
-      .locator("canvas")
-      .first()
-      .isVisible({ timeout: 10_000 })
-      .catch(() => false);
-    if (!canvasVisible) {
-      test.skip();
-      return;
-    }
+    if (!(await ensureSignedInScene(page))) return;
 
     await goOffline(page);
 
@@ -117,15 +135,7 @@ test.describe("Offline indicator & query panel", () => {
   test("query panel shows offline notice and disables input when offline", async ({ page }) => {
     await page.goto(BASE, { waitUntil: "domcontentloaded" });
 
-    const canvasVisible = await page
-      .locator("canvas")
-      .first()
-      .isVisible({ timeout: 10_000 })
-      .catch(() => false);
-    if (!canvasVisible) {
-      test.skip();
-      return;
-    }
+    if (!(await ensureSignedInScene(page))) return;
 
     await goOffline(page);
 
@@ -164,12 +174,7 @@ test.describe("Offline network-abort scenario", () => {
     // 1. Load the app and wait for the canvas + terrain to appear
     await page.goto(BASE, { waitUntil: "domcontentloaded" });
 
-    const canvas = await page.$("canvas");
-    if (!canvas) {
-      // Not signed in — terrain never loads; skip gracefully
-      test.skip();
-      return;
-    }
+    if (!(await ensureSignedInScene(page))) return;
 
     // Give the terrain a moment to start loading
     await page.waitForTimeout(1500);
@@ -195,10 +200,7 @@ test.describe("Offline network-abort scenario", () => {
   test("query panel is disabled and shows offline notice after network block", async ({ page }) => {
     await page.goto(BASE, { waitUntil: "domcontentloaded" });
 
-    if (!(await page.$("canvas"))) {
-      test.skip();
-      return;
-    }
+    if (!(await ensureSignedInScene(page))) return;
 
     await page.waitForTimeout(1000);
     await page.route("**/api/**", (route) => route.abort("failed"));
@@ -223,15 +225,7 @@ test.describe("Offline network-abort scenario", () => {
   test("dataset picker shows availability indicators when offline", async ({ page }) => {
     await page.goto(BASE, { waitUntil: "domcontentloaded" });
 
-    const canvasVisible = await page
-      .locator("canvas")
-      .first()
-      .isVisible({ timeout: 10_000 })
-      .catch(() => false);
-    if (!canvasVisible) {
-      test.skip();
-      return;
-    }
+    if (!(await ensureSignedInScene(page))) return;
 
     // The sidebar's "Your Data" section shows an empty state until a terrain
     // is loaded — seed one via the test bridge so the dataset tree renders.

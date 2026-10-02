@@ -47,6 +47,7 @@ for (const [ghsa, ex] of Object.entries(EXCEPTIONS)) {
 // Run audit
 // ---------------------------------------------------------------------------
 let raw;
+let auditFailed = false;
 try {
   raw = execSync("pnpm audit --json --audit-level=high", {
     stdio: ["ignore", "pipe", "pipe"],
@@ -54,12 +55,15 @@ try {
 } catch (err) {
   // pnpm audit exits with a non-zero code when vulnerabilities are found —
   // capture stdout from the error object.
+  auditFailed = true;
   raw = err.stdout ? err.stdout.toString() : "";
 }
 
 if (!raw.trim()) {
-  console.log("check:audit — no output from pnpm audit; assuming clean.");
-  process.exit(0);
+  console.error(
+    `check:audit — pnpm audit ${auditFailed ? "failed" : "returned"} without JSON output; cannot determine dependency safety.`,
+  );
+  process.exit(1);
 }
 
 let report;

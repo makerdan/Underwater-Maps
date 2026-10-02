@@ -29,7 +29,7 @@ import { render, act } from "@testing-library/react";
 const mockGeoInstances: Array<{ dispose: ReturnType<typeof vi.fn> }> = [];
 const mockMatInstances: Array<{ dispose: ReturnType<typeof vi.fn>; map?: unknown }> = [];
 // Texture loader — tests set this to trigger the loaded callback.
-let mockTextureLoaderLoad: ReturnType<typeof vi.fn> = vi.fn();
+let mockTextureLoaderLoad = vi.fn((..._args: unknown[]) => undefined);
 
 // ---------------------------------------------------------------------------
 // Custom three mock — must include every class used at module-init time by the
@@ -289,7 +289,7 @@ function makeGrid(seed = 0): LandGrid {
 beforeEach(() => {
   mockGeoInstances.length = 0;
   mockMatInstances.length = 0;
-  mockTextureLoaderLoad = vi.fn();
+  mockTextureLoaderLoad = vi.fn((..._args: unknown[]) => undefined);
   mockLandGrid = null;
   mockTileUrl = null;
   mockSettingsState.satelliteImagery = false;

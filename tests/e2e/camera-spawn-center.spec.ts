@@ -115,6 +115,7 @@ test.describe("BathyScan — camera spawn center on first dataset load", () => {
           lat,
           depth: 100,
           heading: 0,
+          headingConvention: "north-up",
         });
       },
       { lon: savedLon, lat: savedLat },

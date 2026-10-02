@@ -147,17 +147,17 @@ test.describe("SaveCard inline rename flow", () => {
 
     // The card shows the catalog name (no displayLabel yet) and sourceAgency
     // as subtitle.
-    const saveName = page.getByTestId(`text-save-name-${SAVE_ID}`);
+    const saveName = saveCard.getByTestId(`text-save-name-${SAVE_ID}`);
     await expect(saveName).toBeVisible({ timeout: 5_000 });
     await expect(saveName).toContainText(CATALOG_NAME);
 
     // (1) The ✎ pencil button must be visible on the card.
-    const pencilBtn = page.getByTestId(`btn-rename-save-${SAVE_ID}`);
+    const pencilBtn = saveCard.getByTestId(`btn-rename-save-${SAVE_ID}`);
     await expect(pencilBtn).toBeVisible({ timeout: 5_000 });
 
     // (2) Clicking the pencil button reveals the inline input.
     await pencilBtn.click();
-    const renameInput = page.getByTestId(`input-rename-save-${SAVE_ID}`);
+    const renameInput = saveCard.getByTestId(`input-rename-save-${SAVE_ID}`);
     await expect(renameInput).toBeVisible({ timeout: 5_000 });
 
     // The pencil button should be gone while editing (no duplicate entry
@@ -168,7 +168,7 @@ test.describe("SaveCard inline rename flow", () => {
     await renameInput.fill(NEW_LABEL);
 
     // Click the Save button to commit.
-    const commitBtn = page.getByTestId(`btn-rename-save-commit-${SAVE_ID}`);
+    const commitBtn = saveCard.getByTestId(`btn-rename-save-commit-${SAVE_ID}`);
     await expect(commitBtn).toBeVisible({ timeout: 3_000 });
     await commitBtn.click();
 
@@ -243,17 +243,19 @@ test.describe("SaveCard inline rename flow", () => {
     const mySavesTab = page.getByRole("button", { name: /My Saves/i });
     await mySavesTab.click();
 
-    const pencilBtn = page.getByTestId(`btn-rename-save-${SAVE_ID}`);
+    const saveCard = page.getByTestId(`save-card-${SAVE_ID}`);
+    await expect(saveCard).toBeVisible({ timeout: 10_000 });
+    const pencilBtn = saveCard.getByTestId(`btn-rename-save-${SAVE_ID}`);
     await expect(pencilBtn).toBeVisible({ timeout: 10_000 });
     await pencilBtn.click();
 
-    const renameInput = page.getByTestId(`input-rename-save-${SAVE_ID}`);
+    const renameInput = saveCard.getByTestId(`input-rename-save-${SAVE_ID}`);
     await expect(renameInput).toBeVisible({ timeout: 5_000 });
 
     // Type something but then cancel.
     await renameInput.fill("Should not be saved");
 
-    const cancelBtn = page.getByTestId(`btn-rename-save-cancel-${SAVE_ID}`);
+    const cancelBtn = saveCard.getByTestId(`btn-rename-save-cancel-${SAVE_ID}`);
     await expect(cancelBtn).toBeVisible({ timeout: 3_000 });
     await cancelBtn.click();
 
@@ -264,7 +266,7 @@ test.describe("SaveCard inline rename flow", () => {
     expect(patchCalled, "Cancel must not trigger a PATCH request").toBe(false);
 
     // Card still shows the original catalog name.
-    const saveName = page.getByTestId(`text-save-name-${SAVE_ID}`);
+    const saveName = saveCard.getByTestId(`text-save-name-${SAVE_ID}`);
     await expect(saveName).toContainText(CATALOG_NAME);
   });
 });

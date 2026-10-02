@@ -101,18 +101,27 @@ async function setServerOnboardingFlag(
 }
 
 /**
- * Navigate to "/" and confirm the main 3D canvas is visible (which requires
- * the E2E auth bypass to be active). Calls `test.skip` and returns false if
- * the canvas is absent so the calling test exits cleanly.
+ * Navigate to "/" and distinguish the authentication prerequisite from the
+ * scene prerequisite. The sidebar is part of the authenticated app shell and
+ * does not depend on WebGL, so a missing canvas after the shell is ready must
+ * remain a real test failure rather than being reported as missing auth.
  */
 async function ensureSceneLoaded(page: Page): Promise<boolean> {
   await page.waitForLoadState("domcontentloaded");
-  const canvas = page.locator("canvas").first();
-  const visible = await canvas.isVisible({ timeout: 15_000 }).catch(() => false);
-  if (!visible) {
-    test.skip(true, "Scene canvas not visible — E2E auth bypass not active in this environment");
+  const shell = page.locator("[data-testid='sidebar-mode-tabs']");
+  const landing = page.getByRole("button", { name: "Sign In to Explore", exact: true });
+  await expect
+    .poll(async () => (await shell.isVisible().catch(() => false)) || (await landing.isVisible().catch(() => false)), {
+      timeout: 15_000,
+    })
+    .toBe(true);
+  if (await landing.isVisible().catch(() => false)) {
+    test.skip(true, "Authenticated app shell not available — E2E auth bypass is inactive in this environment");
     return false;
   }
+  await expect(shell).toBeVisible();
+  const canvas = page.locator("canvas").first();
+  await expect(canvas).toBeVisible({ timeout: 15_000 });
   // Seed synthetic terrain so OnboardingGuard (which gates the overlay on terrain
   // being loaded) mounts the OnboardingOverlay. Without this, the overlay is never
   // rendered even when hasSeenOnboarding=false, because the guard returns null
@@ -343,13 +352,14 @@ test.describe("Onboarding tour overlay", () => {
 
     // Check sign-in status via a setting that only renders when signed in.
     const settingsPage = page.locator("text=SETTINGS").first();
-    const signedIn = await settingsPage
-      .isVisible({ timeout: 15_000 })
-      .catch(() => false);
-    if (!signedIn) {
-      test.skip(true, "Settings page not visible — E2E auth bypass not active in this environment");
+    const landing = page.getByRole("button", { name: "Sign In to Explore", exact: true });
+    if (await landing.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      test.skip(true, "Authenticated settings app shell not available — E2E auth bypass is inactive in this environment");
       return;
     }
+    // Authentication is established independently of the scene canvas here:
+    // settings is intentionally a non-WebGL route.
+    await expect(settingsPage).toBeVisible({ timeout: 15_000 });
 
     // Click the "GENERAL" nav tab in the Settings sidebar (replay tour lives there).
     const onboardingTab = page.locator("nav button", { hasText: "GENERAL" });

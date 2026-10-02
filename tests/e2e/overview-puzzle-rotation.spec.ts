@@ -150,179 +150,43 @@ test.describe("BathyScan — Overview Puzzle rotation panel", () => {
       .catch(() => {});
   });
 
-  // ---------------------------------------------------------------------------
-  // 1. Selecting a tile reveals the rotation panel
-  // ---------------------------------------------------------------------------
-  test("rotation panel appears when a tile is selected in puzzle mode", async ({ page }) => {
-    if (!(await ensureSignedInOrSkip(page))) return;
-
-    await openOverview(page);
-
-    // Confirm puzzle mode can be entered.
-    const entered = await enterPuzzleMode(page);
-    if (!entered) {
-      test.skip(true, "Puzzle toggle button not found — overview may require real terrain in this env");
-      return;
-    }
-
-    // Wait for registerPuzzleTestHandlers useEffect to fire before calling bridge.
-    const bridgeReady = await waitForPuzzleBridge(page);
-    if (!bridgeReady) {
-      test.skip(true, "Puzzle bridge handlers not registered in time — effect may not have fired");
-      return;
-    }
-
-    // Rotation panel must NOT be visible before any tile is selected.
-    await expect(page.getByTestId("overview-puzzle-rotation-panel")).toHaveCount(0);
-
-    // Select the primary dataset tile via bridge.
+  async function openTileMenu(page: Page): Promise<string | null> {
     const tileId = await selectPrimaryTileViaBridge(page);
-    if (!tileId) {
-      test.skip(true, "Bridge could not select a tile — terrain may not be available");
-      return;
-    }
+    if (!tileId) return null;
+    const canvas = page.locator("canvas").first();
+    const box = await canvas.boundingBox();
+    if (!box) return null;
+    await canvas.click({ button: "right", position: { x: box.width / 2, y: box.height / 2 } });
+    await expect(page.getByText("Rotate 45° clockwise")).toBeVisible({ timeout: 3_000 });
+    return tileId;
+  }
 
-    // Rotation panel must now be visible.
-    await expect(page.getByTestId("overview-puzzle-rotation-panel")).toBeVisible({ timeout: 3_000 });
-
-    // Rotation dropdown and angle input must be present.
-    await expect(page.getByTestId("overview-puzzle-rotate-dropdown")).toBeVisible();
-    await expect(page.getByTestId("overview-puzzle-angle-input")).toBeVisible();
-  });
-
-  // ---------------------------------------------------------------------------
-  // 2. +90° button rotates the tile to 90°
-  // ---------------------------------------------------------------------------
-  test("+90° button rotates the selected tile to 90°", async ({ page }) => {
+  test("selected tile exposes the supported rotation context menu", async ({ page }) => {
     if (!(await ensureSignedInOrSkip(page))) return;
-
     await openOverview(page);
-    const entered = await enterPuzzleMode(page);
-    if (!entered) {
-      test.skip(true, "Puzzle toggle button not found");
+    if (!(await enterPuzzleMode(page)) || !(await waitForPuzzleBridge(page))) {
+      test.skip(true, "Puzzle mode context-menu bridge unavailable");
       return;
     }
-
-    // Wait for registerPuzzleTestHandlers useEffect to fire before calling bridge.
-    const bridgeReady = await waitForPuzzleBridge(page);
-    if (!bridgeReady) {
-      test.skip(true, "Puzzle bridge handlers not registered in time — effect may not have fired");
-      return;
-    }
-
-    const tileId = await selectPrimaryTileViaBridge(page);
+    const tileId = await openTileMenu(page);
     if (!tileId) {
       test.skip(true, "Bridge could not select a tile");
       return;
     }
-
-    await expect(page.getByTestId("overview-puzzle-rotation-panel")).toBeVisible({ timeout: 3_000 });
-
-    // Initial angle should be 0 (or absent from the transforms map).
-    const angleBefore = await getPuzzleAngle(page, tileId);
-    expect(angleBefore ?? 0).toBe(0);
-
-    // Select +90° from the dropdown.
-    await page.selectOption("[data-testid='overview-puzzle-rotate-dropdown']", "90");
-
-    // The transform must now show angleDeg = 90.
-    await expect
-      .poll(() => getPuzzleAngle(page, tileId), { timeout: 3_000 })
-      .toBe(90);
-
-    // The angle input must reflect the new value.
-    await expect(page.getByTestId("overview-puzzle-angle-input")).toHaveValue("90");
+    await expect(page.getByText("Rotate 5° counter-clockwise")).toBeVisible();
+    await expect(page.getByText("Reset rotation")).toBeVisible();
   });
 
-  // ---------------------------------------------------------------------------
-  // 3. Numeric input sets angle directly
-  // ---------------------------------------------------------------------------
-  test("entering an angle in the numeric input applies it to the tile", async ({ page }) => {
+  test("context-menu clockwise rotation updates the selected tile", async ({ page }) => {
     if (!(await ensureSignedInOrSkip(page))) return;
-
     await openOverview(page);
-    const entered = await enterPuzzleMode(page);
-    if (!entered) {
-      test.skip(true, "Puzzle toggle button not found");
+    if (!(await enterPuzzleMode(page)) || !(await waitForPuzzleBridge(page))) {
+      test.skip(true, "Puzzle mode context-menu bridge unavailable");
       return;
     }
-
-    // Wait for registerPuzzleTestHandlers useEffect to fire before calling bridge.
-    const bridgeReady = await waitForPuzzleBridge(page);
-    if (!bridgeReady) {
-      test.skip(true, "Puzzle bridge handlers not registered in time — effect may not have fired");
-      return;
-    }
-
-    const tileId = await selectPrimaryTileViaBridge(page);
-    if (!tileId) {
-      test.skip(true, "Bridge could not select a tile");
-      return;
-    }
-
-    await expect(page.getByTestId("overview-puzzle-rotation-panel")).toBeVisible({ timeout: 3_000 });
-
-    const angleInput = page.getByTestId("overview-puzzle-angle-input");
-
-    // Clear the input and type a new value.
-    await angleInput.fill("45");
-    await angleInput.dispatchEvent("input");
-    // React's onChange fires on the `input` event; dispatch a synthetic change too.
-    await angleInput.dispatchEvent("change");
-
-    // Poll the store transform — the input's onChange handler calls setAngle().
-    await expect
-      .poll(() => getPuzzleAngle(page, tileId), { timeout: 3_000 })
-      .toBe(45);
-  });
-
-  // ---------------------------------------------------------------------------
-  // 4. ↺ reset button returns tile to 0°
-  // ---------------------------------------------------------------------------
-  test("rotation reset button returns the tile to 0° and hides itself", async ({ page }) => {
-    if (!(await ensureSignedInOrSkip(page))) return;
-
-    await openOverview(page);
-    const entered = await enterPuzzleMode(page);
-    if (!entered) {
-      test.skip(true, "Puzzle toggle button not found");
-      return;
-    }
-
-    // Wait for registerPuzzleTestHandlers useEffect to fire before calling bridge.
-    const bridgeReady = await waitForPuzzleBridge(page);
-    if (!bridgeReady) {
-      test.skip(true, "Puzzle bridge handlers not registered in time — effect may not have fired");
-      return;
-    }
-
-    const tileId = await selectPrimaryTileViaBridge(page);
-    if (!tileId) {
-      test.skip(true, "Bridge could not select a tile");
-      return;
-    }
-
-    await expect(page.getByTestId("overview-puzzle-rotation-panel")).toBeVisible({ timeout: 3_000 });
-
-    // Apply a non-zero rotation first so the reset button appears.
-    await page.selectOption("[data-testid='overview-puzzle-rotate-dropdown']", "90");
-    await expect
-      .poll(() => getPuzzleAngle(page, tileId), { timeout: 3_000 })
-      .toBe(90);
-
-    // The ↺ reset button is conditionally rendered (only when angleDeg ≠ 0).
-    const resetBtn = page.getByTestId("overview-puzzle-rotation-reset");
-    await expect(resetBtn).toBeVisible({ timeout: 3_000 });
-
-    // Click it.
-    await resetBtn.dispatchEvent("click");
-
-    // Tile angle must return to 0.
-    await expect
-      .poll(() => getPuzzleAngle(page, tileId), { timeout: 3_000 })
-      .toBe(0);
-
-    // The reset button must vanish (angle is back to 0, conditional render drops it).
-    await expect(resetBtn).toHaveCount(0, { timeout: 3_000 });
+    const tileId = await openTileMenu(page);
+    if (!tileId) { test.skip(true, "Bridge could not select a tile"); return; }
+    await page.getByText("Rotate 45° clockwise").click();
+    await expect.poll(() => getPuzzleAngle(page, tileId), { timeout: 3_000 }).toBe(45);
   });
 });

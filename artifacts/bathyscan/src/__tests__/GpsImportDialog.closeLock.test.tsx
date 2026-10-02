@@ -123,7 +123,7 @@ describe("GpsImportDialog close-lock during import", () => {
     mockPostTrollingPresets.mockReturnValue(new Promise(() => {}));
   });
 
-  async function renderAndReachPreview(onClose: ReturnType<typeof vi.fn>) {
+  async function renderAndReachPreview(onClose: () => void) {
     render(<GpsImportDialog terrain={TERRAIN} onClose={onClose} />);
 
     const fileInput = screen.getByTestId("gps-import-file-input");
@@ -137,7 +137,7 @@ describe("GpsImportDialog close-lock during import", () => {
   }
 
   it("close button is enabled before import starts", async () => {
-    const onClose = vi.fn();
+    const onClose = vi.fn((): void => {});
     await renderAndReachPreview(onClose);
 
     const closeBtn = screen.getByTestId("gps-import-close-btn");
@@ -146,7 +146,7 @@ describe("GpsImportDialog close-lock during import", () => {
   });
 
   it("close button is disabled while import is in-flight", async () => {
-    const onClose = vi.fn();
+    const onClose = vi.fn((): void => {});
     const confirmBtn = await renderAndReachPreview(onClose);
 
     fireEvent.click(confirmBtn);
@@ -161,7 +161,7 @@ describe("GpsImportDialog close-lock during import", () => {
   });
 
   it("onClose is NOT called when close button is clicked during import", async () => {
-    const onClose = vi.fn();
+    const onClose = vi.fn((): void => {});
     const confirmBtn = await renderAndReachPreview(onClose);
 
     fireEvent.click(confirmBtn);
@@ -175,7 +175,7 @@ describe("GpsImportDialog close-lock during import", () => {
   });
 
   it("backdrop click does NOT call onClose while import is in-flight", async () => {
-    const onClose = vi.fn();
+    const onClose = vi.fn((): void => {});
     const confirmBtn = await renderAndReachPreview(onClose);
 
     fireEvent.click(confirmBtn);
@@ -190,7 +190,7 @@ describe("GpsImportDialog close-lock during import", () => {
   });
 
   it("in-progress label is shown while import is in-flight", async () => {
-    const onClose = vi.fn();
+    const onClose = vi.fn((): void => {});
     const confirmBtn = await renderAndReachPreview(onClose);
 
     expect(screen.queryByTestId("gps-import-in-progress-label")).not.toBeInTheDocument();
@@ -203,7 +203,7 @@ describe("GpsImportDialog close-lock during import", () => {
   });
 
   it("onClose IS called when close button is clicked before import starts", async () => {
-    const onClose = vi.fn();
+    const onClose = vi.fn((): void => {});
     await renderAndReachPreview(onClose);
 
     const closeBtn = screen.getByTestId("gps-import-close-btn");

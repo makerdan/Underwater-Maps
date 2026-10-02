@@ -59,7 +59,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "node scripts/run-with-timeout.mjs aggregate -- node scripts/test-heavy-serial.mjs"
+args = "node scripts/run-with-timeout.mjs aggregate --owns-e2e-ports -- node scripts/test-heavy-serial.mjs"
 
 [workflows.workflow.metadata]
 isValidation = true

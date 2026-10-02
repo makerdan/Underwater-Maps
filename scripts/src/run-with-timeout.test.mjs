@@ -5,12 +5,14 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
+import { collectDescendantPids } from "../lib/child-process-tree.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const wrapper = resolve(repoRoot, "scripts/run-with-timeout.mjs");
 const rootPackage = JSON.parse(readFileSync(resolve(repoRoot, "package.json"), "utf8"));
 const scriptsPackage = JSON.parse(readFileSync(resolve(repoRoot, "scripts/package.json"), "utf8"));
 const budgets = JSON.parse(readFileSync(resolve(repoRoot, "tests/timeout-guard/budgets.json"), "utf8"));
+const wrapperSource = readFileSync(wrapper, "utf8");
 
 function spawnWrapper(budget, args) {
   return spawn(process.execPath, [wrapper, budget, "--", ...args], {
@@ -34,6 +36,25 @@ test("unit entry points use dedicated timeout guards", () => {
   );
   assert.ok(budgets.rootUnit.runBudgetMs > 0);
   assert.ok(budgets.scriptsUnit.runBudgetMs > 0);
+});
+
+test("aggregate E2E cleanup is explicit and load diagnostics walk descendants", () => {
+  assert.match(wrapperSource, /--owns-e2e-ports/);
+  assert.doesNotMatch(wrapperSource, /layer === "aggregate";/);
+  assert.match(wrapperSource, /collectDescendantPids/);
+  assert.match(wrapperSource, /!excludedPids\.has\(r\.pid\)/);
+});
+
+test("load diagnostics exclude nested detached descendants but not same-group siblings", () => {
+  const rows = [
+    { pid: "100", ppid: "90", pgid: "100", args: "run-with-timeout" },
+    { pid: "101", ppid: "100", pgid: "101", args: "nested run-with-timeout" },
+    { pid: "102", ppid: "101", pgid: "102", args: "playwright test" },
+    { pid: "103", ppid: "999", pgid: "102", args: "unrelated playwright test" },
+  ];
+  const excluded = collectDescendantPids(rows, ["90"]);
+  assert.deepEqual([...excluded].sort(), ["100", "101", "102", "90"]);
+  assert.equal(excluded.has("103"), false);
 });
 
 test("normal completion preserves the wrapped command exit code", async () => {

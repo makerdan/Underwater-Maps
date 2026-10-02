@@ -31,7 +31,7 @@
  *   tierFast.runBudgetMs         = 300 000 ms   (5 min)
  *   tierStandard.runBudgetMs     = 1 200 000 ms (20 min)
  *   tierStandardPlus.runBudgetMs = 2 100 000 ms (35 min)
- *   aggregate.totalBudgetMs      = 3 000 000 ms (50 min)
+ *   aggregate.totalBudgetMs      = 12 000 000 ms (200 min maximum)
  *
  * Scheduled / DB-backed commands (not part of the tiered suite):
  *   audit-marker-bbox — requires DATABASE_URL pointing at a live DB.
@@ -71,7 +71,7 @@ export const VALIDATION_COMMANDS = [
   {
     name: "test-heavy",
     command:
-      "node scripts/run-with-timeout.mjs aggregate -- node scripts/test-heavy-serial.mjs",
+      "node scripts/run-with-timeout.mjs aggregate --owns-e2e-ports -- node scripts/test-heavy-serial.mjs",
     budgetKey: "aggregate",
     description:
       "all steps including e2e (~45 min). Pick for new API routes, schema migrations, " +

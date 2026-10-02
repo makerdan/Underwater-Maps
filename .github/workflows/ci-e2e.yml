@@ -1,10 +1,11 @@
 name: E2E — Playwright (main)
 
 # Full Playwright e2e suite against a real Postgres + api-server + Vite dev
-# server stack. Runs on push to main only (not PRs): the suite takes ~20–25
-# minutes, which is too slow for PR gating — the immediate win is catching
-# regressions automatically after every merge instead of spending an agent
-# session on post-merge validation. workflow_dispatch allows manual runs.
+# server stack. Runs on push to main only (not PRs): the suite is usually
+# 20–25 minutes when green, but retries can extend it beyond 45 minutes.
+# Keep a 120-minute job ceiling so a slow run can finish and publish its final
+# Playwright outcome instead of being cancelled before reporters run.
+# workflow_dispatch allows manual runs.
 
 on:
   push:
@@ -16,7 +17,7 @@ jobs:
   e2e:
     name: Playwright e2e suite
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 120
 
     services:
       postgres:

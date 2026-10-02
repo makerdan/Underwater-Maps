@@ -85,7 +85,9 @@ describe("fetchTerrainTile — in-flight deduplication", () => {
     expect(buf1).toBe(buf2);
 
     // The USGS shaded-relief endpoint must have been called exactly once.
-    const usgsCalls = fetchSpy.mock.calls.filter(([url]) =>
+    const usgsCalls = (
+      fetchSpy.mock.calls as Parameters<typeof globalThis.fetch>[]
+    ).filter(([url]) =>
       String(url).includes("basemap.nationalmap.gov"),
     );
     expect(usgsCalls).toHaveLength(1);
@@ -119,7 +121,9 @@ describe("fetchTerrainTile — in-flight deduplication", () => {
     ]);
 
     // Each unique key must have generated its own upstream request.
-    const usgsCalls = fetchSpy.mock.calls.filter(([url]) =>
+    const usgsCalls = (
+      fetchSpy.mock.calls as Parameters<typeof globalThis.fetch>[]
+    ).filter(([url]) =>
       String(url).includes("basemap.nationalmap.gov"),
     );
     expect(usgsCalls).toHaveLength(2);

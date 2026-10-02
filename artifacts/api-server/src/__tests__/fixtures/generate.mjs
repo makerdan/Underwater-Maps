@@ -50,7 +50,7 @@ const __dir = dirname(fileURLToPath(import.meta.url));
 // ─── GeoTIFF ─────────────────────────────────────────────────────────────────
 
 /**
- * Build a 20×20 float32 GeoTIFF matching a small USGS/NOAA bathymetry tile:
+ * Build a 64×64 float32 GeoTIFF matching a small USGS/NOAA bathymetry tile:
  *  - Coverage: 142.0–142.2°E, 11.0–11.2°N (Mariana Trench area)
  *  - Resolution: 0.01° per pixel
  *  - Depth values: 3000–10000 m (negative in raster convention = below sea level)
@@ -58,8 +58,8 @@ const __dir = dirname(fileURLToPath(import.meta.url));
  *  - 5 no-data cells injected to test skipping logic
  */
 async function buildGeoTiff() {
-  const WIDTH = 20;
-  const HEIGHT = 20;
+  const WIDTH = 64;
+  const HEIGHT = 64;
   const NODATA = -9999;
 
   // lon0, lat0 = top-left corner; pixel size = 0.01°
@@ -140,9 +140,9 @@ function buildNetCdf() {
     ]);
   };
 
-  // Dimensions: lon=10, lat=10
+  // Dimensions: lon=64, lat=64
   const LON_DIM = 0, LAT_DIM = 1;
-  const LON_SIZE = 10, LAT_SIZE = 10;
+  const LON_SIZE = 64, LAT_SIZE = 64;
 
   const dimList = Buffer.concat([
     u32be(NC_DIMENSION), u32be(2),
@@ -679,8 +679,8 @@ async function buildBag() {
  * The Python helper script (gen_laz.py in this directory) produces a LAS 1.2
  * file, point format 0, with:
  *   scale XY = 1e-6°, Z = 0.001 m; offset X = -133, Y = 55, Z = 0
- *   15 records; index 10 has depth=0 (zi=0) — parseLasLaz must skip it
- *   14 valid points at lon ≈ -132.5, lat ≈ 55.2, depth 1250–2400 m
+ *   4096 records covering a 64×64 grid; one depth=0 intertidal point
+ *   4096 valid points at lon ≈ -132.5…-132.44, lat ≈ 55.2…55.26
  *
  * Python dependencies are listed in gen_laz_deps.txt (same directory) with
  * version bounds confirmed working on Python 3.11 (numpy>=1.26,<3;

@@ -1,15 +1,63 @@
 {
-  "$comment": "GitHub-runner runtime skips only. This is deliberately separate from tests/skip-baseline.json, which counts static source call sites in every environment. Values are the 2026-08-18/19 observed GitHub Actions baseline; lower results must be committed as a deliberate ratchet.",
+  "$comment": "GitHub-runner runtime skips. main-full keeps the 44 identities last observed in run 32204518527 (2026-08-19, commit 1f8c5dcd391f586bc6f91d124a4a096b9b0481c8). Fresh run 36949565563 was cancelled at the 45-minute limit after 21 partial skips; its four new identities are not accepted without a complete report. pr-smoke and palette-settings-sync remain at zero; lower results should be committed as deliberate ratchets.",
   "version": 1,
   "suites": {
     "pr-smoke": {
-      "skipped": 0
+      "skipped": 0,
+      "tests": []
     },
     "main-full": {
-      "skipped": 44
+      "skipped": 44,
+      "tests": [
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/advanced-toggles.spec.ts:226 ›  › chromium › advanced-toggles.spec.ts › SeafloorClassificationPanel — Advanced toggle › is collapsed by default, expands on click, and persists across reload",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/advanced-toggles.spec.ts:275 ›  › chromium › advanced-toggles.spec.ts › SeafloorClassificationPanel — Advanced toggle › ZoneOverlay zone-toggle inside Advanced is reachable after expanding",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/advanced-toggles.spec.ts:313 ›  › chromium › advanced-toggles.spec.ts › CurrentsPanel — Advanced toggle › is collapsed by default, expands on click, and persists across reload",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/advanced-toggles.spec.ts:356 ›  › chromium › advanced-toggles.spec.ts › CurrentsPanel — Advanced toggle › particle/arrow/stream toggles inside Advanced are reachable after expanding",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/advanced-toggles.spec.ts:409 ›  › chromium › advanced-toggles.spec.ts › CurrentsPanel — Advanced toggle › Advanced section is absent when currentsEnabled=false",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/advanced-toggles.spec.ts:436 ›  › chromium › advanced-toggles.spec.ts › CurrentsPanel — Advanced toggle › Advanced section is still expanded after toggling currents off then back on",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/advanced-toggles.spec.ts:488 ›  › chromium › advanced-toggles.spec.ts › TidePanel — Advanced toggle › Advanced toggle persists when tide panel is visible",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/advanced-toggles.spec.ts:534 ›  › chromium › advanced-toggles.spec.ts › TidePanel — Advanced toggle › depth-layer buttons inside Advanced are reachable after expanding",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/advanced-toggles.spec.ts:567 ›  › chromium › advanced-toggles.spec.ts › HabitatPanel — Advanced toggle › Advanced toggle persists when habitat overlay is active",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/advanced-toggles.spec.ts:617 ›  › chromium › advanced-toggles.spec.ts › HabitatPanel — Advanced toggle › intensity slider inside Advanced is reachable after expanding",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/currents.spec.ts:134 ›  › chromium › currents.spec.ts › Bathymetric currents — interaction coverage › source toggle round-trips Manual → NOAA → Manual and the UI tracks it",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/currents.spec.ts:185 ›  › chromium › currents.spec.ts › Bathymetric currents — interaction coverage › tide-phase slider scrub updates the visible phase readout",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/currents.spec.ts:237 ›  › chromium › currents.spec.ts › Bathymetric currents — interaction coverage › particles / arrows / streams toggles flip active state",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/currents.spec.ts:275 ›  › chromium › currents.spec.ts › Bathymetric currents — interaction coverage › HUD currents panel mounts with all expected controls",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/dataset-loading-dial.spec.ts:10 ›  › chromium › dataset-loading-dial.spec.ts › dataset row loading dial › appears, advances, and disappears when a preset dataset is selected",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/dataset-upload-autosave.spec.ts:283 ›  › chromium › dataset-upload-autosave.spec.ts › upload auto-save end-to-end › UI path: dropping a CSV onto the dropzone uploads it for real and inserts the new row into MY UPLOADS",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/efh-overlay.spec.ts:474 ›  › chromium › efh-overlay.spec.ts › EFH overlay — Task #314 dataset coverage › Thorne Bay (NOAA) — overview paints polygons and detail panel shows the NOAA EFH credit (no TPWD line)",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/file-upload-bag-nmea-gpx.spec.ts:187 ›  › chromium › file-upload-bag-nmea-gpx.spec.ts › BAG file-upload flow › API path: uploading survey.bag via multipart POST saves the dataset, returns terrain and overview, and the 3D viewer renders data",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/file-upload-bag-nmea-gpx.spec.ts:232 ›  › chromium › file-upload-bag-nmea-gpx.spec.ts › BAG file-upload flow › browser UI path: dropping survey.bag onto the dropzone adds the row to MY UPLOADS and the 3D viewer renders data",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/file-upload-bag-nmea-gpx.spec.ts:317 ›  › chromium › file-upload-bag-nmea-gpx.spec.ts › BAG file-upload flow › error path: dropzone shows error when a corrupt BAG file (plain text) is uploaded",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/file-upload-bag-nmea-gpx.spec.ts:401 ›  › chromium › file-upload-bag-nmea-gpx.spec.ts › NMEA file-upload flow › browser UI path: dropping sparse survey.nmea shows a survey-coverage error in the dropzone",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/file-upload-bag-nmea-gpx.spec.ts:430 ›  › chromium › file-upload-bag-nmea-gpx.spec.ts › NMEA file-upload flow › error path: dropzone shows error when an NMEA file with no valid sentences is uploaded",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/file-upload-bag-nmea-gpx.spec.ts:515 ›  › chromium › file-upload-bag-nmea-gpx.spec.ts › GPX file-upload flow › browser UI path: dropping sparse survey.gpx shows a survey-coverage error in the dropzone",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/file-upload-bag-nmea-gpx.spec.ts:544 ›  › chromium › file-upload-bag-nmea-gpx.spec.ts › GPX file-upload flow › error path: dropzone shows error when a GPX file with no track points or waypoints is uploaded",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/file-upload-chunked.spec.ts:145 ›  › chromium › file-upload-chunked.spec.ts › Chunked upload flow (> 10 MB) › happy path: real chunked upload shows 'Uploading in chunks…' then 'Processing on server…' and the dataset row appears in MY UPLOADS",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/file-upload-chunked.spec.ts:196 ›  › chromium › file-upload-chunked.spec.ts › Chunked upload flow (> 10 MB) › mid-stream retry: chunk-1 failure surfaces the retry button after partial progress; retry resumes from chunk 1 and completes the upload end-to-end",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/file-upload-chunked.spec.ts:302 ›  › chromium › file-upload-chunked.spec.ts › Chunked upload flow (> 10 MB) › beforeunload guard: real browser dialog fires when navigating away while uploading",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/file-upload-chunked.spec.ts:343 ›  › chromium › file-upload-chunked.spec.ts › Chunked upload flow (> 10 MB) › beforeunload guard: does NOT fire when chunked upload is idle or in error state",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/file-upload-chunked.spec.ts:397 ›  › chromium › file-upload-chunked.spec.ts › Chunked upload flow (> 10 MB) › retry path: chunk failure surfaces the retry button; clicking it resumes and completes the upload end-to-end via the real server",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/file-upload-laz.spec.ts:149 ›  › chromium › file-upload-laz.spec.ts › LAZ file-upload flow › API path: uploading survey.laz via multipart POST saves the dataset and it appears in MY UPLOADS",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/file-upload-laz.spec.ts:207 ›  › chromium › file-upload-laz.spec.ts › LAZ file-upload flow › browser UI path: dropping survey.laz onto the dropzone shows upload progress and adds the row to MY UPLOADS",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/file-upload-laz.spec.ts:299 ›  › chromium › file-upload-laz.spec.ts › LAZ file-upload flow › browser UI path: upload error shown when server rejects the LAZ file",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/file-upload-tiff-netcdf.spec.ts:148 ›  › chromium › file-upload-tiff-netcdf.spec.ts › TIFF file-upload flow › API path: uploading survey.tif via multipart POST saves the dataset and it appears in MY UPLOADS",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/file-upload-tiff-netcdf.spec.ts:199 ›  › chromium › file-upload-tiff-netcdf.spec.ts › TIFF file-upload flow › browser UI path: dropping survey.tif onto the dropzone shows upload progress and adds the row to MY UPLOADS",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/file-upload-tiff-netcdf.spec.ts:268 ›  › chromium › file-upload-tiff-netcdf.spec.ts › TIFF file-upload flow › browser UI path: upload error shown when server rejects the TIFF file",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/file-upload-tiff-netcdf.spec.ts:325 ›  › chromium › file-upload-tiff-netcdf.spec.ts › NetCDF file-upload flow › API path: uploading survey.nc via multipart POST saves the dataset and it appears in MY UPLOADS",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/file-upload-tiff-netcdf.spec.ts:376 ›  › chromium › file-upload-tiff-netcdf.spec.ts › NetCDF file-upload flow › browser UI path: dropping survey.nc onto the dropzone shows upload progress and adds the row to MY UPLOADS",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/file-upload-tiff-netcdf.spec.ts:445 ›  › chromium › file-upload-tiff-netcdf.spec.ts › NetCDF file-upload flow › browser UI path: upload error shown when server rejects the NetCDF file",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/habitat-overlay.spec.ts:271 ›  › chromium › habitat-overlay.spec.ts › Habitat overlay › saltwater species lights up the terrain and disabling restores baseline",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/habitat-overlay.spec.ts:277 ›  › chromium › habitat-overlay.spec.ts › Habitat overlay › freshwater species lights up the terrain on a freshwater dataset",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/null-cell-terrain.spec.ts:99 ›  › chromium › null-cell-terrain.spec.ts › dense-survey 200 with coveragePercent › survey.bag returns 200 with coveragePercent present in response body",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/palette-picker.spec.ts:34 ›  › chromium › palette-picker.spec.ts › Depth palette picker — end-to-end › changing the deep colour repaints the HUD depth scale bar",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/pwa-offline.spec.ts:219 ›  › chromium › pwa-offline.spec.ts › Offline network-abort scenario › dataset picker shows availability indicators when offline",
+        "/home/runner/work/Underwater-Maps/Underwater-Maps/tests/e2e/pwa-offline.spec.ts:500 ›  › chromium › pwa-offline.spec.ts › Save Offline full-download flow › offline reload serves cached terrain (SW environments only)"
+      ]
     },
     "palette-settings-sync": {
-      "skipped": 0
+      "skipped": 0,
+      "tests": []
     }
   }
 }

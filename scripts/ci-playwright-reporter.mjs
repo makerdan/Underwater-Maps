@@ -9,6 +9,8 @@
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
+export const MISSING_SKIP_REASON = "No skip reason was supplied by Playwright.";
+
 function testKey(test) {
   const location = test.location ?? {};
   return `${location.file ?? "unknown"}:${location.line ?? 0} › ${test.titlePath().join(" › ")}`;
@@ -17,7 +19,12 @@ function testKey(test) {
 function skipReason(test) {
   const annotations = Array.isArray(test.annotations) ? test.annotations : [];
   const annotation = annotations.find((item) => item.type === "skip" && item.description);
-  return annotation?.description ?? "No skip reason was supplied by Playwright.";
+  if (!annotation?.description?.trim()) {
+    throw new Error(
+      `Skipped test ${testKey(test)} has no explicit reason. Add a description to test.skip().`,
+    );
+  }
+  return annotation.description;
 }
 
 export default class CiPlaywrightReporter {

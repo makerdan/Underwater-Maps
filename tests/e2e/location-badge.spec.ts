@@ -26,15 +26,26 @@ import { test, expect, type Page, API_URL, E2E_USER_ID } from "./fixtures";
  * The TidePanel badge wiring across embedded and standalone rendering modes is
  * additionally covered at unit-test level in TidePanelBadge.test.tsx.
  *
- * All tests gracefully skip when the e2e auth bypass is inactive.
+ * Tests skip only when the landing page proves that the e2e auth bypass is
+ * inactive. Once the authenticated shell is present, a required canvas is a
+ * separate rendering prerequisite and its absence fails the test.
  */
 
 async function appIsSignedIn(page: Page): Promise<boolean> {
-  return page
-    .locator("canvas")
-    .first()
-    .isVisible({ timeout: 10_000 })
-    .catch(() => false);
+  const shell = page.locator("[data-testid='sidebar-mode-tabs']");
+  const landing = page.getByRole("button", { name: "Sign In to Explore", exact: true });
+  await expect
+    .poll(async () => (await shell.isVisible().catch(() => false)) || (await landing.isVisible().catch(() => false)), {
+      timeout: 15_000,
+    })
+    .toBe(true);
+  if (await landing.isVisible().catch(() => false)) {
+    test.skip(true, "Authenticated app shell not available — E2E auth bypass is inactive in this environment");
+    return false;
+  }
+  await expect(shell).toBeVisible();
+  await expect(page.locator("canvas").first()).toBeVisible({ timeout: 15_000 });
+  return true;
 }
 
 /** Mock surface-conditions to return a clean ready response immediately. */
@@ -348,10 +359,7 @@ test.describe("LocationBadge on data panels", () => {
       await page.goto("/");
       await page.waitForLoadState("domcontentloaded");
 
-      if (!(await appIsSignedIn(page))) {
-        test.skip(true, "Canvas not visible — landing page shown (auth bypass inactive)");
-        return;
-      }
+      await appIsSignedIn(page);
 
       await ensureTerrainLoaded(page);
       await openPlanTab(page);
@@ -380,10 +388,7 @@ test.describe("LocationBadge on data panels", () => {
       await page.goto("/");
       await page.waitForLoadState("domcontentloaded");
 
-      if (!(await appIsSignedIn(page))) {
-        test.skip(true, "Canvas not visible — landing page shown");
-        return;
-      }
+      await appIsSignedIn(page);
 
       await ensureTerrainLoaded(page);
       await openPlanTab(page);
@@ -441,10 +446,7 @@ test.describe("LocationBadge on data panels", () => {
       await page.goto("/");
       await page.waitForLoadState("domcontentloaded");
 
-      if (!(await appIsSignedIn(page))) {
-        test.skip(true, "Canvas not visible — landing page shown");
-        return;
-      }
+      await appIsSignedIn(page);
 
       await ensureTerrainLoaded(page);
       await ensureOverlayOn(page, "overlay-toggle-wind");
@@ -467,10 +469,7 @@ test.describe("LocationBadge on data panels", () => {
       await page.goto("/");
       await page.waitForLoadState("domcontentloaded");
 
-      if (!(await appIsSignedIn(page))) {
-        test.skip(true, "Canvas not visible — landing page shown");
-        return;
-      }
+      await appIsSignedIn(page);
 
       await ensureTerrainLoaded(page);
       await ensureOverlayOn(page, "overlay-toggle-wind");
@@ -502,10 +501,7 @@ test.describe("LocationBadge on data panels", () => {
       await page.goto("/");
       await page.waitForLoadState("domcontentloaded");
 
-      if (!(await appIsSignedIn(page))) {
-        test.skip(true, "Canvas not visible — landing page shown");
-        return;
-      }
+      await appIsSignedIn(page);
 
       await ensureTerrainLoaded(page);
       await openPlanTab(page);
@@ -531,10 +527,7 @@ test.describe("LocationBadge on data panels", () => {
       await page.goto("/");
       await page.waitForLoadState("domcontentloaded");
 
-      if (!(await appIsSignedIn(page))) {
-        test.skip(true, "Canvas not visible — landing page shown");
-        return;
-      }
+      await appIsSignedIn(page);
 
       await ensureTerrainLoaded(page);
       await openPlanTab(page);
@@ -584,10 +577,7 @@ test.describe("LocationBadge on data panels", () => {
       await page.goto("/");
       await page.waitForLoadState("domcontentloaded");
 
-      if (!(await appIsSignedIn(page))) {
-        test.skip(true, "Canvas not visible — landing page shown");
-        return;
-      }
+      await appIsSignedIn(page);
 
       await ensureTerrainLoaded(page);
       await openPlanTab(page);

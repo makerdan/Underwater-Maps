@@ -1,0 +1,150 @@
+{
+  "catalogVersion": 1,
+  "catalogDate": "2026-08-30",
+  "entries": [
+    {
+      "id": "BASE-E2E-PUZZLE-POLL",
+      "suite": "Playwright palette E2E",
+      "test": "tests/e2e/overview-puzzle-multiselect.spec.ts — expect.poll matcher calls",
+      "failureSignature": "Runtime TypeError because Playwright expect.poll does not provide the Vitest-only toSatisfy matcher.",
+      "classification": "test",
+      "evidence": {
+        "sources": [
+          { "path": "docs/audits/bug-audit-preexisting-2026-08.md", "locator": "Finding 1, lines 36-41" },
+          { "path": "docs/audits/bug-audit-merge-regressions-2026-08-25.md", "locator": "T-1, lines 137-152" }
+        ],
+        "observations": [
+          { "date": "2026-08-17", "outcome": "fail", "command": "solo Playwright run of the documented baseline spec", "result": "3 failed and 3 passed; failures were deterministic across Playwright retry." },
+          { "date": "2026-08-25", "outcome": "fail", "command": "test-standard-plus palette coverage", "result": "The known browser contract baseline remained outside the audited merge range." }
+        ],
+        "authoritative": false,
+        "summary": "The audit evidence identified a test-only matcher mismatch that was subsequently removed from the spec."
+      },
+      "ownership": {
+        "owner": "BathyScan browser test maintenance",
+        "rationale": "The spec must be repaired or its product contract deliberately changed before the palette signal is trusted."
+      },
+      "firstVerifiedDate": "2026-08-17",
+      "lastVerifiedDate": "2026-08-25",
+      "affectedTiers": ["heavy"],
+      "reviewDeadline": "2026-09-30",
+      "status": "resolved",
+      "statusHistory": [
+        { "status": "active", "date": "2026-08-17", "note": "Confirmed in the pre-existing-failure audit." },
+        { "status": "resolved", "date": "2026-08-17", "note": "The five unsupported toSatisfy calls were replaced; later browser-contract failures have different signatures." }
+      ],
+      "repositoryReferences": ["tests/e2e/overview-puzzle-multiselect.spec.ts"],
+      "resolution": {
+        "date": "2026-08-17",
+        "summary": "The unsupported matcher calls were replaced with Playwright-compatible polling assertions.",
+        "evidence": "Tracked commit 23356481 removed all toSatisfy calls; the current spec contains none."
+      }
+    },
+    {
+      "id": "BASE-RAW-PNPM-AUDIT",
+      "suite": "Dependency audit",
+      "test": "pnpm audit --audit-level=moderate",
+      "failureSignature": "Raw dependency audit reports six test-only vulnerabilities through jsdom and postcss even though the registered check:audit exception is green.",
+      "classification": "dependency",
+      "evidence": {
+        "sources": [
+          { "path": "docs/audits/bug-audit-preexisting-2026-08.md", "locator": "Finding 5, lines 64-69" },
+          { "path": "security-audit-exceptions.md", "locator": "Documented undici exception and review date" }
+        ],
+        "observations": [
+          { "date": "2026-08-17", "outcome": "fail", "command": "pnpm audit --audit-level=moderate", "result": "Six advisories remained on dev-only dependency paths." },
+          { "date": "2026-08-17", "outcome": "pass", "command": "pnpm run check:audit", "result": "The registered audit gate passed with one dated, documented exception." }
+        ],
+        "authoritative": true,
+        "summary": "The failing command and the registered exception are intentionally distinguished; this entry does not authorize ignoring other audit signatures."
+      },
+      "ownership": {
+        "owner": "Dependency maintenance",
+        "rationale": "Revisit when compatible jsdom and postcss releases are available, then remove the dated exception."
+      },
+      "firstVerifiedDate": "2026-08-17",
+      "lastVerifiedDate": "2026-08-17",
+      "affectedTiers": ["standalone"],
+      "reviewDeadline": "2026-10-17",
+      "status": "active",
+      "statusHistory": [
+        { "status": "active", "date": "2026-08-17", "note": "Raw audit failure was observed while the registered gate remained compliant." }
+      ],
+      "repositoryReferences": ["pnpm-lock.yaml", "scripts/check-audit.mjs"],
+      "resolution": null
+    },
+    {
+      "id": "BASE-OVERVIEW-ZOOM-GEO",
+      "suite": "BathyScan component integration",
+      "test": "OverviewMap geographic transform publication after wheel zoom",
+      "failureSignature": "A fixed-pixel puzzle translation leaves the published dLon unchanged after Overview zoom, so persisted geographic placement is stale.",
+      "classification": "product",
+      "evidence": {
+        "sources": [
+          { "path": "docs/audits/bug-audit-merge-regressions-2026-08-25.md", "locator": "F-1, lines 75-102" },
+          { "path": "docs/audits/bug-audit-preexisting-2026-08.md", "locator": "Audit summary and validation method" }
+        ],
+        "observations": [
+          { "date": "2026-08-25", "outcome": "fail", "command": "overviewMap.componentIntegration.test.ts", "result": "The geographic transform assertion failed 3/3 with dLon unchanged." },
+          { "date": "2026-08-25", "outcome": "fail", "command": "reproduction of Overview wheel zoom scenario", "result": "The rAF republish path did not publish a changed transform for the fixed-pixel translation." }
+        ],
+        "authoritative": true,
+        "summary": "This is the one confirmed product defect in the recent merge-regression audit and must not be treated as a harmless test baseline."
+      },
+      "ownership": {
+        "owner": "BathyScan Overview map",
+        "rationale": "The zoom refresh trigger and geographic persistence contract require a product fix before cross-device placement is trusted."
+      },
+      "firstVerifiedDate": "2026-08-25",
+      "lastVerifiedDate": "2026-08-25",
+      "affectedTiers": ["standard"],
+      "reviewDeadline": "2026-09-15",
+      "status": "active",
+      "statusHistory": [
+        { "status": "active", "date": "2026-08-25", "note": "Confirmed independently in the merge-regression audit." }
+      ],
+      "repositoryReferences": [
+        "artifacts/bathyscan/src/components/OverviewMap.tsx",
+        "artifacts/bathyscan/src/__tests__/overviewMap.componentIntegration.test.ts"
+      ],
+      "resolution": null
+    },
+    {
+      "id": "BASE-SIDEBAR-CHEVRON-CONTRACT",
+      "suite": "BathyScan unit tests",
+      "test": "DatasetPanel.myLibraryCollapse.test.tsx",
+      "failureSignature": "The test expects old up/down chevrons while SidebarSection intentionally renders the newer collapsed/expanded chevrons.",
+      "classification": "test",
+      "evidence": {
+        "sources": [
+          { "path": "docs/audits/bug-audit-merge-regressions-2026-08-25.md", "locator": "T-4, lines 154-174" },
+          { "path": "docs/audits/bug-audit-preexisting-2026-08.md", "locator": "Audit summary" }
+        ],
+        "observations": [
+          { "date": "2026-08-25", "outcome": "fail", "command": "BathyScan unit shard", "result": "The stale chevron assertion failed against the current SidebarSection output." },
+          { "date": "2026-08-26", "outcome": "fail", "command": "isolated DatasetPanel.myLibraryCollapse.test.tsx retry", "result": "The same assertion failed on three isolated retries." }
+        ],
+        "authoritative": false,
+        "summary": "The audit identifies contract drift between an intentionally changed UI and its older assertion; current ownership still needs re-verification."
+      },
+      "ownership": {
+        "owner": "BathyScan sidebar test maintenance",
+        "rationale": "Confirm the intended chevron contract, then update the assertion or revert the UI deliberately."
+      },
+      "firstVerifiedDate": "2026-08-25",
+      "lastVerifiedDate": "2026-08-25",
+      "affectedTiers": ["standard", "standard-plus", "heavy"],
+      "reviewDeadline": "2026-09-15",
+      "status": "needs-review",
+      "statusHistory": [
+        { "status": "active", "date": "2026-08-25", "note": "Observed in the merge-regression validation run." },
+        { "status": "needs-review", "date": "2026-08-26", "note": "Requires a fresh verification before it can authorize triage." }
+      ],
+      "repositoryReferences": [
+        "artifacts/bathyscan/src/components/SidebarSection.tsx",
+        "artifacts/bathyscan/src/__tests__/DatasetPanel.myLibraryCollapse.test.tsx"
+      ],
+      "resolution": null
+    }
+  ]
+}

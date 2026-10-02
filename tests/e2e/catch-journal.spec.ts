@@ -29,7 +29,7 @@ async function safeText(res: APIResponse): Promise<string> {
 
 async function createMarker(page: Page, label: string): Promise<Marker> {
   const res = await page.request.post(`${API_BASE}/api/markers`, {
-    data: { datasetId: DATASET_ID, lon: 142.5, lat: 11.35, depth: -10500, label, type: "custom" },
+    data: { datasetId: DATASET_ID, lon: -132.53, lat: 55.69, depth: 100, label, type: "custom" },
     headers: authHeaders,
   });
   expect(res.status(), `POST /api/markers → ${res.status()} ${await safeText(res)}`).toBe(201);

@@ -29,15 +29,17 @@ import {
   writeFileSync,
   chmodSync,
   rmSync,
+  symlinkSync,
 } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
-import { countMatches, loadBaseline, findMissingScanRoots } from "../check-skip-count.mjs";
+import { countSkipCalls, loadBaseline, findMissingScanRoots } from "../check-skip-count.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const scriptPath = resolve(__dirname, "..", "check-skip-count.mjs");
 const ignoredDirsPath = resolve(__dirname, "..", "lib", "ignored-dirs.mjs");
+const workspaceNodeModules = resolve(__dirname, "..", "..", "node_modules");
 
 // Built dynamically so the ratchet scanning THIS file never counts them.
 const UNIT_SKIP_CALL = ["it", "skip("].join(".");
@@ -61,6 +63,7 @@ after(() => {
 function makeFakeRepo(name) {
   const repo = join(sandbox, name);
   mkdirSync(join(repo, "scripts", "lib"), { recursive: true });
+  symlinkSync(workspaceNodeModules, join(repo, "node_modules"), "dir");
   copyFileSync(scriptPath, join(repo, "scripts", "check-skip-count.mjs"));
   copyFileSync(ignoredDirsPath, join(repo, "scripts", "lib", "ignored-dirs.mjs"));
   for (const d of ["artifacts", "lib", join("tests", "e2e")]) {
@@ -255,18 +258,20 @@ describe("unreadable file handling", () => {
     );
   });
 
-  it("countMatches skips a nonexistent file and counts the rest (unit)", () => {
-    const repo = makeFakeRepo("countmatches-unit");
+  it("countSkipCalls skips a nonexistent file and counts the rest (unit)", () => {
+    const repo = makeFakeRepo("countskipcalls-unit");
     const good = join(repo, "artifacts", "good.test.ts");
     writeFileSync(good, `${UNIT_SKIP_CALL}"x");\n`);
-    const re = new RegExp(String.raw`\b(?:it|test|describe)\.skip\(`, "g");
 
     const warnings = [];
     const origWarn = console.warn;
     console.warn = (msg) => warnings.push(String(msg));
     let out;
     try {
-      out = countMatches([join(repo, "artifacts", "gone.test.ts"), good], re);
+      out = countSkipCalls(
+        [join(repo, "artifacts", "gone.test.ts"), good],
+        ["it", "test", "describe"],
+      );
     } finally {
       console.warn = origWarn;
     }
@@ -278,19 +283,40 @@ describe("unreadable file handling", () => {
     assert.ok(warnings[0].includes("gone.test.ts") && warnings[0].includes("could not read"));
   });
 
-  it("countMatches normalizes non-global regexes and counts every match", () => {
-    const repo = makeFakeRepo("countmatches-non-global");
+  it("counts executable calls while ignoring comments and string literals", () => {
+    const repo = makeFakeRepo("ast-skip-count");
     const file = join(repo, "artifacts", "three.test.ts");
-    writeFileSync(file, `${UNIT_SKIP_CALL}"a");\n${UNIT_SKIP_CALL}"b");\n${UNIT_SKIP_CALL}"c");\n`);
-
-    const nonGlobal = countMatches([file], new RegExp(String.raw`\b(?:it|test|describe)\.skip\(`));
-    const global = countMatches(
-      [file],
-      new RegExp(String.raw`\b(?:it|test|describe)\.skip\(`, "g"),
+    writeFileSync(
+      file,
+      [
+        `// ${UNIT_SKIP_CALL}"comment only");`,
+        `const message = ${JSON.stringify(`${UNIT_SKIP_CALL}"string only");`)};`,
+        `${UNIT_SKIP_CALL}"first");`,
+        `${UNIT_SKIP_CALL}"second");`,
+        `test["skip"]("computed property call");`,
+      ].join("\n"),
     );
 
-    assert.deepEqual(nonGlobal, global);
-    assert.equal(nonGlobal.total, 3);
+    const result = countSkipCalls([file], ["it", "test", "describe"]);
+    assert.equal(result.total, 3);
+    assert.equal(result.perFile[0].count, 3);
+  });
+
+  it("fails closed when a test file cannot be parsed", () => {
+    const repo = makeFakeRepo("parse-error");
+    writeFileSync(join(repo, "artifacts", "broken.test.ts"), "export const = ;\n");
+    writeBaseline(repo, { unitStaticSkips: 0, e2eSkipSites: 0 });
+
+    const result = runScript(repo);
+    assert.equal(result.status, 1, `expected exit 1, got ${result.status}\n${result.stderr}`);
+    assert.ok(
+      result.stderr.includes("could not parse") && result.stderr.includes("broken.test.ts"),
+      `stderr should identify the unparseable file.\nstderr: ${result.stderr}`,
+    );
+    assert.ok(
+      result.stderr.includes("refusing to compare a partial skip count"),
+      `stderr should refuse partial coverage.\nstderr: ${result.stderr}`,
+    );
   });
 });
 

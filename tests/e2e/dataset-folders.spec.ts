@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext, type Page, API_URL } from "./fixtures";
+import { test, expect, type APIRequestContext, type Page, API_URL, E2E_BYPASS_SECRET } from "./fixtures";
 
 /**
  * Dataset folders E2E.
@@ -23,6 +23,7 @@ const USER_B = `e2e-folders-other-${Date.now()}`;
 function authHeaders(userId: string): Record<string, string> {
   return {
     "x-e2e-user-id": userId,
+    "x-e2e-bypass-secret": E2E_BYPASS_SECRET,
     "Content-Type": "application/json",
   };
 }
@@ -330,8 +331,8 @@ test.describe("dataset folders — UI action bar (route-mocked)", () => {
     const anchorRow = page.getByTestId(`btn-user-dataset-${ANCHOR.id}`);
     await anchorRow.waitFor({ state: "visible", timeout: 10_000 });
 
-    // Enter selection mode by clicking the anchor dataset's checkbox.
-    await anchorRow.locator('span[role="checkbox"]').click();
+    // Enter selection mode using the current row selection affordance.
+    await page.getByTestId(`select-upload-${ANCHOR.id}`).click();
 
     // Select the source folder (row is now clickable in selectionMode).
     const srcFolderRow = page.getByTestId(`folder-row-${SRC.id}`);
@@ -339,7 +340,7 @@ test.describe("dataset folders — UI action bar (route-mocked)", () => {
     await srcFolderRow.click();
 
     // Deselect the anchor dataset — only source folder remains selected.
-    await anchorRow.locator('span[role="checkbox"]').click();
+    await page.getByTestId(`select-upload-${ANCHOR.id}`).click();
 
     // Action bar must be visible now with exactly one folder selected.
     const actionBar = page.getByTestId("library-action-bar");
@@ -406,14 +407,14 @@ test.describe("dataset folders — UI action bar (route-mocked)", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await ensureExploreAndLibrary(page);
 
-    // Select both dataset checkboxes to enter and extend selection mode.
+    // Select both datasets using the current row selection affordances.
     const row1 = page.getByTestId(`btn-user-dataset-${DS1.id}`);
     await row1.waitFor({ state: "visible", timeout: 10_000 });
-    await row1.locator('span[role="checkbox"]').click();
+    await page.getByTestId(`select-upload-${DS1.id}`).click();
 
     const row2 = page.getByTestId(`btn-user-dataset-${DS2.id}`);
     await row2.waitFor({ state: "visible", timeout: 5_000 });
-    await row2.locator('span[role="checkbox"]').click();
+    await page.getByTestId(`select-upload-${DS2.id}`).click();
 
     // Action bar: Move To Folder must be enabled (2 datasets, no folders).
     const actionBar = page.getByTestId("library-action-bar");
@@ -462,8 +463,8 @@ test.describe("dataset folders — UI action bar (route-mocked)", () => {
     const dsRow = page.getByTestId(`btn-user-dataset-${DS.id}`);
     await dsRow.waitFor({ state: "visible", timeout: 10_000 });
 
-    // Click the checkbox to enter selection mode.
-    await dsRow.locator('span[role="checkbox"]').click();
+    // Click the current row selection affordance.
+    await page.getByTestId(`select-upload-${DS.id}`).click();
 
     // The library action bar must appear.
     const actionBar = page.getByTestId("library-action-bar");

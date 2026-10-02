@@ -47,6 +47,12 @@ async function openDriftPlanner(page: Page): Promise<void> {
   // the WeatherPanel inside it) lives in the PLAN tab and is display:none in
   // Explore mode. Switch the sidebar to Plan so the panel becomes visible.
   await page.getByRole("button", { name: "Plan", exact: true }).click();
+  const section = page.getByTestId("sidebar-section-driftRoute");
+  const toggle = section.getByRole("button").first();
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.click();
+  }
+  await expect(section).toBeVisible();
 }
 
 async function mockOkSurfaceConditions(page: Page): Promise<void> {

@@ -121,7 +121,7 @@ function getUndoOnClick() {
 import { useUndoableTrailDelete } from "@/hooks/useUndoableTrailDelete";
 
 describe("useUndoableTrailDelete", () => {
-  let refetchTrails: ReturnType<typeof vi.fn>;
+  let refetchTrails: () => Promise<void>;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -132,7 +132,7 @@ describe("useUndoableTrailDelete", () => {
     toastFn.mockReturnValue({ dismiss: dismissFn });
     dismissFn.mockReset();
     invalidateQueries.mockReset();
-    refetchTrails = vi.fn().mockResolvedValue(undefined);
+    refetchTrails = vi.fn(async (): Promise<void> => {});
   });
 
   afterEach(() => {

@@ -138,7 +138,9 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
     expect(resolved).not.toBeNull();
     expect(resolved!.source.id).toBe("usgs-3dep");
     // Confirm the 3DEP URL was called
-    const calledUrls = fetchSpy.mock.calls.map((c) => String(c[0]));
+    const calledUrls = (
+      fetchSpy.mock.calls as Parameters<typeof globalThis.fetch>[]
+    ).map((c) => String(c[0]));
     expect(calledUrls.some((u) => u.includes(URL_3DEP))).toBe(true);
     // Confirm GEBCO was NOT called (3DEP succeeded first)
     expect(calledUrls.some((u) => u.includes(URL_GEBCO))).toBe(false);
@@ -165,7 +167,9 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
     expect(resolved).not.toBeNull();
     expect(resolved!.source.id).toBe("noaa-great-lakes-dem");
     // Confirm that the URL contained the correct coverage identifier
-    const calledUrls = fetchSpy.mock.calls.map((c) => String(c[0]));
+    const calledUrls = (
+      fetchSpy.mock.calls as Parameters<typeof globalThis.fetch>[]
+    ).map((c) => String(c[0]));
     const greatLakesUrl = calledUrls.find((u) => u.includes(URL_GREAT_LAKES));
     expect(greatLakesUrl).toBeDefined();
     expect(greatLakesUrl).toContain("DEM_global_mosaic");
@@ -191,7 +195,9 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
     const resolved = await resolveBathymetrySource(meta, 32);
     expect(resolved).not.toBeNull();
     expect(resolved!.source.id).toBe("noaa-great-lakes-dem");
-    const calledUrls = fetchSpy.mock.calls.map((c) => String(c[0]));
+    const calledUrls = (
+      fetchSpy.mock.calls as Parameters<typeof globalThis.fetch>[]
+    ).map((c) => String(c[0]));
     const greatLakesUrl = calledUrls.find((u) => u.includes(URL_GREAT_LAKES));
     expect(greatLakesUrl).toBeDefined();
     expect(greatLakesUrl).toContain("DEM_global_mosaic");
@@ -229,7 +235,9 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
     expect(resolved).not.toBeNull();
     expect(resolved!.source.id).toBe("gebco");
     // Confirm GEBCO URL was called
-    const calledUrls = fetchSpy.mock.calls.map((c) => String(c[0]));
+    const calledUrls = (
+      fetchSpy.mock.calls as Parameters<typeof globalThis.fetch>[]
+    ).map((c) => String(c[0]));
     expect(calledUrls.some((u) => u.includes(URL_GEBCO))).toBe(true);
     // 3DEP should NOT have been called (fast-failed without fetch).
     // (Great Lakes shares the DEM_global_mosaic URL with GEBCO now, so a
@@ -262,7 +270,9 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
     expect(resolved).not.toBeNull();
     expect(resolved!.source.id).toBe("gebco");
     // Both 3DEP (threw) and GEBCO (succeeded) should have been attempted
-    const calledUrls = fetchSpy.mock.calls.map((c) => String(c[0]));
+    const calledUrls = (
+      fetchSpy.mock.calls as Parameters<typeof globalThis.fetch>[]
+    ).map((c) => String(c[0]));
     expect(calledUrls.some((u) => u.includes(URL_3DEP))).toBe(true);
     expect(calledUrls.some((u) => u.includes(URL_GEBCO))).toBe(true);
   });
@@ -557,7 +567,9 @@ describe("buildTerrainGrid — in-flight deduplication", () => {
       expect(r1).toBe(r2);
       // The WCS endpoint must have been called exactly once — dedup prevented
       // the second concurrent call from firing its own upstream request.
-      const wcsCalls = fetchSpy.mock.calls.filter(([url]) =>
+      const wcsCalls = (
+        fetchSpy.mock.calls as Parameters<typeof globalThis.fetch>[]
+      ).filter(([url]) =>
         String(url).includes("DEM_mosaics"),
       );
       expect(wcsCalls).toHaveLength(1);

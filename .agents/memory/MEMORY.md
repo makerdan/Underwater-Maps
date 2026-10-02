@@ -19,6 +19,7 @@
 - [Shared mock factories + guards](terrain-mock-export-sync.md) — wholesale mocks use factories and guard tests to prevent export drift.
 - [Full e2e known failures](full-e2e-known-failures.md) — deterministic dataset-load and related e2e failures have known baseline provenance.
 - [Toolchain pinned exactly](vite8-vitest-env-pitfalls.md) — Vite, plugin-react, and Vitest are exact-pinned; bump deliberately.
+- [Vitest 4 mock callback typing](vitest4-mock-callback-types.md) — give vi.fn callbacks and spy call tuples explicit types to keep test preflight compiling.
 - [Catalog upstream successors](catalog-upstream-successors.md) — deleted services require successor mapping and fetch-strategy updates together.
 - [API route test mock fallback](api-route-test-mock-fallback.md) — stateful route-test overrides need complete schema/table fallbacks.
 - [PWA service-worker base normalization](pwa-service-worker-base-normalization.md) — never append a slash to an already-root base.

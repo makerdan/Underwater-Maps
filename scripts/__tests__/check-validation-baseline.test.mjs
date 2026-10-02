@@ -13,21 +13,28 @@ import {
 
 const root = resolve(fileURLToPath(import.meta.url), "../../..");
 const catalogPath = resolve(root, "docs/validation/failure-baseline.json");
+const historicalCatalogPath = resolve(
+  root,
+  "scripts/__tests__/fixtures/failure-baseline-2026-08-30.json",
+);
 const catalog = JSON.parse(readFileSync(catalogPath, "utf8"));
+// Date-specific assertions use a frozen catalog excerpt from 2026-08-30. The
+// checked-in catalog remains independently validated at its current date.
+const historicalCatalog = JSON.parse(readFileSync(historicalCatalogPath, "utf8"));
 
 function cloneCatalog() {
-  return structuredClone(catalog);
+  return structuredClone(historicalCatalog);
 }
 
-function check(candidate, asOf = "2026-08-30") {
+function check(candidate, asOf = historicalCatalog.catalogDate) {
   return validateBaselineCatalog(candidate, { repoRoot: root, asOf });
 }
 
 test("the checked-in catalog is valid at its verification date", () => {
-  const result = check(catalog);
+  const result = check(catalog, catalog.catalogDate);
   assert.deepEqual(result.errors, []);
   assert.equal(result.entryCount, 14);
-  assert.equal(result.authoritativeActiveCount, 2);
+  assert.equal(result.authoritativeActiveCount, 1);
 });
 
 test("the CLI validates the real catalog without changing it", () => {
@@ -35,7 +42,7 @@ test("the CLI validates the real catalog without changing it", () => {
   const result = runValidationBaselineCheck({
     catalog: catalogPath,
     repoRoot: root,
-    asOf: "2026-08-30",
+    asOf: catalog.catalogDate,
   });
   assert.deepEqual(result.errors, []);
   assert.equal(readFileSync(catalogPath, "utf8"), before);
@@ -118,18 +125,18 @@ test("catalog defects never become a test suppression mechanism", () => {
 test("maintenance report returns no findings when active records are outside both windows", () => {
   const candidate = cloneCatalog();
   const result = findBaselineMaintenanceFindings(candidate, {
-    asOf: "2026-08-30",
+    asOf: historicalCatalog.catalogDate,
     withinDays: 0,
     staleAfterDays: 100,
   });
   assert.deepEqual(result.actionable, []);
-  assert.equal(result.informationalInactive.length, 12);
+  assert.equal(result.informationalInactive.length, 2);
 });
 
 test("maintenance report includes the inclusive deadline boundary", () => {
   const candidate = cloneCatalog();
   const result = findBaselineMaintenanceFindings(candidate, {
-    asOf: "2026-08-30",
+    asOf: historicalCatalog.catalogDate,
     withinDays: 16,
     staleAfterDays: 0,
   });
@@ -146,7 +153,7 @@ test("maintenance report identifies expired deadlines and stale reviews", () => 
   active.reviewDeadline = "2026-08-29";
   active.lastVerifiedDate = "2026-07-01";
   const report = findBaselineMaintenanceFindings(candidate, {
-    asOf: "2026-08-30",
+    asOf: historicalCatalog.catalogDate,
     withinDays: 0,
     staleAfterDays: 30,
   });
@@ -180,7 +187,7 @@ test("maintenance report treats inactive records as informational", () => {
     staleAfterDays: 0,
   });
   assert.equal(result.actionable.length, 2);
-  assert.equal(result.informationalInactive.length, 12);
+  assert.equal(result.informationalInactive.length, 2);
   assert.ok(result.informationalInactive.some((entry) => entry.status === "resolved"));
   assert.ok(result.informationalInactive.some((entry) => entry.status === "needs-review"));
 });
