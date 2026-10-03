@@ -1,775 +1,716 @@
 ---
-name: Poe-Setup
+name: poe-setup
+title: Poe Setup
 description: >-
-  Self-contained guide for integrating the Poe API into any JavaScript or
-  TypeScript Replit app. Use it whenever an app needs Poe models, an
-  OpenAI-compatible client, structured output, tool calling, vision, or
-  streamed AI responses. Covers provider-wrapper selection, secret handling,
-  live model discovery, resilient server routes, and portable testing without
-  assuming any existing app architecture.
+  Implement, audit, or troubleshoot Poe API integrations in server-capable
+  JavaScript and TypeScript Replit applications. Reuse the host application's
+  provider boundary, keep credentials server-side, restrict every request to a
+  code-owned static model allowlist, verify endpoint capabilities, and add
+  bounded requests, validated outputs, safe
+  streaming, tool authorization, multimodal protections, a Replit AI
+  provider-level fallback, and portable tests. Use advisory mode for
+  architecture questions and implementation mode when project changes are
+  requested.
 ---
 
-# Poe API Integration — Portable, Chatbot-Oriented Setup Guide
+# Poe Setup
 
-Poe exposes an OpenAI-compatible API at `https://api.poe.com/v1`. The endpoint
-accepts common OpenAI request shapes, but compatibility does not mean every
-model supports every capability or parameter. Discover the live catalogue and
-verify the capability metadata and current Poe documentation for the exact
-model and endpoint actually selected.
+Poe exposes an OpenAI-compatible API at `https://api.poe.com/v1`. Compatibility
+does not guarantee that every model supports every endpoint, modality,
+parameter, tool shape, structured-output form, or streaming event. Use only
+exact model IDs declared in the application's code-owned static Poe registry.
+Verify optional behavior against current Poe documentation and bounded,
+administrator-triggered probes of those approved models.
 
-This guide is a provider-specific transport guide behind a provider-neutral
-application boundary. The application should choose a capability-appropriate
-model through an explicit intake and registry process, then let one server-side
-provider adapter perform the Poe call.
+<HARD-GATE>
+Production code, startup checks, health checks, setup flows, and administrator
+operations must never call Poe's full `GET /v1/models` catalogue, including
+through `getPoeClient().models.list()` or another SDK wrapper. Model discovery
+cannot authorize, populate, refresh, or expand the static registry. Every Poe
+probe, Poe primary route, Poe-model fallback, and Poe completion must fail
+closed before Poe transport when its exact model ID is absent from the
+code-owned registry or lacks the route's required capabilities. The required
+Replit AI provider fallback is a separate provider path and can never be used to
+expand or bypass the Poe registry.
+</HARD-GATE>
 
-## 1. Intake before model selection
+This skill targets server-capable Node.js JavaScript and TypeScript
+applications. Do not copy its Node, `process.env`, OpenAI SDK, or Express
+examples into browser-only, Expo, Deno, edge-worker, or other incompatible
+runtimes. For another runtime, preserve the security and validation contract
+but implement it with that runtime's server-side secret, HTTP, abort, and
+streaming primitives. Stop and identify the missing server boundary when the
+application cannot keep a provider credential off the client.
 
-Do not choose a model from a familiar name, an old example, or a vague request.
-For each chatbot or route, gather these fields in order:
+## 1. Select the operating mode
 
-1. **Goal and use case:** What should the user accomplish, and what is success?
-2. **Input contract:** Text only, images, audio, files, structured records, or a
-   bounded combination? What MIME types, sizes, and trust boundaries apply?
-3. **Output contract:** Free text, a schema-validated JSON object, a tool request,
-   a streamed response, or another explicitly validated shape?
-4. **Required capabilities:** Vision, tools, structured output, reasoning,
-   streaming, long context, or multi-turn state. Mark each as required,
-   optional, or forbidden.
-5. **Context:** What history, retrieved data, system instructions, and tool
-   results must be transferred? What may not be retained or sent?
-6. **Operational targets:** Maximum latency, token/payload limits, concurrency,
-   and whether partial streaming is useful.
-7. **Cost target:** Per-request or monthly budget, token ceiling, and whether a
-   cheaper documented fallback is acceptable.
-8. **Privacy and authorization:** Data classification, retention expectations,
-   tenant/user isolation, consent, and which server-owned actions the user may
-   authorize.
-9. **Fallback expectations:** May the product retry, refresh the catalogue, use
-   another registered model, degrade from streaming to non-streaming, or ask the
-   user to retry? Define what must instead fail closed.
+Choose exactly one mode from the user's request:
 
-Record the answers as the route's input/output contract. If a required field is
-unknown, ask for it or stop with a clear configuration error; do not infer
-permission, privacy suitability, or capability from the model name. Filter the
-registry using the required fields, verify live availability, select an exact
-model ID, and re-check the selected endpoint's supported parameters immediately
-before the call. A fallback is a separately verified registry choice, not an
-implicit substitution.
+- **Advisory:** Explain architecture, review a proposed design, or answer a Poe
+  integration question. Do not change project files.
+- **Implementation:** Inspect the host project, implement the smallest
+  compatible integration, add tests, run the project's canonical validation,
+  and report the result.
+- **Audit/troubleshooting:** Inspect an existing integration for correctness,
+  security, reliability, and contract failures. Default to report-only unless
+  the user explicitly requests fixes.
 
-## 2. Choose the integration layer first
+In implementation mode, complete this workflow in order:
 
-Before installing an SDK or writing a direct Poe call, inspect the repository
-for an existing provider abstraction. Search for names such as `ai`,
-`providers`, `llm`, `inference`, `getClient`, or `complete`, and look for
-service factories, model registries, retry/caching helpers, and error types.
-Read the local usage and tests before choosing an implementation.
+1. Establish the project's required test baseline and validation ceiling.
+2. Detect the runtime, package manager, server boundary, authentication model,
+   validation library, provider abstractions, tests, and existing secret names.
+3. Record the minimum route contract and activate any capability-specific
+   intake gates.
+4. Resolve the exact model from the static registry and verify the endpoint and
+   required capabilities.
+5. Implement the smallest change behind the existing provider boundary.
+6. Implement or verify the Replit AI provider-level fallback.
+7. Add or update contract, failure-path, and route tests.
+8. Run the project's canonical validation without escalating beyond its
+   established ceiling.
+9. Report changed files, selected endpoint/model evidence, security controls,
+   validation results, and unresolved limitations.
 
-Use an existing provider/client abstraction when one is present. Add Poe as a
-provider behind that boundary instead of bypassing it from a route or browser
-component. This preserves the app's existing authentication, retries,
-telemetry, caching, rate limits, and error contract, and prevents multiple
-clients from handling the same secret differently.
+Do not replace or broadly refactor an existing provider abstraction merely to
+add Poe. Preserve public contracts and existing providers unless the user
+explicitly requests a migration or refactor.
 
-Only use the raw OpenAI-compatible SDK or REST fallback below when no suitable
-abstraction exists, or when the abstraction explicitly delegates client
-creation to it. Do not install a second SDK or create a second provider
-singleton merely because a route needs a new model capability.
+Stop rather than guess when:
 
-## 3. Maintain a model capability and routing registry
+- no server-side credential boundary exists;
+- the requested model or required capability cannot be verified;
+- a requested primary, fallback, probe, or completion model is not in the
+  code-owned static registry;
+- the required Replit AI fallback cannot satisfy the route's user-visible
+  contract and no explicitly approved degraded contract exists;
+- sensitive data would be sent without verified processing/retention approval;
+- a required authorization, tenant-isolation, or validation boundary is absent;
+- a paid capability probe or live inference test lacks authorization;
+- the integration would require an incompatible runtime or unsupported client
+  exposure; or
+- the project cannot run its required validation and no evidence-based
+  limitation can be reported.
 
-Treat the registry as application configuration with an owner and verification
-record, not as a permanent copy of Poe's catalogue. Keep two related records
-when useful:
+## 2. Discover the host application first
 
-- The **capability registry** says what an exact model/endpoint combination was
-  observed and verified to support.
-- The **use-case routing record** says which verified entries are eligible for a
-  particular use case, in priority order, with explicit fallback behavior.
+Before installing an SDK or writing a direct request:
 
-### Capability registry contract
+- Read project instructions and package scripts.
+- Detect the package manager from the lockfile and existing commands. Use it;
+  do not introduce another package manager.
+- Search for provider boundaries and registries using names such as `ai`,
+  `providers`, `llm`, `inference`, `getClient`, `complete`, and `models`.
+- Inspect existing authentication, authorization, schemas, retries, caching,
+  logging, rate limits, errors, and tests.
+- Check whether the installed dependencies already provide an OpenAI-compatible
+  client. Do not install a duplicate SDK.
+- Confirm the SDK version and actual API before copying an example.
 
-Every row must use the exact model ID returned by Poe and identify the endpoint
-whose behavior was verified. The row must contain at least:
+Use the existing provider abstraction when suitable. Add Poe behind it so
+routes do not read secrets, construct provider clients, or invent independent
+retry and error policies.
 
-| Field | Required meaning |
-| --- | --- |
-| Exact identity | `model.id` copied verbatim, provider, endpoint, and any version/revision label supplied by the provider |
-| Live availability | Last `GET /v1/models` observation, availability status, and whether a fresh lookup is required before use |
-| Verified inputs/outputs | Accepted input modalities and MIME types, output forms, maximum tested payloads, and response extraction path |
-| Capabilities | Vision, tools, structured JSON Schema output, reasoning, streaming, multi-turn/state behavior; each is `yes`, `no`, or `unknown` with evidence |
-| Limits | Context, input/output tokens, image dimensions/bytes, tool turns, concurrency, timeout, and request-size limits |
-| Parameters | Supported optional fields, rejected fields, defaults, and provider-specific constraints; do not copy unsupported fields |
-| Cost and latency | Current documented or observed cost basis, budget class, latency target/observations, and date; never a permanent price claim |
-| Privacy suitability | Allowed data classification, retention/processing notes, user/tenant restrictions, and authorization requirements |
-| REST mapping | `POST /v1/chat/completions`, `POST /v1/responses`, or another currently documented endpoint and its request shape |
-| Validation | Request/response schema, output limits, tool-argument validation, and test evidence |
-| Reliability | Retry class, timeout, cancellation behavior, rate-limit handling, cache eligibility, and safe normalized errors |
-| Fallback | Explicit eligible model/endpoint, allowed degradation, and fail-closed condition |
-| Approved use | Named route/use-case classes and prohibited uses |
-| Ownership | Registry owner, verification owner, verification date, source links/notes, and next review trigger |
+Only use raw `fetch` or the OpenAI Node SDK when no suitable abstraction exists
+or that abstraction explicitly delegates transport creation. Package commands
+in this skill are illustrative; install through the host project's package
+manager and preserve its lockfile.
 
-Never turn `unknown` into `yes` because an SDK type or catalogue row has a
-similar name. Keep stale rows for audit if needed, but mark them unavailable
-until a fresh catalogue lookup and capability check pass.
+## 3. Define the route contract
 
-### Use-case routing record
+### Minimum intake for ordinary text chat
 
-For each chatbot route, record the intake result, required versus optional
-capabilities, privacy class, budget/latency target, primary registry key,
-ordered fallbacks, permitted degradation, and the owner who can change routing.
-The route must reject a model that is available but does not satisfy a required
-capability. Do not use the presence of a model in the catalogue as proof that
-inference, vision, tools, structured output, or streaming works for that model.
+Record:
 
-## 4. Store the API key as a Replit Secret
+- user goal and success condition;
+- authenticated route and authorized audience;
+- accepted input and maximum request size;
+- output form and maximum output size;
+- required versus optional capabilities;
+- context source and retention rule;
+- latency, timeout, concurrency, and budget limits;
+- data classification and tenant boundary; and
+- fallback and fail-closed behavior.
 
-1. Open the **Secrets** panel in the Replit workspace.
-2. Add a secret named **`POE_API_KEY2`** and paste the key as its value.
-3. Read it only in server-side code as `process.env.POE_API_KEY2`.
+Safe defaults may be documented for ordinary, non-sensitive text chat:
 
-Never hard-code the key, commit it, include it in a client bundle, put it in
-browser local storage, or return it in an error/log response. Do not ask a user
-to paste a secret into chat. If the app already uses a secret-management or
-provider configuration layer, follow that layer's naming and validation
-conventions instead of exposing the key to application code.
+- free-text output;
+- no tools, files, images, audio, or remote URL fetching;
+- no cross-request provider state;
+- no automatic model substitution;
+- bounded context and output;
+- no prompt or response retention beyond the product's stated need; and
+- no automatic retry after an ambiguously transmitted inference request.
 
-## 5. Raw SDK fallback
+Unknown authorization, privacy suitability, required capability, tenant scope,
+or externally visible side effects always block implementation.
 
-If no provider abstraction exists, install the standard OpenAI Node SDK from
-the app's package manager:
+### Capability-specific gates
 
-```bash
-pnpm add openai
-```
+Activate only the gates the route needs:
 
-Construct it lazily and memoize it in a server-only module. Importing the module
-must not read or validate optional Poe configuration, construct a client, or
-throw because Poe is not configured. Fail with a clear configuration error at
-the operation boundary when Poe is first used. If Poe is required for the whole
-service, an explicit startup preflight may call the same getter and fail startup;
-that preflight is an application decision, not a module-import side effect.
+- **Structured output:** exact endpoint shape, runtime schema, business limits,
+  and malformed-output behavior.
+- **Tools:** allow-list, strict argument schema, actor and tenant authorization,
+  side-effect confirmation, idempotency, turn limit, and audit behavior.
+- **Vision/files:** accepted formats, content verification, decoded size,
+  dimensions, metadata policy, malware/content handling, and retention.
+- **Remote URLs:** protocol and host allow-lists, redirect and DNS policy,
+  private-address blocking, timeout, and byte limits.
+- **Streaming:** event schema, cumulative bytes, event count, idle and total
+  deadlines, backpressure, terminal states, and disconnect behavior.
+- **Sensitive data:** verified provider processing/retention terms, application
+  approval, minimum disclosure, access controls, and fail-closed behavior.
+- **Provider fallback:** Poe failure classes that permit Replit AI, Replit AI
+  capability and privacy approval, context conversion, budget limits, degraded
+  behavior, and terminal failure when both providers are unavailable.
+
+## 4. Enforce one code-owned static model registry
+
+Define every approved Poe model and its capability metadata in one auditable,
+source-controlled registry. It is the only authority for model IDs used by
+primaries, fallbacks, explicit probes, route construction, persisted override
+loading, and completion dispatch.
+
+Each registry entry must contain:
+
+- exact immutable model ID;
+- enabled/disabled status;
+- approved routes or use-case classes;
+- supported endpoints and verified capabilities;
+- required input/output and operational limits;
+- data classification and approved use;
+- capability evidence, verifier, and verification timestamp;
+- review trigger;
+- eligible fallback classes; and
+- fail-closed behavior.
+
+Use `yes`, `no`, or `unknown` for capabilities. Only `yes` satisfies a required
+capability. Never add, infer, or activate a model from an SDK type, provider
+error, old example, probe response, administrator input, or any live catalogue.
+Adding or removing a model is a reviewed source-code change.
+
+Every route must derive its primary and eligible fallbacks from this registry.
+A route-specific record may further restrict the global registry but may not
+expand it. Before any Poe network call, the provider boundary must validate:
+
+1. the exact model ID exists in the static registry;
+2. the entry is enabled for the route;
+3. the selected endpoint and every required capability are marked `yes`;
+4. the request respects the entry's limits and data classification; and
+5. the operation is an allowed completion or explicit probe.
+
+Reject violations locally with a normalized non-success response. Do not
+contact Poe to determine whether an unknown or incompatible model happens to
+work.
+
+### Explicit probing
+
+Probing remains optional, administrator-triggered, and bounded. It may target
+only enabled static-registry models relevant to an active route. A probe cannot
+add a model, enable a capability, alter fallback ordering, or expand approved
+use automatically. Record probe time, model, endpoint, bounded result, and safe
+error separately from configured registry metadata.
+
+Bound probe model count, concurrency, request and aggregate deadlines,
+cancellation, retries, response size, and cost. Never probe the full registry
+automatically at startup, deployment, health check, or ordinary request time.
+
+### Administrator and persisted fallback behavior
+
+Administrators may add, remove, reorder, or reset fallback selections only
+within the static registry and only among models whose entries satisfy the
+feature's required capabilities. Code-owned primary models remain code-owned
+unless the application explicitly has a separately approved primary-selection
+contract.
+
+Revalidate persisted fallback overrides when loading, saving, and dispatching.
+Unknown, removed, disabled, or capability-incompatible entries must be rejected
+or filtered before route construction and must never reach the Poe transport.
+Preserve the ordering of valid entries and apply safe code-owned defaults when
+the override becomes empty, according to the route contract.
+
+Remove live-catalogue refresh controls. If compatibility requires retaining a
+retired refresh API temporarily, it must return a documented non-success status
+without contacting Poe. Administrator status surfaces must distinguish:
+
+- configured static-registry metadata;
+- persisted valid fallback ordering; and
+- results of explicit bounded probes.
+
+They must not imply that configured metadata came from live discovery.
+
+## 5. Require Replit AI as the provider-level fallback
+
+Every implemented Poe chatbot route must define a separate Replit AI fallback
+adapter behind the same provider-neutral application boundary. Use Replit's
+currently supported managed AI integration and follow current Replit
+documentation rather than inventing credentials, endpoints, environment
+variables, packages, or model IDs. Replit-managed credentials must remain
+managed by Replit; do not ask the user to expose or copy them.
+
+The fallback configuration is code-owned and must declare:
+
+- provider identity `replit-ai`;
+- the supported Replit AI integration method;
+- an exact supported model or an explicitly approved Replit intelligent-routing
+  policy;
+- supported input/output capabilities and limits;
+- data classification and privacy approval;
+- timeout, concurrency, and Replit-credit budget;
+- output validation and normalized error mapping;
+- whether the user-facing contract remains exact or becomes a documented
+  degraded contract; and
+- an owner and review trigger.
+
+Do not represent Replit AI as a Poe model, add it to the Poe model registry, or
+send it through the Poe transport. The provider router chooses between the Poe
+adapter and Replit AI adapter; each adapter independently enforces its own
+credentials, capabilities, limits, errors, and telemetry.
+
+### Permitted fallback triggers
+
+Attempt Replit AI only when all of these are true:
+
+1. Poe is the selected primary provider.
+2. No validated Poe output or irreversible tool/write side effect has occurred.
+3. The failure is classified as eligible.
+4. Replit AI satisfies every required route capability, privacy rule, and
+   output contract, or the caller has explicitly approved the documented
+   degraded contract.
+5. The request remains within the route's total deadline, attempt count, and
+   cross-provider budget.
+
+Eligible Poe failures include:
+
+- provider outage or verified service unavailability;
+- exhausted Poe allowance, points, credits, quota, or billing rejection;
+- provider rate limiting after the route's bounded policy is exhausted;
+- model unavailability when no eligible static-registry Poe fallback remains;
+- timeout or network failure only when no partial output or ambiguous
+  irreversible side effect makes replay unsafe; and
+- other normalized transient provider failures explicitly listed by the route.
+
+Do not fail over for invalid application input, failed local authorization,
+tenant violations, prompt or file policy rejection, unsupported required
+capabilities, malformed local configuration, or an unregistered Poe model.
+Authentication failures default to configuration repair rather than fallback;
+a route may classify a verified provider-side account outage as eligible only
+when doing so cannot hide a credential or deployment defect.
+
+### Provider fallback procedure
+
+1. Stop and settle the Poe attempt. Prevent late Poe output from reaching the
+   caller or winning a race.
+2. Confirm that no validated output or consequential side effect has already
+   occurred.
+3. Rebuild bounded context from application-owned state; never forward opaque
+   Poe response IDs or provider-specific tool envelopes.
+4. Convert messages, images, schemas, and tools explicitly to the approved
+   Replit AI contract. Do not silently drop a required capability.
+5. Invoke Replit AI once through its adapter with the remaining total deadline
+   and budget.
+6. Validate the Replit AI result against the same route contract or the
+   explicitly approved degraded contract.
+7. Record the provider transition and normalized outcome without secrets,
+   unrestricted prompts, or unnecessary personal data.
+
+Never bounce from Replit AI back to Poe in the same request, recurse through the
+provider router, or attempt more than one cross-provider transition. If Replit
+AI is unavailable, rejects billing/credits, exceeds its budget, or cannot
+satisfy the route, return one stable terminal error. Replit AI is resilience
+against Poe-specific failure, not a guarantee against Replit account limits or
+a substitute for correct application configuration.
+
+For streaming routes, do not begin a second provider stream after Poe deltas
+have reached the client. Either buffer until the provider commitment point or
+terminate with a normalized error. Cross-provider failover must never splice
+two providers into one apparently continuous assistant response.
+
+## 6. Keep the credential server-side
+
+Resolve the secret name in this order:
+
+1. Reuse the host application's existing Poe/provider configuration name.
+2. Otherwise use `POE_API_KEY`.
+3. Treat `POE_API_KEY2` only as an explicitly documented legacy name during a
+   controlled migration.
+
+Do not keep two active names without deterministic precedence and tests. Store
+the value in Replit Secrets. Never hard-code, commit, log, return, place in a
+URL, expose to browser code, or ask the user to paste it into chat.
+
+Optional Poe modules must be import-safe. Read and validate configuration only
+when a Poe operation runs. A required service may invoke the same getter from an
+explicit startup preflight; module import must not create a client or fail.
+
+Illustrative Node fallback:
 
 ```ts
 import OpenAI from "openai";
 
-let poeClient: OpenAI | undefined;
+let client: OpenAI | undefined;
 
 export function getPoeClient(): OpenAI {
-  if (poeClient) return poeClient;
+  if (client) return client;
+  const apiKey = process.env.POE_API_KEY;
+  if (!apiKey) throw new Error("Poe is not configured on the server");
 
-  const apiKey = process.env.POE_API_KEY2;
-  if (!apiKey) {
-    throw new Error("POE_API_KEY2 is not configured on the server");
-  }
-
-  poeClient = new OpenAI({
+  client = new OpenAI({
     apiKey,
     baseURL: "https://api.poe.com/v1",
     timeout: 30_000,
+    maxRetries: 0,
   });
-  return poeClient;
+  return client;
 }
 ```
 
-Keep client construction, timeout defaults, and provider-specific error
-classification in one module. Routes should call the provider boundary, not
-reconstruct clients or read secrets themselves. The memoized getter makes
-unrelated imports and server startup safe when Poe is optional while preserving
-one client per process after the first Poe operation.
+Process-local memoization is only an optimization. It is not global uniqueness
+across workers or deployments. If runtime secret rotation is supported, define
+how cached clients are replaced.
 
-The OpenAI SDK in this guide is a caller for Poe's OpenAI-compatible `/v1`
-surface. Do not set its `baseURL` to `https://api.poe.com/bot/` or append
-OpenAI routes to `/bot/`. The legacy `/bot/` paths use Poe's bot-server protocol
-and SSE envelopes; they are for implementing a bot server that Poe calls, not
-for calling Poe models through the OpenAI SDK.
+Do not set the OpenAI-compatible client's base URL to
+`https://api.poe.com/bot/`. The `/bot/` protocol is for implementing a bot
+server that Poe calls, not for calling Poe models through `/v1`.
 
-## 6. Discover live model IDs and capabilities
+## 7. Use bounded HTTP and validated responses
 
-The live `GET https://api.poe.com/v1/models` response is authoritative for the
-model IDs currently exposed to the key. Query it server-side for setup and
-model-picker workflows and refresh it with a short server-side cache when
-appropriate. Use the response as an availability input, not as proof of every
-inference capability.
+All provider requests must:
 
-### Bound discovery and capability probing
+- run server-side after application authentication, authorization, CSRF/origin
+  protection where applicable, body-size checks, and rate limiting;
+- use an exact static-registry model and approved endpoint after local
+  capability authorization;
+- have connect/total deadlines and caller cancellation;
+- send only endpoint-supported parameters;
+- bound and validate response content type and bytes;
+- check HTTP status before parsing a success schema;
+- normalize errors without exposing provider bodies or credentials; and
+- treat model output as untrusted data.
 
-Make exactly one catalogue request per setup or refresh operation. `GET
-/v1/models` returns the available catalogue; do not repeat that request once for
-each returned model. Cache a successful catalogue response briefly when several
-setup steps or model-picker requests would otherwise fetch the same data.
-
-Do not capability-probe every model in the catalogue. After the single catalogue
-lookup:
-
-1. Filter models using the route's required input, output, privacy, cost, and
-   operational constraints.
-2. Select one primary model and only the explicitly configured fallback models.
-3. Run the smallest safe capability probe only for those selected models when
-   current validated catalogue metadata and documentation are insufficient.
-4. Record untested capabilities and unselected models as `unknown`; `unknown`
-   is valid registry state and is not a reason to issue another provider call.
-
-Ordinary application startup, deployment startup, readiness checks, health
-checks, and catalogue refreshes must send zero model-completion requests.
-Catalogue discovery and live inference verification are separate operations.
-Expand capability evidence lazily when a model becomes a real routing candidate.
-
-Live inference verification requires an explicit, authenticated and authorized
-administrator or operator action. A single-model verification must have a fixed
-timeout and bounded retry policy. If bulk verification is retained, restrict it
-to models actively used by application routing and enforce fixed ceilings for
-model count, concurrency, attempts per model, per-request timeout, aggregate
-request count, and aggregate operation deadline. Return safe partial or
-budget-limited results when a ceiling is reached. Never scale probing directly
-with the size of the provider catalogue.
-
-An installation or health check must not fan out into one request per available
-model. Do not infer that the capability registry must be fully populated during
-installation. If probing is necessary, bound its model count, concurrency,
-timeout, retry policy, and cost before issuing any inference request.
-
-```ts
-const response = await fetch("https://api.poe.com/v1/models", {
-  method: "GET",
-  headers: {
-    Authorization: `Bearer ${process.env.POE_API_KEY2}`,
-    Accept: "application/json",
-  },
-  signal,
-});
-
-if (!response.ok) {
-  throw normalizePoeHttpError(response);
-}
-
-const body: unknown = await response.json();
-const models = parseModelsResponse(body).map((model) => ({
-  id: model.id,
-}));
-```
-
-The standard OpenAI SDK equivalent is:
-
-```ts
-const modelsPage = await getPoeClient().models.list();
-const models = modelsPage.data.map((model) => ({ id: model.id }));
-```
-
-Validate the response shape before using it. Send every returned `id` verbatim:
-do not normalize case, infer aliases, add a provider prefix, or assume that an
-ID from an old example still exists. If the live payload includes extra
-capability fields, parse and validate those fields into the app's registry
-schema. If it does not, consult current Poe documentation and, only for the
-selected primary or explicitly configured fallback models, run the smallest
-safe capability probe or configured inference check. Do not probe every
-returned model. Leave untested capabilities as `unknown`; an SDK `Model` type
-and a catalogue response do not guarantee provider-specific metadata or
-inference.
-
-Examples must use placeholders such as `<LIVE_MODEL_ID>` and must be labeled
-illustrative. Do not put a named model, price, capability, or availability in
-production defaults unless the live registry and current documentation have
-verified it. A successful catalogue request proves only that the key can access
-the catalogue at that moment.
-
-## 7. Use the correct server-side REST endpoint
-
-All Poe calls require server-side Bearer authentication:
-
-```http
-Authorization: Bearer <server-side-secret>
-Content-Type: application/json
-Accept: application/json
-```
-
-Never put the Bearer value in browser code, a URL, a client-visible error, a
-telemetry field, or a source-controlled example. Authenticate and authorize
-the app user before the upstream request. Resolve `<LIVE_MODEL_ID>` from the
-live catalogue/registry and verify optional parameters against the selected
-model's current capability row and Poe documentation.
-
-### Chat Completions
-
-Use `POST https://api.poe.com/v1/chat/completions` for a chat message sequence
-when the selected model and registry row support the requested message content,
-parameters, and output form:
+Illustrative non-streaming pattern:
 
 ```ts
 const upstream = await fetch("https://api.poe.com/v1/chat/completions", {
   method: "POST",
   headers: {
-    Authorization: `Bearer ${process.env.POE_API_KEY2}`,
+    Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json",
     Accept: "application/json",
   },
   body: JSON.stringify({
-    model: "<LIVE_MODEL_ID>",
-    messages: [
-      { role: "system", content: "Be concise and factual." },
-      { role: "user", content: validatedUserMessage },
-    ],
-    max_tokens: 1024,
+    model: route.modelId,
+    messages: validatedMessages,
+    max_tokens: route.maxOutputTokens,
   }),
   signal,
 });
 
-const payload: unknown = await readPoeJson(upstream);
-const reply = parseChatCompletion(payload).choices[0]?.message?.content ?? "";
-```
-
-Validate the request locally, reject unsupported optional fields before sending
-them, verify the response shape and content limits, and treat the extracted
-message as untrusted data. Do not assume every model accepts every Chat
-Completions parameter.
-
-### Responses
-
-Use `POST https://api.poe.com/v1/responses` only when the current Poe
-documentation and the selected capability row verify that the model supports
-the Responses endpoint and the requested input, output, tools, or state shape:
-
-```ts
-const upstream = await fetch("https://api.poe.com/v1/responses", {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${process.env.POE_API_KEY2}`,
-    "Content-Type": "application/json",
-    Accept: "application/json",
-  },
-  body: JSON.stringify({
-    model: "<LIVE_MODEL_ID>",
-    instructions: "Return only the requested answer.",
-    input: validatedInput,
-    max_output_tokens: 1024,
-  }),
-  signal,
+const payload = await readBoundedPoeJson(upstream, {
+  maxBytes: route.maxProviderResponseBytes,
 });
 
-const payload: unknown = await readPoeJson(upstream);
-const answer = parseResponse(payload).output_text;
-```
-
-Do not infer that a Responses object, response ID, or conversation-like field
-creates portable shared state. Store only the application-approved context and
-reconstruct it explicitly when needed.
-
-### Structured JSON Schema output
-
-For a model and endpoint whose registry row says structured output is supported,
-request a small schema and validate the decoded result with the app's runtime
-schema validator:
-
-```ts
-const upstream = await fetch("https://api.poe.com/v1/responses", {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${process.env.POE_API_KEY2}`,
-    "Content-Type": "application/json",
-    Accept: "application/json",
-  },
-  body: JSON.stringify({
-    model: "<LIVE_MODEL_ID>",
-    input: validatedInput,
-    text: {
-      format: {
-        type: "json_schema",
-        name: "answer",
-        strict: true,
-        schema: {
-          type: "object",
-          properties: { answer: { type: "string" } },
-          required: ["answer"],
-          additionalProperties: false,
-        },
-      },
-    },
-  }),
-  signal,
-});
-
-const payload: unknown = await readPoeJson(upstream);
-const value = answerSchema.parse(parseResponse(payload).output_text);
-```
-
-Use the currently documented field name and schema shape for the selected
-endpoint; some models or API surfaces may support a different structured-output
-form. Reject malformed JSON, missing fields, extra fields where relevant, and
-values outside business limits. If structured output is unsupported, use only a
-documented fallback or return a normalized unsupported-capability error. Never
-silently parse arbitrary prose as JSON.
-
-### Tool calling
-
-Declare only server-owned, allow-listed operations with strict JSON schemas:
-
-```ts
-const requestBody = {
-  model: "<LIVE_MODEL_ID>",
-  input: validatedInput,
-  tools: [
-    {
-      type: "function",
-      name: "lookup_record",
-      description: "Look up an authorized record by its opaque ID.",
-      parameters: {
-        type: "object",
-        properties: { record_id: { type: "string", maxLength: 128 } },
-        required: ["record_id"],
-        additionalProperties: false,
-      },
-    },
-  ],
-};
-```
-
-The exact tool envelope differs by endpoint and must match current Poe
-documentation and the registry row. Treat a model tool call as a request for
-work, not proof that work succeeded: validate every argument, authorize the
-user again at execution time, enforce a maximum number of tool turns, execute
-only the allow-listed operation, bound and validate its result, and send the
-result back as data before continuing the model turn. If the endpoint/model
-lacks tool support, return a clear capability error.
-
-Never let a model choose arbitrary URLs, SQL, shell commands, file paths, or
-credentials. Log tool name and outcome, not secrets or unrestricted arguments.
-
-### Multimodal input
-
-For a vision-capable model, validate MIME type, dimensions, byte size, and
-content before creating the provider-specific image input. For Chat
-Completions, the documented shape may resemble:
-
-```ts
-{
-  role: "user",
-  content: [
-    { type: "text", text: validatedPrompt },
-    {
-      type: "image_url",
-      image_url: { url: validatedDataUrl },
-    },
-  ],
+if (!upstream.ok) {
+  throw normalizePoeHttpError(upstream.status, upstream.headers, payload);
 }
+
+const completion = parseChatCompletion(payload);
+const reply = validateAssistantText(completion);
 ```
 
-Use the exact current shape for the selected endpoint; do not assume that an
-image field accepted by one API surface is accepted by another. Keep decoding
-and provider calls on the server, limit dimensions/bytes, reject untrusted
-remote URLs unless the app has an explicit safe fetch policy, and do not
-persist images or prompts unless the user-facing product requires it. Redact
-image-derived personal data from telemetry where possible.
+`readBoundedPoeJson` must reject an unexpected content type, oversized body,
+invalid encoding, malformed JSON, and premature termination. Error
+normalization may retain provider request IDs in protected logs but must not
+return unrestricted provider payloads to clients.
 
-### Streaming and SSE
+The transport function itself must repeat the static-registry authorization
+check. Route or UI validation alone is insufficient because another caller
+could bypass it. Unknown or incompatible model IDs must produce a local
+normalized failure before `fetch` or SDK dispatch.
 
-Set `stream: true` only when the capability row and current documentation
-confirm streaming for the selected endpoint/model. For an SSE response, parse
-complete `data:` events, tolerate provider event variants, validate each
-increment before forwarding, and never pass raw provider errors to the client.
-The provider's terminal event and the app's terminal event are separate
-contracts; emit the app's documented `[DONE]` marker only after cleanup has
-started and the response can be closed safely.
+Use Chat Completions or Responses only when current evidence verifies that
+exact model/endpoint combination and requested fields. A provider response ID
+does not create portable shared state. Store approved context in the
+application and reconstruct it explicitly.
 
-The portable Express-style lifecycle pattern is:
+For structured output, validate both decoded JSON and business constraints with
+the application's runtime schema. Do not parse arbitrary prose as JSON or
+silently fall back from required structured output.
 
-```ts
-app.post("/chat/stream", async (req, res) => {
-  const controller = new AbortController();
-  let clientGone = false;
-  let sentDone = false;
+## 8. Treat instructions and external content as separate trust domains
 
-  const writeEvent = (event: unknown) => {
-    if (!clientGone && !res.destroyed && !res.writableEnded) {
-      res.write(`data: ${JSON.stringify(event)}\n\n`);
-    }
-  };
-  const finish = () => {
-    if (!sentDone && !clientGone && !res.destroyed && !res.writableEnded) {
-      sentDone = true;
-      res.write("data: [DONE]\n\n");
-    }
-    if (!res.destroyed && !res.writableEnded) res.end();
-  };
-  const onRequestAborted = () => {
-    clientGone = true;
-    controller.abort();
-  };
-  const onResponseClose = () => {
-    if (!res.writableEnded) {
-      clientGone = true;
-      controller.abort();
-    }
-  };
+System/developer instructions, authenticated application policy, user input,
+retrieved documents, web content, images, tool output, and prior model output
+are not equally trusted.
 
-  req.once("aborted", onRequestAborted);
-  res.once("close", onResponseClose);
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache, no-transform");
-  res.setHeader("Connection", "keep-alive");
+- Serialize retrieved or tool-produced content as data; never concatenate it
+  into privileged instructions.
+- Do not obey instructions found in documents, pages, images, tool output, or
+  model output when they conflict with application policy.
+- Never reveal credentials, hidden instructions, unrestricted logs, or
+  cross-tenant context in response to model or user content.
+- Validate model-produced URLs, citations, identifiers, and structured values
+  before display or use.
+- Do not copy model text into SQL, shell commands, file paths, authorization
+  decisions, or privileged prompts.
 
-  try {
-    // Authenticate, validate req.body, check the registry, and apply
-    // rate limits before this call.
-    const streamResponse = await fetch(
-      "https://api.poe.com/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.POE_API_KEY2}`,
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-        },
-        body: JSON.stringify({
-          model: "<LIVE_MODEL_ID>",
-          messages: validatedMessages,
-          stream: true,
-        }),
-        signal: controller.signal,
-      },
-    );
-    if (!streamResponse.ok || !streamResponse.body) {
-      throw normalizePoeHttpError(streamResponse);
-    }
+## 9. Authorize every tool execution
 
-    for await (const event of parseSse(streamResponse.body)) {
-      if (clientGone) break;
-      const safeEvent = parseAndValidatePoeStreamEvent(event);
-      if (safeEvent.delta) writeEvent({ delta: safeEvent.delta });
-    }
-  } catch (error) {
-    const normalized = normalizePoeError(error);
-    if (!res.headersSent && !clientGone) {
-      res.status(normalized.status).json(normalized.body);
-      return;
-    }
-    if (!clientGone) writeEvent({ error: normalized.body });
-  } finally {
-    req.removeListener("aborted", onRequestAborted);
-    res.removeListener("close", onResponseClose);
-    controller.abort();
-    finish();
-  }
-});
-```
+Tools are server-owned allow-listed operations. A model tool call is an
+untrusted request, not authorization and not proof of success.
 
-In real code, `parseSse`, response validators, and error normalizers must
-handle buffering, event boundaries, provider event variants, and safe limits.
-If headers are already sent, preserve SSE framing and the safe error code; do
-not attempt to change the status. If a disconnect has occurred, cleanup
-silently and do not write. For non-Express servers, implement equivalent abort,
-listener cleanup, and guaranteed close behavior.
+For every tool call:
 
-## 8. Reconstruct context when switching models
+1. Validate the tool name and strict JSON arguments.
+2. Derive actor, role, and tenant from authenticated server context, never
+   model arguments.
+3. Re-authorize the operation and referenced object at execution time.
+4. Ignore or reject model-supplied user, tenant, role, or permission fields.
+5. Enforce object ownership after lookup.
+6. Require user confirmation before externally visible, destructive,
+   irreversible, financial, or otherwise consequential actions.
+7. Apply idempotency/deduplication to writes.
+8. Bound execution time, result size, tool turns, and cumulative cost.
+9. Validate and tenant-scope the result before returning it as data.
+10. Record a protected audit event for consequential operations.
 
-Models do not share hidden memory, provider conversation state, or portable
-response state unless the current endpoint explicitly documents such behavior
-and the application has chosen to use it. Never pass an opaque response ID or
-assume one model can dereference another model's state.
+Never let the model choose unrestricted URLs, SQL, shell commands, file paths,
+credentials, or arbitrary code. Do not retry an irreversible operation merely
+because the model or provider request timed out.
 
-When routing or falling back to another model:
+## 10. Protect multimodal and remote inputs
 
-1. Stop the old attempt or mark it cancelled; do not let late output overwrite
-   the new result.
-2. Rebuild a bounded context package from application-owned state: system
-   instructions, relevant user turns, validated assistant output, retrieved
-   facts with provenance, and approved tool results.
-3. Re-apply the destination model's input, privacy, token, and capability
-   constraints. Convert content explicitly rather than silently dropping
-   images, tools, schema requirements, or citations.
-4. Identify the destination model and context transfer in telemetry without
-   recording secrets or unnecessary prompt contents.
-5. Validate the destination response against the same user-facing contract,
-   or apply an explicitly documented degraded contract and tell the caller.
+Validate declared MIME type and actual file signature, decoded byte size,
+dimensions, frame/page count, and application content policy. Reject malformed
+data URLs, decompression bombs, oversized metadata, and unsupported formats.
+Strip metadata when the product does not require it.
 
-Do not copy untrusted model text into system instructions, tool authorization,
-or SQL/shell/file arguments. Context reconstruction is a data boundary and
-must be treated as untrusted-input processing.
+Remote fetching is disabled by default. If enabled, enforce:
 
-## 9. Reliability, privacy, and cost controls
+- `https` and explicit host allow-lists;
+- DNS resolution and IP checks that block loopback, link-local, private,
+  metadata-service, and other prohibited ranges;
+- the same validation after every bounded redirect;
+- protection against DNS rebinding;
+- connect and total deadlines;
+- compressed and decompressed byte limits;
+- content-type and magic-byte checks; and
+- no forwarding of application credentials to remote hosts.
 
-Apply these controls in the provider abstraction, not independently in every
-route:
+Do not persist prompts, images, files, or extracted personal data unless the
+product contract requires it. Apply retention and access controls.
 
-- **Retries:** Retry only transient network failures, timeouts, selected 5xx
-  responses, and provider rate limits. Use a small bounded attempt count,
-  exponential backoff, and jitter. Honor `Retry-After` when present. Never
-  retry invalid authentication, exhausted quota, invalid requests, or a
-  permanently unavailable model. A retry must reuse a safe idempotency policy
-  and must not duplicate an irreversible tool operation.
-- **Timeouts and cancellation:** Give every upstream call a deadline. Connect
-  request abort/disconnect signals to the provider request and release all
-  listeners and timers in cleanup code. Abort stale attempts when routing
-  switches models.
-- **Caching:** Cache only deterministic, idempotent results where the product
-  permits it. Include exact model ID, endpoint, relevant input, tenant/user
-  scope, tool/schema version, context and prompt version, and capability mode
-  in the key; use a TTL and bounded storage. Do not cache private data across
-  users, failed responses, credentials, or unbounded prompts. Invalidate when
-  model or prompt behavior changes.
-- **Usage telemetry:** Record model, endpoint, route/use case, latency, status,
-  retry count, cache hit, fallback transition, and provider-reported token
-  usage when available. Apply retention and access controls, and omit API keys,
-  full prompts, image bytes, tool secrets, and unnecessary personal data.
-- **Rate limits and backpressure:** Authenticate before expensive work, apply
-  per-user/tenant and global limits before calling Poe, bound concurrent
-  upstream requests, and return a retryable 429 with safe headers when limits
-  are reached. Do not rely on Poe's limit as the app's abuse protection.
-- **Output validation:** Validate every non-streaming response, structured
-  object, tool argument/result, multimodal extraction, and stream event against
-  the app's runtime contract before use or forwarding. Bound output size and
-  tool turns.
-- **Privacy:** Route only data permitted by the intake's privacy class. Do not
-  persist prompts, images, or model output beyond the product's stated need.
-  Separate tenants/users in storage, cache keys, logs, and authorization.
-- **Normalized errors:** Map provider failures to a small app contract such as
-  `unauthorized`, `quota_exhausted`, `rate_limited`, `model_unavailable`,
-  `unsupported_capability`, `invalid_request`, `upstream_timeout`, and
-  `upstream_error`. Give clients a stable code and safe message; keep provider
-  request IDs and stack details in protected server logs only.
+## 11. Stream with explicit terminal states
 
-## 10. Key health-check
+Streaming must define mutually exclusive outcomes:
 
-Use a server-only health/setup check to validate configuration. Invoke it from
-an explicit setup action or startup preflight, never as a module-import side
-effect. A successful
-`GET /v1/models` proves that the key can access the catalogue at that moment;
-it does not prove that a particular model, capability, quota, or inference
-request will succeed. The health check makes one catalogue request regardless
-of how many models are returned and sends zero model-completion requests.
+- **Success:** validated deltas, then the application's documented success
+  terminal marker.
+- **Provider/application failure:** a normalized error event, then close; never
+  emit the success terminal marker.
+- **Client disconnect/cancellation:** abort upstream work and close silently.
 
-```ts
-type PoeKeyStatus =
-  | "valid"
-  | "rejected"
-  | "quota_exceeded"
-  | "rate_limited"
-  | "unavailable"
-  | "unknown";
+Do not commit a success HTTP status before avoidable upstream setup failures
+when the framework permits waiting. After SSE headers are committed, preserve
+SSE framing and use a safe error event rather than attempting to change status.
 
-async function checkPoeKey(apiKey: string): Promise<PoeKeyStatus> {
-  const client = new OpenAI({
-    apiKey,
-    baseURL: "https://api.poe.com/v1",
-    timeout: 5_000,
-  });
-  try {
-    await client.models.list();
-    return "valid";
-  } catch (error: unknown) {
-    if (error instanceof OpenAI.APIError) {
-      if (error.status === 401 || error.status === 403) return "rejected";
-      if (error.status === 402) return "quota_exceeded";
-      if (error.status === 429) return "rate_limited";
-      if (error.status === 500 || error.status === 502 ||
-          error.status === 503 || error.status === 504) return "unavailable";
-    }
-    // A timeout or network outage is not proof that a configured key is bad.
-    return "unknown";
-  }
-}
-```
+The stream implementation must:
 
-Do not log the key or raw error body. A setup UI can fail closed when a
-definitive 401/403 or quota response is returned, but should distinguish an
-outage from a rejected key. If the app uses a provider abstraction, call its
-health-check and preserve its normalized result instead of constructing a
-second client.
+- parse complete SSE events across arbitrary chunks;
+- tolerate only documented provider event variants;
+- bound individual event bytes, cumulative bytes, event count, idle duration,
+  and total duration;
+- reject malformed or oversized events;
+- honor write backpressure and await `drain`;
+- link request abort and response close to the upstream abort controller;
+- clean up listeners and timers exactly once;
+- ignore late output from cancelled or superseded attempts; and
+- emit the success terminal marker only after a confirmed successful provider
+  terminal state and before a successful close.
 
-## 11. Failure modes and explicit fallback
+Never place a generic `finishSuccess()` call in `finally`; `finally` runs on
+errors and disconnects too.
 
-| Scenario | Safe handling |
-| --- | --- |
-| Missing secret | Fail at the first Poe operation or an explicit startup preflight with a configuration error. Importing an optional Poe module must remain safe; never send the key or secret value to the client. |
-| 401/403 | Report `unauthorized` and require server configuration repair; do not retry. |
-| 402 or exhausted allowance | Report `quota_exhausted`; do not retry automatically. |
-| 429 | Apply bounded backoff for eligible upstream calls, respect `Retry-After`, and expose a stable rate-limit response. |
-| Timeout/network/5xx | Abort and retry only within a bounded transient policy; then report `upstream_timeout` or `upstream_error`. |
-| Invalid request/schema/tool arguments | Return a 400-class contract error after local validation; do not retry unchanged input. |
-| Model unavailable/retired | Refresh the live catalogue and return `model_unavailable`; do not silently substitute a different model unless the route's routing record explicitly allows the verified fallback. |
-| Unsupported capability/parameter/endpoint | Return `unsupported_capability` or choose the documented verified fallback; never pretend structured output, tools, vision, Responses, or streaming succeeded. |
-| Catalogue succeeds but inference fails | Keep the key/catalogue status separate from model capability or quota status; normalize the inference failure and update the registry evidence if appropriate. |
-| Browser CORS attempt | Keep Poe calls server-side. The browser calls the app's authenticated route, not `api.poe.com`. |
-| Client disconnect during stream | Abort upstream work, remove listeners, avoid writes, and close/settle resources. |
-| Model switch during a request | Cancel the stale attempt, reconstruct context explicitly, and prevent late output from winning. |
+## 12. Reconstruct context on model and provider changes
 
-A fallback must be selected from a live-available, capability-verified registry
-row and must satisfy the intake's privacy and output contract. If no such row
-exists, fail clearly rather than silently changing the user's requested
-behavior.
+Models do not share hidden memory or portable response state unless the exact
+endpoint explicitly documents it and the application elects to use it.
 
-## 12. Generic new-route checklist
+When routing, changing Poe models, or transitioning to Replit AI:
 
-For every route that calls Poe, check all of the following:
+1. Cancel or supersede the old attempt and prevent late output from winning.
+2. Rebuild bounded context from application-owned, tenant-scoped state.
+3. Keep privileged instructions separate from untrusted messages, retrieval,
+   model output, and tool results.
+4. Reapply destination-model input, privacy, token, and capability constraints.
+5. Do not silently drop images, tools, schemas, citations, or safety controls.
+6. Validate the destination response against the same contract or an explicitly
+   approved degraded contract.
+7. Apply the destination provider's independent budget, timeout, error, and
+   telemetry policy.
+8. Record the transition without logging unnecessary content.
 
-- [ ] Intake records goal, input, output, required capabilities, context,
-      latency, cost, privacy, authorization, and fallback expectations.
-- [ ] An existing provider abstraction was searched for and reused when
-      available; no duplicate client or direct provider call was added.
-- [ ] Poe is called only from server-side code; the API key and provider
-      details cannot reach client bundles or browser logs.
-- [ ] Optional Poe modules are import-safe: secret validation and memoized client
-      construction happen only when a Poe operation runs.
-- [ ] Any startup failure comes from an explicit application preflight, not an
-      import-time side effect.
-- [ ] Authentication and authorization happen before model work, including
-      authorization of each server-side tool operation.
-- [ ] Per-user/tenant and global rate limits, concurrency bounds, and request
-      deadlines are applied before the upstream call.
-- [ ] The exact model ID came from a live catalogue lookup and the capability
-      registry identifies the endpoint, verified parameters, limits, cost,
-      privacy suitability, fallback, verification date, and owner.
-- [ ] `GET /v1/models` availability is not being treated as proof of inference
-      or optional capability support.
-- [ ] Startup, readiness, health, and catalogue refreshes send zero completions;
-      live verification requires an explicit protected operator action.
-- [ ] Setup performs one catalogue lookup, filters candidates, and verifies only
-      actively routed models within fixed request and deadline ceilings; all
-      other capabilities remain `unknown`.
-- [ ] Chat Completions versus Responses was selected from current endpoint and
-      model support; unsupported optional fields are rejected before sending.
-- [ ] Request and response contracts are documented in the app's existing
-      schema/API mechanism and runtime validation rejects untrusted output.
-- [ ] Context is rebuilt explicitly when switching models; no shared hidden
-      memory or portable response state is assumed.
-- [ ] Retries, caching, telemetry, abort handling, and normalized errors use
-      shared provider policies rather than route-specific copies.
-- [ ] Streaming handles SSE parsing, upstream failure, client disconnect,
-      cancellation, cleanup, and guaranteed response termination.
-- [ ] Unit tests cover validation, auth/rate limits, model discovery, endpoint
-      selection, provider success, each relevant normalized failure,
-      cache/telemetry behavior, context reconstruction, and stream cleanup.
-- [ ] An end-to-end test exercises the authenticated browser-to-route contract
-      when the feature is user-visible; provider calls are safely stubbed.
-- [ ] Logs and metrics include route/use case, model, endpoint, latency, status,
-      retries, fallback, and usage without prompts, images, secrets, or
-      unnecessary PII.
-- [ ] The route is tested with missing configuration and provider outages, and
-      operational alerts or dashboards have been considered.
+Fallbacks must be present and enabled in the static registry,
+capability-verified, privacy-compatible, and listed in the route record.
+Otherwise fail locally before Poe transport. This rule governs Poe-model
+fallbacks; the Replit AI provider fallback is governed by Section 5 and must
+still satisfy the route contract.
 
-## Quick-start checklist
+## 13. Reliability, privacy, and cost rules
 
-- [ ] Completed the intake before selecting a model or endpoint.
-- [ ] Searched for and understood an existing provider/client abstraction.
-- [ ] `POE_API_KEY2` is in Replit Secrets or is managed by the existing provider.
-- [ ] All provider calls stay server-side and use Bearer authentication.
-- [ ] Raw SDK fallback lazily memoizes one server client at
-      `https://api.poe.com/v1`; it never composes OpenAI SDK routes with the
-      legacy bot-server `/bot/` protocol.
-- [ ] `GET /v1/models` supplies exact IDs; no stale example is a production
-      default, and catalogue access is not treated as inference proof.
-- [ ] Startup and catalogue refresh issue zero model-completion requests.
-- [ ] Live verification is an explicit protected operator action bounded by
-      model, concurrency, attempt, timeout, request, and deadline ceilings.
-- [ ] The selected registry row verifies endpoint, inputs, outputs, capabilities,
-      limits, parameters, cost, privacy, validation, fallback, and ownership.
-- [ ] Chat Completions versus Responses is supported by the live/current
-      endpoint documentation for the exact model.
-- [ ] Request/output schemas, tools, and vision inputs are validated.
-- [ ] Model switches reconstruct approved context explicitly.
-- [ ] Timeouts, bounded retries, cancellation, cache scope, usage telemetry,
-      privacy controls, and rate limits are implemented at the provider boundary.
-- [ ] Error responses are normalized and safe.
-- [ ] Streaming routes parse SSE and terminate on success, failure, and
-      disconnect.
-- [ ] Unit and relevant end-to-end coverage is in place.
+- **Retries:** Disable SDK retries until the application policy is explicit.
+  Retry only when transmission is known not to have occurred, the provider
+  explicitly rejected the request as retryable, or documented idempotency makes
+  duplication safe. An ambiguous timeout after transmission can duplicate cost
+  and must not be retried automatically. Never retry after partial output or a
+  tool/write side effect.
+- **Provider transition:** Count Poe and Replit AI attempts under one request
+  budget and total deadline. Permit at most one transition from Poe to Replit
+  AI and never transition after partial client-visible output or a consequential
+  side effect.
+- **Backoff:** For eligible retries, use a small bounded count, exponential
+  backoff with jitter, and verified `Retry-After` semantics.
+- **Timeouts:** Apply deadlines to explicit approved-model probes, inference,
+  tools, uploads, remote fetches, and streams. Abort stale attempts.
+- **Caching:** Cache only product-approved deterministic results. Include model,
+  endpoint, tenant/user scope, input, context/prompt version, schema/tool
+  version, and capability mode. Bound storage and TTL; never cache credentials,
+  failures, cross-tenant private data, or unbounded prompts.
+- **Telemetry:** Record route, model, endpoint, latency, status, retry, cache,
+  source provider, destination provider, fallback reason, and available usage.
+  Distinguish Poe usage from Replit-managed AI usage. Omit keys, full prompts,
+  image/file bytes, unrestricted tool arguments, and unnecessary personal data.
+- **Rate limits:** Authenticate first; enforce per-user/tenant and global
+  concurrency and budget limits before provider work.
+- **Privacy:** Send only approved data, isolate tenants in every store and key,
+  and enforce retention and deletion policy.
+- **Errors:** Use stable codes such as `not_configured`, `unauthorized`,
+  `authorization_denied`, `quota_exhausted`, `rate_limited`,
+  `model_unavailable`, `unsupported_capability`, `invalid_request`,
+  `upstream_timeout`, and `upstream_error`.
 
----
+Do not claim a key is invalid solely from an ambiguous provider response.
+Classify 401, 403, quota, and allowance statuses according to current verified
+Poe behavior. Preserve `unknown` or `provider_rejected` when the cause is not
+authoritative. Health checks may perform a bounded request against an approved
+registry model only when explicitly authorized; they must never list models.
+
+## 14. Required validation
+
+Use provider stubs and fake credentials for automated tests. Live paid
+inference is an explicit, bounded, opt-in smoke test and must not be required by
+ordinary CI.
+
+Add tests applicable to the route:
+
+- optional module import with no secret;
+- first-operation configuration failure;
+- exact base URL and server-only authorization;
+- request-size and schema rejection;
+- non-2xx normalization before success parsing;
+- malformed, wrong-content-type, and oversized provider bodies;
+- exact model and endpoint capability enforcement;
+- timeout, cancellation, and ambiguous-retry behavior;
+- authentication, CSRF/origin policy, rate limit, and tenant isolation;
+- structured-output schema and business-limit rejection;
+- tool argument validation, object authorization, confirmation, idempotency,
+  and prevention of duplicate writes;
+- multimodal signature, decoded-size, and remote-fetch protections;
+- startup and ordinary health checks make no model-list request;
+- no production path calls `/v1/models`, `models.list()`, or an equivalent full
+  registry operation;
+- route, probe, fallback, and transport paths reject unregistered, disabled,
+  removed, and capability-incompatible models before network dispatch;
+- persisted fallback overrides preserve valid order while filtering or
+  rejecting invalid entries;
+- retired catalogue-refresh APIs return non-success without contacting Poe;
+- administrator status distinguishes configured registry data from explicit
+  probe results;
+- fallback eligibility and stale-attempt suppression;
+- Poe outage, quota/points/credits, billing rejection, exhausted rate-limit
+  policy, and model-unavailable cases transition to Replit AI only when eligible;
+- invalid input, authorization failure, unregistered Poe models, and local
+  configuration defects do not trigger Replit AI;
+- Replit AI capability, privacy, deadline, and budget gates fail closed;
+- context conversion does not pass opaque Poe state or silently remove required
+  features;
+- no fallback occurs after client-visible streaming output or consequential
+  side effects;
+- the provider router permits at most one Poe-to-Replit-AI transition and cannot
+  recurse or loop;
+- Replit AI success is validated through the route contract, while dual-provider
+  failure returns one stable terminal error;
+- telemetry identifies the transition and provider-specific usage without
+  leaking protected content;
+- SSE chunk boundaries, malformed events, cumulative limits, backpressure,
+  provider failure, client disconnect, cleanup, and absence of false success
+  markers; and
+- redaction of secrets and sensitive content from errors and telemetry.
+
+Run the project's canonical typecheck and established validation tier. Do not
+silently waive a failure or fix unrelated pre-existing failures.
+
+## 15. Completion report
+
+In implementation or fix mode, report:
+
+- operating mode and route/use case;
+- runtime and reused provider boundary;
+- changed files;
+- secret name used, never its value;
+- exact static-registry model and endpoint, or why selection remains blocked;
+- Replit AI integration method, configured fallback model or routing policy,
+  capability evidence, and eligible Poe failure classes;
+- capability evidence and verification timestamp;
+- enabled security, privacy, reliability, and cost controls;
+- tests added and validation commands/results;
+- whether any live paid probe ran and its bounded scope;
+- fallbacks and fail-closed behavior;
+- proof that provider fallback cannot loop, splice streams, duplicate side
+  effects, or exceed the shared deadline/budget; and
+- unresolved risks, unknowns, or required owner decisions.
+
+Do not declare completion if required capabilities remain `unknown`, a secret
+would reach a client, consequential tools lack authorization/confirmation, a
+stream can signal false success, the required Replit AI fallback is missing or
+can bypass route policy, or required validation did not run without a specific
+evidence-based limitation.
+
+## Implementation checklist
+
+- [ ] Selected advisory, implementation, or audit/troubleshooting mode.
+- [ ] Detected runtime, server boundary, package manager, validation contract,
+      authentication, schemas, and existing provider abstraction.
+- [ ] Reused existing abstractions and made the smallest compatible change.
+- [ ] Recorded minimum intake and activated only required capability gates.
+- [ ] Kept credentials server-side with deterministic secret-name precedence.
+- [ ] Confirmed no startup, health, setup, admin, or production path requests
+      Poe's full model catalogue.
+- [ ] Used only exact model IDs from one code-owned static registry.
+- [ ] Recorded evidence, timestamp, freshness, owner, fallback, and fail-closed
+      behavior for the route.
+- [ ] Revalidated persisted fallback overrides and constrained administrator
+      choices to compatible enabled registry entries.
+- [ ] Repeated model authorization at the transport boundary before every probe
+      and completion.
+- [ ] Implemented Replit AI as a separate provider adapter using the current
+      supported Replit-managed AI integration.
+- [ ] Declared eligible Poe outage, billing, points/credits, quota, rate-limit,
+      timeout, and model-unavailable fallback classes.
+- [ ] Enforced one-way, single-attempt provider fallback under a shared deadline
+      and budget with no partial-output or side-effect replay.
+- [ ] Verified Replit AI capability, privacy, output validation, normalized
+      errors, telemetry, and terminal dual-provider failure.
+- [ ] Checked status before parsing success and bounded every response.
+- [ ] Separated privileged instructions from untrusted external content.
+- [ ] Enforced actor, tenant, object, confirmation, idempotency, and audit rules
+      for every applicable tool.
+- [ ] Applied file-signature, decoded-size, SSRF, redirect, and metadata
+      protections where applicable.
+- [ ] Implemented mutually exclusive stream terminal states, backpressure,
+      limits, cancellation, and cleanup where applicable.
+- [ ] Prevented unsafe retries after ambiguous transmission, partial output, or
+      side effects.
+- [ ] Added applicable contract and failure-path tests with provider stubs.
+- [ ] Ran canonical validation and reported exact results and limitations.

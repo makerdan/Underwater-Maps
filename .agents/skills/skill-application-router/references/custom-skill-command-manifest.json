@@ -1,0 +1,27 @@
+{
+  "format": 1,
+  "source": ".local/custom_skills",
+  "note": "Historical runtime catalog from the uploaded package, not a current canonical-source drift baseline or definition authority. Do not read runtime mirrors to refresh it. The current canonical .agents target SKILL.md always wins.",
+  "skills": {
+    "app-support-ops": "de57d054bcd39880e741975f29a9cf0f38c300912f35791511a6b471d4d73983",
+    "bug-audit": "9c983b93f7812d24e0e9625c28379c2b3f51edd1cf42b27856e785c867dc0167",
+    "chunk-it": "276f1812c9c44824190cd2492a966658a180cf4160a1ea5b42fa204c28d9e4c8",
+    "ci-validation-parity": "0032fdb9a316a2912d0bc6b6a2d6d8a1fc4147df2df27a82878be0bb35dacecd",
+    "clerk-for-dan": "3a2562475e8107ff50bf45be99177a4363ef42634e5dc1e9a9f52c36b3aa28e6",
+    "failure-gate": "c1bf1f672d96f6909a333647842e256f3f1104c94638562e2624157e2e5fe534",
+    "install-github-actions": "d34cd47ccb669f562a110285c2f34a0edb576c956ff8b262e25a59d37da3ccf5",
+    "poe-setup": "3701e25b3b510741aa99c5bd7767fb7e9148199ba6cf6f157877837ed8ee0d23",
+    "port-authority": "37f39e6db6fbecffdce6464402cc846ef89b06d0536dd994a0b8caf3857ac6bb",
+    "port-authority-heavy": "e08f2bc5f2fae343632d67e00f846cf81594d44ccb012de565c74c6e572e70ef",
+    "project-skill-inventory": "657811e5bfa5fc48de7ed14b91b9b1bd5726742df06cb0677de512ffdd068243",
+    "react-render-memory-audit": "f4173621befc47870fb61ecab203c194eac0365cad71c671ff4f75e8017ff32",
+    "regression-guard": "0dd8d05cfd19be0126a0735d2c5858048f393d0d7bbd2bdfafdb1f58133ad1f5",
+    "skill-application-router": "c1ddbb34fb8fe8983c35a038974bf2d9d6d52185c65722926a6c824e08dd167a",
+    "skill-compression": "121b4b42813ff4b77463b922ef7e924a653edd736df21e7f1a4ad2c9ac563a31",
+    "skill-install-confirmation": "d6ffd1d23ccba902f43098970739432689f54e88e134e321194fedd2160b972a",
+    "skill-mirror-sync": "e63e333c64e4495dbac513e39bdc605f2ea37f579147ea838948eeef961e3ce0",
+    "task-sorting": "25afb5db451076141772be12c468d67daaf0d0061e3dabcdf4634a7b51e70d38",
+    "task-triage": "44f4efb32bb303c294886b9ffa49c26f54087644a128b5fa0891ab64a5957c93",
+    "ux-confirmation-audit": "635193862fecbe1bb07a97a5a03c9e53750951c2d793fb841ab5426dfbaa1c58"
+  }
+}

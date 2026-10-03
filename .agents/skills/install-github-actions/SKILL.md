@@ -18,6 +18,44 @@ the only authority. Keep local and task validation reproducible, and never
 claim that a workflow is active, passing, or required merely because its YAML
 exists.
 
+## 0. Repository visibility gate — read-only and mandatory
+
+Before inventory, installation, workflow edits, contract application, or any
+GitHub-settings action, establish the repository visibility from read-only
+evidence. Do not infer visibility from a workflow file, a repository name, a
+badge, or an unavailable API response. If visibility cannot be inspected, mark
+it **unknown** and stop before proceeding.
+
+Present this decision before continuing:
+
+1. **Public path:** The user may make a private repository public outside this
+   skill. Public visibility is the unrestricted path for GitHub branch
+   protection and ruleset capabilities. The skill must never change visibility
+   itself. After the user performs that change, require the user to confirm it,
+   then re-check visibility through read-only evidence before any inventory or
+   GitHub Actions work continues.
+2. **Private path:** If the user declines to make the repository public, record
+   that the current private plan may paywall branch-protection and ruleset
+   capabilities. Any available paid-plan choice must be selected by the user
+   outside this skill; do not invent membership or plan names and do not choose
+   one for them. Record the resulting limitations as unavailable or unknown
+   evidence before proceeding with the private path.
+
+The decision is a gate, not a recommendation to change visibility. Never
+change repository visibility, billing or plan, GitHub settings, secrets,
+variables, environments, branch policies, workflows, or remote workflow runs
+automatically. Require explicit authorization separately for any later remote
+ mutation, and require the user to perform and provide confirmation of any
+ visibility change.
+
+### Selected package inventory
+
+The supplied Install GitHub Actions package contains only this `SKILL.md`.
+Represent every supplied package file under the canonical skill directory; do
+not silently omit files or invent scripts, references, assets, or workflow
+templates. The canonical source is `.agents/skills/install-github-actions/`.
+The runtime mirror, when present, is platform-managed and is not a source file.
+
 ## 0. Inventory before proposing edits
 
 Do this read-only inventory first. Do not create credentials, change GitHub
