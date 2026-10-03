@@ -1,5 +1,7 @@
 ---
 name: Skill Compression
+title: Skill Compression
+slug: skill-compression
 description: >-
   Refine a user-designated custom skill's instructional text for clarity and
   concision without sacrificing correctness, safety, scope, required behavior,
@@ -191,7 +193,46 @@ or retain the strongest prior candidate as a no-op.
 The pass order is mandatory: do not polish before clarifying boundaries, and
 do not remove redundancy based on wording introduced by a later pass.
 
-## 8. Apply correctness-first stop conditions
+## 8. Run the post-compression additive improvement phase
+
+After Pass 3, analyze the complete `P3` candidate again against `B0`, the
+Invariant Ledger, the target's actual semantics, and every recorded finding.
+This is a separate **post-compression improvement phase**, not a fourth
+compression pass. Its purpose is to add back omitted wording or add new,
+supported wording that fills a real gap, closes a loophole, handles an edge
+case, improves executability, or strengthens safety and clarity.
+
+Run at most three additive iterations (`A1`, `A2`, and `A3`). For each
+iteration:
+
+1. Identify concrete gaps, loopholes, edge cases, ambiguous execution paths,
+   weak safety boundaries, or missing observability in the current candidate.
+2. Trace every proposed addition to `B0`, an applicable ledger entry, an actual
+   target semantic, or an adversarial finding. Record the evidence and the
+   expected improvement.
+3. Reject additions that invent policy, scope, requirements, domain facts,
+   features, permissions, or behavior not supported by that evidence. Do not
+   use additive wording to silently resolve a contradiction; preserve it as a
+   finding and escalate when needed.
+4. Apply only supported additions that materially improve correctness, safety,
+   clarity, adherence, or execution, producing the next `A` candidate. A
+   reviewed no-op is valid.
+5. Compare the result with `B0` and the immediately preceding candidate,
+   including ledger coverage, risks, rejected additions, and any new findings.
+
+Stop before the cap when a full analysis finds no material supported
+improvement. If the cap is reached while a supported improvement remains,
+retain the strongest safe candidate, record the unresolved finding and
+remaining evidence-backed addition, and report that the finite cap prevented
+another iteration. Never loop indefinitely or add wording merely to fill a
+pass. Label the result **Post-compression candidate** (`A1`–`A3`), or
+**Post-compression candidate — no-op** when no addition is justified.
+
+The post-compression candidate is the strongest candidate for all later
+adversarial checks, Final Review, preview output, durable retention, and
+approval. It must not alter protected metadata or expand the approved scope.
+
+## 9. Apply correctness-first stop conditions
 
 At any point, stop the affected change and retain earlier wording when
 shortening, merging, reordering, or generalizing would:
@@ -216,9 +257,9 @@ no-op is a valid result for a round or pass. Never force a word-count
 reduction, and never silently repair a contradiction as if it were a wording
 problem.
 
-## 9. Perform adversarial acceptance checks
+## 10. Perform adversarial acceptance checks
 
-Before Final Review, test the strongest candidate against representative
+Before Final Review, test the post-compression candidate against representative
 scenarios. Use the target's actual content, not invented application-specific
 examples. At minimum, check:
 
@@ -239,17 +280,19 @@ For each check, record the scenario, the relevant ledger entries, the result,
 and any candidate change or retained wording. If a check exposes a risk, stop
 that change and return to the strongest safe earlier candidate.
 
-## 10. Conduct Final Review in two separate stages
+## 11. Conduct Final Review in two separate stages
 
-Final Review happens after both brainstorm rounds and all three ordered
-passes. Perform these stages separately and record their results.
+Final Review happens after both brainstorm rounds, all three ordered passes, and
+the post-compression improvement phase. Perform these stages separately and
+record their results.
 
 ### Final Review A — semantic fidelity
 
-Compare `P3` (or the retained strongest candidate) with `B0`, the ledger, and
-all adversarial findings. Confirm that every applicable trigger, requirement,
-step, boundary, input, output, exception, escalation rule, tool constraint,
-and file constraint is still present and has the same force and scope.
+Compare the post-compression candidate (or the retained strongest candidate)
+with `B0`, the ledger, and all adversarial findings. Confirm that every
+applicable trigger, requirement, step, boundary, input, output, exception,
+escalation rule, tool constraint, and file constraint is still present and has
+the same force and scope.
 Confirm that protected identity and trigger metadata remain unchanged unless
 the user explicitly expanded scope. Reject the candidate if any invariant is
 weaker, missing, ambiguous, or contradicted.
@@ -267,7 +310,7 @@ contradiction that cannot be resolved from `B0`.
 If either review fails, retain the strongest safe earlier candidate and report
 the failed check. Do not reopen completed passes or invent a fourth pass.
 
-## 11. Preview, durable retention, approval, and safe application
+## 12. Preview, durable retention, approval, and safe application
 
 The default response is a preview with this exact content:
 
@@ -302,9 +345,11 @@ The persisted preview must contain, in addition to the complete candidate text:
 - the handoff information below, including the candidate label, exact path,
   canonical source, and baseline identity.
 
-Label the inline candidate unambiguously as **P3 — Complete candidate**. If
-Pass 3 is a no-op, label the strongest retained candidate
-**Retained strongest candidate — Pass 3 no-op** and say why it was retained.
+Label the inline candidate unambiguously as **Post-compression candidate** and
+include its additive iteration label (`A1`–`A3`, or no-op). If Pass 3 and the
+additive phase are no-ops, label the strongest retained candidate
+**Retained strongest candidate — post-compression no-op** and say why it was
+retained.
 Return the complete candidate under that label and report the exact saved path.
 If response transport limits prevent complete inline delivery, say that the
 response is incomplete and direct the user to the verified durable file; do
@@ -342,7 +387,7 @@ the preview if the source changed. When no project-task system exists, put this
 same ready-to-use apply-task specification in the durable preview and final
 response rather than pretending a task was created.
 
-## 12. Report every proposed change
+## 13. Report every proposed change
 
 End both preview and applied responses with a concise, itemized change list.
 Cover every category below; write `None` when it has no entries:
@@ -365,7 +410,7 @@ Do not claim that a change was accepted if it was only brainstormed, rejected,
 or retained from an earlier candidate. The report must account for every
 proposed change, not merely the final diff.
 
-## 13. Self-check before finishing
+## 14. Self-check before finishing
 
 Before presenting the recommendation or applying an approved candidate, verify:
 
@@ -377,13 +422,19 @@ Before presenting the recommendation or applying an approved candidate, verify:
 - exactly three passes ran in the order redundancy, decision boundaries,
   language and ordering;
 - every pass compared with `B0` and the prior candidate, including no-ops;
+- the post-compression phase ran after Pass 3, used evidence from `B0`, the
+  invariant ledger, target semantics, or findings, and stayed within the
+  three-iteration cap;
+- additive candidates were labeled `A1`–`A3` (or a documented no-op), and
+  unsupported scope, policy, feature, permission, and silent contradiction
+  additions were rejected;
 - stop conditions, contradiction handling, domain-term handling, and the
   recursion guard were applied;
 - all six adversarial check categories were addressed;
 - Final Review checked semantic fidelity before general language;
 - the preview includes complete text, diff, risks, and recommendation;
-- the complete P3 candidate, or clearly labeled retained strongest candidate,
-  is present in the response and the durable preview;
+- the complete post-compression candidate, or clearly labeled retained
+  strongest candidate, is present in the response and the durable preview;
 - the durable preview path passed prohibited-location and read-back checks and
   its persisted text matches the reported candidate;
 - the exact saved path, candidate label, canonical source, and baseline identity

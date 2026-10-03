@@ -1,5 +1,5 @@
 ---
-name: UX E2E
+name: UX Confirmation Audit
 description: >-
   End-to-end UX confirmation audit playbook for any app. Walks every major user
   journey to find and fix broken flows, silent failures, and rough edges before
@@ -11,7 +11,7 @@ description: >-
   concrete fix attached.
 ---
 
-# UX E2E
+# UX Confirmation Audit
 
 A phased, repeatable playbook for confirming that every major user journey in an app works correctly, persists properly, and handles failures gracefully. Works on any stack; stack-specific checks are gated and explicitly skipped when they don't apply.
 
