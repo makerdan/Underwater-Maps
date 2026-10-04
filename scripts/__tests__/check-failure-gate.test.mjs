@@ -33,41 +33,46 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const scriptPath = resolve(__dirname, "..", "check-failure-gate.mjs");
 const newPlanPath = resolve(__dirname, "..", "new-plan.mjs");
-const skillPath = resolve(__dirname, "..", "..", ".agents", "skills", "failure-gate", "SKILL.md");
+const skillPath = resolve(
+  __dirname,
+  "..",
+  "..",
+  ".agents",
+  "skills",
+  "failure-gate-v4",
+  "SKILL.md",
+);
 
-describe("Failure Gate refinement scenario contract", () => {
+describe("Failure Gate v4 canonical skill contract", () => {
   const skill = readFileSync(skillPath, "utf8");
 
-  it("keeps the final skill materially shorter without dropping required plan decisions", () => {
-    assert.ok(
-      skill.split("\n").length < 300,
-      "the refined always-loaded skill should remain materially shorter than the 515-line baseline",
-    );
-    assert.match(skill, /Every plan has `## Pre-existing failures to ignore` and `## Validation`/);
-    assert.match(skill, /The plan's `\*\*Command:\*\*` is the validation ceiling/);
+  it("describes the local gate limitations without claiming Task Board enforcement", () => {
+    assert.match(skill, /project-local, cooperative workflow/);
+    assert.match(skill, /cannot prevent\s+that or require Replit's Task Board to use the local checker/);
+    assert.match(skill, /This does not gate Replit Agent's Task Board or any platform-owned success path/);
   });
 
-  it("lets unrelated feature work ignore documented baseline failures", () => {
-    assert.match(skill, /Explicit baseline, unrelated task:[\s\S]*skip the listed failure/);
+  it("binds one active tier to a stable local task ID and fails closed", () => {
+    assert.match(skill, /one stable local task ID has one active\s+authorized tier/);
+    assert.match(skill, /A supplied\s+Replit Agent task number is not a local Failure Gate authorization/);
+    assert.match(skill, /Missing, malformed, stale, conflicting, suspended, or terminal authorization\s+fails closed/);
   });
 
-  it("lets validation-repair work explicitly own a documented baseline failure", () => {
-    assert.match(skill, /Explicit baseline, validation-repair task:[\s\S]*fix it when the plan says/);
+  it("keeps required plan fields and authorized-tier limits in the scaffold", () => {
+    assert.match(skill, /## Pre-existing failures to ignore[\s\S]*## Validation/);
+    assert.match(skill, /\*\*Command:\*\* `<registered-tier>`/);
+    assert.match(skill, /Do not run other task tiers using a fast-only task plan/);
   });
 
-  it("classifies a passing retry as intermittency rather than provenance", () => {
-    assert.match(skill, /Any passing retry means \*\*intermittent\*\*, not pre-existing/);
-    assert.match(skill, /cannot satisfy the[\s\S]*two-factor evidence gate/);
+  it("treats retries as intermittency and requires evidence for provenance", () => {
+    assert.match(skill, /A retry pass establishes intermittency, not pre-existing provenance/);
+    assert.match(skill, /Direct evidence is a verified comparison run or a trustworthy earlier run/);
+    assert.match(skill, /If isolation is impossible or unsafe[\s\S]*classification is\s+blocked/);
   });
 
-  it("fails closed on unavailable tier data except for the explicit ad-hoc opt-out", () => {
-    assert.match(skill, /Missing, unreadable, malformed, or unparseable task-plan\/tier data is a/);
-    assert.match(skill, /`--allow-no-plan` is the only bypass/);
-  });
-
-  it("keeps gitignored archive remediation environment-local", () => {
-    assert.match(skill, /`\.local\/tasks\/` is not tracked output/);
-    assert.match(skill, /Do not instruct an agent to bulk-edit[\s\S]*as part of a commit/);
+  it("keeps durable deliverables outside .local and rejects disposable archives as plans", () => {
+    assert.match(skill, /Keep deliverables outside `\.local\/`/);
+    assert.match(skill, /Disposable archives are not durable plans/);
   });
 });
 

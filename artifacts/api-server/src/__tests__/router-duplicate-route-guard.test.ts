@@ -73,6 +73,7 @@ import { API_DOMAINS, API_DOMAIN_KEYS } from "../routes/index.js";
 import { uploadIngestionRouter } from "../domains/upload/ingestion.js";
 import datasetDiscoveryRouter from "../routes/datasets-discovery.js";
 import datasetTerrainRouter from "../routes/datasets-terrain.js";
+import { publicDatasetAuditRouter, userDatasetAuditRouter } from "../routes/dataset-audit.js";
 import healthRouter from "../routes/health.js";
 import poeRouter from "../routes/poe.js";
 import markersRouter from "../routes/markers.js";
@@ -123,6 +124,7 @@ const ROUTERS: Array<[name: string, router: unknown]> = [
   ["poe", poeRouter],
   ["datasets-discovery", datasetDiscoveryRouter],
   ["datasets-terrain", datasetTerrainRouter],
+  ["dataset-audit", publicDatasetAuditRouter],
   ["upload-ingestion", uploadIngestionRouter],
   ["markers", markersRouter],
   ["catches", catchesRouter],
@@ -225,6 +227,7 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
   it("catalog organization composition retains all user-owned catalog routes without duplicates", () => {
     expect(countRoutesDeep(catalogOrganizationRouter)).toBe(
       countRoutes(userDatasetsRouter) +
+        countRoutes(userDatasetAuditRouter) +
         countRoutes(foldersRouter) +
         countRoutes(collectionsRouter) +
         countRoutes(catalogSavesRouter),
@@ -232,6 +235,7 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
     expect(
       findDuplicateRoutesAcross([
         [userDatasetsRouter, ""],
+        [userDatasetAuditRouter, ""],
         [foldersRouter, ""],
         [collectionsRouter, ""],
         [catalogSavesRouter, ""],
@@ -313,12 +317,15 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
     expect(countRoutes(datasetTerrainRouter)).toBe(9);
     expect(countRoutes(uploadIngestionRouter)).toBe(11);
     expect(countRoutesDeep(datasetDomain.router)).toBe(
-      countRoutes(datasetDiscoveryRouter) + countRoutes(datasetTerrainRouter),
+      countRoutes(datasetDiscoveryRouter) +
+        countRoutes(datasetTerrainRouter) +
+        countRoutes(publicDatasetAuditRouter),
     );
     expect(findDuplicateRoutesDeep(datasetDomain.router)).toEqual([]);
     expect(findDuplicateRoutesAcross([
       [datasetDiscoveryRouter, ""],
       [datasetTerrainRouter, ""],
+      [publicDatasetAuditRouter, ""],
       [uploadIngestionRouter, ""],
     ])).toEqual([]);
   });
@@ -348,6 +355,9 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
       "GET /terrain/land",
       "GET /terrain/satellite-tile",
       "GET /terrain/terrain-tile",
+    ]);
+    expect(routePairs(publicDatasetAuditRouter)).toEqual([
+      "GET /datasets/:id/audit",
     ]);
     expect(routePairs(uploadIngestionRouter)).toEqual([
       "GET /datasets/upload/chunk/status/:uploadId",

@@ -16,11 +16,13 @@
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { screen, fireEvent } from "@testing-library/react";
+import { cleanup, screen, fireEvent } from "@testing-library/react";
 import { renderWithProviders } from "./setup";
 import { FindDataPanel } from "@/components/FindDataPanel";
 import { useTerrainStore, MAX_ACTIVE_DATASETS, type VisibleDataset } from "@/lib/terrainStore";
 import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
+
+const originalAddSelected = useTerrainStore.getState().addSelected;
 
 // ---------------------------------------------------------------------------
 // Hoisted proxy factory — identical pattern to the other FindDataPanel tests.
@@ -266,6 +268,8 @@ function renderPanel() {
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
+  vi.restoreAllMocks();
+  useTerrainStore.setState({ addSelected: originalAddSelected });
   onClose.mockClear();
   toastMock.mockClear();
   catalogResults = [PRESET_ENTRY];
@@ -279,8 +283,13 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
   // Restore terrain store to clean state so tests don't bleed into each other.
-  useTerrainStore.setState({ ...BLANK_TERRAIN_STATE });
+  useTerrainStore.setState({
+    ...BLANK_TERRAIN_STATE,
+    addSelected: originalAddSelected,
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -427,6 +436,9 @@ describe("FindDataPanel — catalog ADD button", () => {
     renderPanel();
 
     const btn = screen.getByTestId(`catalog-add-to-view-${PRESET_ENTRY.id}`);
+    expect(btn).toHaveTextContent("IN VIEW");
+    expect(btn).toBeDisabled();
+    expect(addSelectedSpy).not.toHaveBeenCalled();
     fireEvent.click(btn);
 
     expect(addSelectedSpy).not.toHaveBeenCalled();
@@ -468,6 +480,7 @@ describe("FindDataPanel — catalog ADD button", () => {
     const btn = screen.getByTestId(`catalog-add-to-view-${PRESET_ENTRY.id}`);
     expect(btn).toHaveTextContent("ADD");
     expect(btn).not.toBeDisabled();
+    expect(addSelectedSpy).not.toHaveBeenCalled();
 
     fireEvent.click(btn);
     expect(addSelectedSpy).toHaveBeenCalledTimes(1);

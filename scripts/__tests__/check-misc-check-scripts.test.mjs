@@ -1,6 +1,6 @@
 /**
- * Regression coverage for the hardcoded-port, codegen-stale, and duplicate-
- * hooks registry checks.
+ * Regression coverage for the hardcoded-port, codegen-stale, duplicate-hooks
+ * registry, and published Failure Gate ZIP checks.
  */
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -24,6 +24,15 @@ const repoRoot = resolve(scriptsDir, "..");
 const portsScript = join(scriptsDir, "check-hardcoded-ports.mjs");
 const codegenScript = join(scriptsDir, "check-codegen-stale.mjs");
 const hooksScript = join(scriptsDir, "check-duplicate-hooks-registry.mjs");
+const failureGateZipScript = join(scriptsDir, "check-failure-gate-zip-stale.mjs");
+const failureGateZip = join(
+  repoRoot,
+  "artifacts/bathyscan/public/failure-gate-skill.zip",
+);
+const failureGateSkill = join(
+  repoRoot,
+  ".agents/skills/failure-gate-v4/SKILL.md",
+);
 const ignoredDirs = join(scriptsDir, "lib", "ignored-dirs.mjs");
 
 let sandbox;
@@ -69,6 +78,7 @@ describe("check-hardcoded-ports --scan restrictions", () => {
     assert.doesNotMatch(result.stderr, /allowed\.mjs/);
   });
 });
+
 
 describe("check-codegen-stale process failures", () => {
   it("reports a spawn error separately from a non-zero generator exit", () => {
@@ -146,5 +156,29 @@ describe("check-duplicate-hooks-registry hook counting", () => {
     });
     assert.equal(result.status, 1);
     assert.match(String(result.stderr), /Large\.tsx \(505 lines, 10 hook declarations\)/);
+  });
+});
+
+describe("check-failure-gate-zip-stale canonical archive", () => {
+  it("accepts only the byte-identical failure-gate-v4 skill entry", () => {
+    const check = runNode(failureGateZipScript);
+    assert.equal(check.status, 0, check.stderr);
+
+    const listing = spawnSync("unzip", ["-Z1", failureGateZip], {
+      encoding: "utf8",
+    });
+    assert.equal(listing.status, 0, listing.stderr);
+    assert.deepEqual(
+      listing.stdout.split(/\r?\n/).filter(Boolean),
+      ["failure-gate-v4/SKILL.md"],
+    );
+
+    const contents = spawnSync(
+      "unzip",
+      ["-p", failureGateZip, "failure-gate-v4/SKILL.md"],
+      { encoding: "buffer" },
+    );
+    assert.equal(contents.status, 0, contents.stderr?.toString("utf8"));
+    assert.deepEqual(contents.stdout, readFileSync(failureGateSkill));
   });
 });

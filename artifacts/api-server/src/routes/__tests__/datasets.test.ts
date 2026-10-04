@@ -18,30 +18,41 @@ import { fileURLToPath } from "url";
 // DB fallback returns without re-mocking the entire module.
 let _mockJobRows: unknown[] = [];
 
-vi.mock("@workspace/db", () => ({
-  db: {
-    select: () => ({
-      from: () => ({
-        where: () => Promise.resolve(_mockJobRows),
-      }),
-    }),
-    insert: () => ({
-      values: () => ({
-        returning: () => Promise.resolve([]),
-        onConflictDoUpdate: () => Promise.resolve([]),
-      }),
-    }),
-    update: () => ({
-      set: () => ({
-        where: () => Promise.resolve([]),
-      }),
-    }),
-    transaction: async <T>(cb: (tx: unknown) => Promise<T>) => cb({}),
-  },
-  customDatasetsTable: {},
-  userSettingsTable: {},
-  uploadJobsTable: {},
-}));
+vi.mock("@workspace/db", async () => {
+  const { createDbMock } = await import("../../__tests__/helpers/db-mock.js");
+  return createDbMock({
+    db: {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => Promise.resolve(_mockJobRows)),
+        })),
+      })),
+      insert: vi.fn(() => ({
+        values: vi.fn((values: Record<string, unknown>) => ({
+          returning: vi.fn(() =>
+            Promise.resolve([
+              {
+                id: values.id ?? "mock-dataset-id",
+                name: values.name ?? "survey",
+                minDepth: values.minDepth ?? 0,
+                maxDepth: values.maxDepth ?? 0,
+                createdAt: new Date(),
+              },
+            ]),
+          ),
+          onConflictDoUpdate: vi.fn(() => Promise.resolve([])),
+        })),
+      })),
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({
+          where: vi.fn(() => Promise.resolve([])),
+        })),
+      })),
+      transaction: async <T>(cb: (tx: unknown) => Promise<T>): Promise<T> =>
+        cb({}),
+    },
+  });
+});
 
 vi.mock("@clerk/express", () => ({
   clerkMiddleware: vi.fn(
@@ -288,9 +299,8 @@ describe("POST /api/datasets/upload — numeric-param validation", () => {
 //
 // These tests exercise the full POST /api/datasets/upload route using real
 // binary fixtures (GeoTIFF, NetCDF, LAS 1.2, LAS 1.4).  The DB mock returns
-// an empty array from `returning()`, so `savedDatasetId` is absent — but
-// the route still returns 200 with populated `terrain` and `overview` fields
-// generated from the parsed point cloud.
+// persisted-row metadata for successful uploads, so the route validates its
+// response after parsing and terrain generation.
 
 const FIXTURE_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -298,10 +308,7 @@ const FIXTURE_DIR = join(
 );
 
 describe("POST /api/datasets/upload — binary survey formats (end-to-end)", () => {
-  it("rejects a sparse GeoTIFF (.tif) survey file with 422 and coveragePercent", async () => {
-    // The fixture is sparse at resolution=64 (>70% null cells), so the sparse
-    // guard correctly rejects it with 422.  This verifies the guard fires for
-    // GeoTIFF.  A denser real-world TIFF would return 200.
+  it("accepts the dense GeoTIFF (.tif) fixture and returns saved terrain", async () => {
     const buf = readFileSync(join(FIXTURE_DIR, "survey.tif"));
     const res = await request(app)
       .post("/api/datasets/upload")
@@ -310,16 +317,16 @@ describe("POST /api/datasets/upload — binary survey formats (end-to-end)", () 
       .field("resolution", "64")
       .attach("file", buf, { filename: "survey.tif", contentType: "image/tiff" });
 
-    expect(res.status).toBe(422);
-    expect(res.body.error).toBe("sparse_survey");
-    expect(res.body).toHaveProperty("coveragePercent");
-    expect(res.body.coveragePercent).toBeLessThan(30);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      savedDatasetMeta: { name: "survey" },
+      terrain: { width: 64, height: 64 },
+      overview: expect.any(Object),
+    });
+    expect(res.body.savedDatasetId).toBeTruthy();
   });
 
-  it("rejects a sparse NetCDF (.nc) survey file with 422 and coveragePercent", async () => {
-    // The fixture is sparse at resolution=64 (>70% null cells), so the sparse
-    // guard correctly rejects it with 422.  This verifies the guard fires for
-    // NetCDF.  A denser real-world NC would return 200.
+  it("accepts the dense NetCDF (.nc) fixture and returns saved terrain", async () => {
     const buf = readFileSync(join(FIXTURE_DIR, "survey.nc"));
     const res = await request(app)
       .post("/api/datasets/upload")
@@ -328,10 +335,13 @@ describe("POST /api/datasets/upload — binary survey formats (end-to-end)", () 
       .field("resolution", "64")
       .attach("file", buf, { filename: "survey.nc", contentType: "application/octet-stream" });
 
-    expect(res.status).toBe(422);
-    expect(res.body.error).toBe("sparse_survey");
-    expect(res.body).toHaveProperty("coveragePercent");
-    expect(res.body.coveragePercent).toBeLessThan(30);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      savedDatasetMeta: { name: "survey" },
+      terrain: { width: 64, height: 64 },
+      overview: expect.any(Object),
+    });
+    expect(res.body.savedDatasetId).toBeTruthy();
   });
 
   it("rejects a sparse LAS 1.2 (.las) survey file with 422 and coveragePercent", async () => {

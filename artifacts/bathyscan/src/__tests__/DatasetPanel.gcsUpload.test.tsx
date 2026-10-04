@@ -10,10 +10,12 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import React from "react";
-import { render, screen, act } from "@testing-library/react";
+import { cleanup, render, screen, act } from "@testing-library/react";
 import { DatasetPanel } from "@/components/DatasetPanel";
 
 // ── Hoisted state ─────────────────────────────────────────────────────────────
+
+let restoreActiveXhr: (() => void) | null = null;
 
 const makeApiClientMock = vi.hoisted(() => {
   function noop() {}
@@ -347,11 +349,19 @@ function mockXhrSuccess() {
         loadListeners.forEach((handler) => handler());
       }, 0);
     }),
+    abort: vi.fn(),
     status: 200,
     readyState: 4,
   };
-  globalThis.XMLHttpRequest = vi.fn(() => xhr) as unknown as typeof XMLHttpRequest;
-  return () => { globalThis.XMLHttpRequest = original; };
+  globalThis.XMLHttpRequest = vi.fn(function XMLHttpRequestMock() {
+    return xhr;
+  }) as unknown as typeof XMLHttpRequest;
+  const restore = () => {
+    globalThis.XMLHttpRequest = original;
+    restoreActiveXhr = null;
+  };
+  restoreActiveXhr = restore;
+  return restore;
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -364,6 +374,9 @@ describe("DatasetPanel — gcsUploadFile Authorization header", () => {
   });
 
   afterEach(() => {
+    cleanup();
+    restoreActiveXhr?.();
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -547,7 +560,10 @@ describe("DatasetPanel — gcsUploadFile Authorization header", () => {
     const pollCalls = fetchSpy.mock.calls.filter(([url]) =>
       typeof url === "string" && url.includes("gcs-job-status"),
     );
-    expect(pollCalls).toHaveLength(2);
+    expect(
+      pollCalls,
+      `fetch URLs: ${fetchSpy.mock.calls.map(([url]) => String(url)).join(", ")}`,
+    ).toHaveLength(2);
     expect(new Headers(pollCalls[0]![1]?.headers as HeadersInit).get("authorization"))
       .toBe("Bearer stale-poll-token");
     expect(new Headers(pollCalls[1]![1]?.headers as HeadersInit).get("authorization"))

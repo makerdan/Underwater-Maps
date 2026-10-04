@@ -43,8 +43,8 @@ describe("GeoTIFF — realistic survey fixture", () => {
 
   it("skips NODATA pixels (GDAL_NODATA=-9999)", async () => {
     const pts = await parseGeoTiff(tifBuf);
-    // Fixture has 20×20 = 400 pixels, 5 NODATA cells → at most 395 valid
-    expect(pts.length).toBeLessThanOrEqual(395);
+    // Fixture has 64×64 = 4096 pixels, 5 NODATA cells.
+    expect(pts).toHaveLength(64 * 64 - 5);
     for (const p of pts) {
       // After abs() the parser applies, no point should equal 9999
       expect(p.depth).not.toBe(9999);
@@ -54,11 +54,12 @@ describe("GeoTIFF — realistic survey fixture", () => {
   it("derives correct geographic coordinates from ModelTiepoint+ModelPixelScale", async () => {
     const pts = await parseGeoTiff(tifBuf);
     // geotiff.writeArrayBuffer forces the globe top-left tiepoint [-180, 90, 0].
-    // With 20×20 pixels at 0.01°/px: lon ∈ [-180, -179.8], lat ∈ [89.8, 90].
+    // With 64×64 pixels at 0.01°/px, cell centers span approximately
+    // lon [-179.995, -179.365], lat [89.365, 89.995].
     for (const p of pts) {
       expect(p.lon).toBeGreaterThanOrEqual(-180.01);
-      expect(p.lon).toBeLessThanOrEqual(-179.79);
-      expect(p.lat).toBeGreaterThanOrEqual(89.79);
+      expect(p.lon).toBeLessThanOrEqual(-179.35);
+      expect(p.lat).toBeGreaterThanOrEqual(89.35);
       expect(p.lat).toBeLessThanOrEqual(90.01);
     }
   });

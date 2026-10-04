@@ -29,9 +29,9 @@ const gcsMocks = vi.hoisted(() => {
 });
 
 vi.mock("@google-cloud/storage", () => ({
-  Storage: vi.fn().mockImplementation(() => ({
+  Storage: vi.fn().mockImplementation(function StorageMock() { return ({
     bucket: gcsMocks.mockBucket,
-  })),
+  }); }),
 }));
 
 // ── Minimal stubs for transitive imports ─────────────────────────────────────

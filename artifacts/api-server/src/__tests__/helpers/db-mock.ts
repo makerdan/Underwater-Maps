@@ -243,6 +243,13 @@ const poeUsageLogTableStub = {
   createdAt: "createdAt",
 };
 
+const poeVerificationDiagnosticsTableStub = {
+  route: "route",
+  code: "code",
+  count: "count",
+  lastOccurredAt: "lastOccurredAt",
+};
+
 const rateLimitEventsTableStub = {
   id: "id",
   userId: "userId",
@@ -358,6 +365,7 @@ export function createDbMock(options: DbMockOptions = {}) {
     weatherStationCacheTable: weatherStationCacheTableStub,
     rawsObservationCacheTable: rawsObservationCacheTableStub,
     poeUsageLogTable: poeUsageLogTableStub,
+    poeVerificationDiagnosticsTable: poeVerificationDiagnosticsTableStub,
     rateLimitEventsTable: rateLimitEventsTableStub,
     uploadCalibrationTable: uploadCalibrationTableStub,
     conversations: conversationsTableStub,

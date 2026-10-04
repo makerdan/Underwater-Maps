@@ -22,12 +22,14 @@ const { mockFileFactory } = vi.hoisted(() => ({
 }));
 
 vi.mock("@google-cloud/storage", () => ({
-  Storage: vi.fn().mockImplementation(() => ({
-    bucket: vi.fn().mockReturnValue({
-      file: mockFileFactory,
-      getFiles: vi.fn().mockResolvedValue([[]]),
-    }),
-  })),
+  Storage: vi.fn().mockImplementation(function StorageMock() {
+    return {
+      bucket: vi.fn().mockReturnValue({
+        file: mockFileFactory,
+        getFiles: vi.fn().mockResolvedValue([[]]),
+      }),
+    };
+  }),
   File: vi.fn(),
 }));
 

@@ -276,7 +276,9 @@ function makeSuspendedXhr() {
   };
 
   const OrigXHR = globalThis.XMLHttpRequest;
-  globalThis.XMLHttpRequest = vi.fn(() => stub) as unknown as typeof XMLHttpRequest;
+  globalThis.XMLHttpRequest = vi.fn(function XMLHttpRequestMock() {
+    return stub;
+  }) as unknown as typeof XMLHttpRequest;
 
   return {
     abortSpy,

@@ -115,7 +115,7 @@ function installHeightMock() {
   // Override ResizeObserver to fire immediately so the virtualizer's internal
   // state is updated synchronously on observe().
   (global as Record<string, unknown>)["ResizeObserver"] = vi.fn(
-    (cb: ResizeObserverCallback) => ({
+    function ResizeObserverMock(cb: ResizeObserverCallback) { return ({
       observe: (el: Element) => {
         cb(
           [
@@ -132,7 +132,7 @@ function installHeightMock() {
       },
       unobserve: vi.fn(),
       disconnect: vi.fn(),
-    }),
+    }); },
   );
 }
 

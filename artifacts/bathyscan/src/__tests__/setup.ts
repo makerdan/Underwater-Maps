@@ -17,11 +17,11 @@ if (typeof window !== "undefined") {
 }
 
 if (typeof global !== "undefined" && !(global as unknown as Record<string, unknown>)["ResizeObserver"]) {
-  (global as unknown as Record<string, unknown>)["ResizeObserver"] = vi.fn(() => ({
+  (global as unknown as Record<string, unknown>)["ResizeObserver"] = vi.fn(function ResizeObserverMock() { return ({
     observe: vi.fn(),
     unobserve: vi.fn(),
     disconnect: vi.fn(),
-  }));
+  }); });
 }
 
 if (typeof window !== "undefined" && !window.matchMedia) {

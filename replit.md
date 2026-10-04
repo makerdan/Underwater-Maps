@@ -601,7 +601,7 @@ validation with `nohup`, `setsid`, background shells, or one-off port clones.
 ## Agent rules
 
 > **HARD GATE — applies before writing any plan.**
-> Read `.agents/skills/failure-gate/SKILL.md` now if you have not already done so this session.
+> Read `.agents/skills/failure-gate-v4/SKILL.md` now if you have not already done so this session.
 
 
 ### Progress checkpoints

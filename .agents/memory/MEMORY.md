@@ -4,7 +4,7 @@
 - [Poe disk-cache cross-run isolation](poe-disk-cache-isolation.md) — cache directories are pid-unique; clear zone, dataset, and upscale caches between tests.
 - [Zustand no-selector crash](zustand-no-selector-crash.md) — always use per-field selectors in React 18 Concurrent Mode.
 - [TS project refs need rebuild after codegen](ts-project-refs-codegen.md) — codegen must be followed by typecheck:libs before consuming generated types.
-- [Running long test suites](long-test-runs.md) — bathyscan unit is long-running; use the registered validation workflow, not a shell background job.
+- [Running long test suites](long-test-runs.md) — assigned tiers need the plan-bound launcher; monitor it in the background when longer than the shell limit.
 - [Focused Playwright runs](focused-playwright-runs.md) — verify Playwright filters reach the runner; nested E2E scripts may run a broader set than intended.
 - [Serialized heavy test suites](test-heavy-serialized.md) — unit, palette, and e2e heavy validation must remain serialized.
 - [Replit proxy needs native WS ping](replit-proxy-ws-ping.md) — only native opcode-0x9 frames keep the mTLS preview proxy alive.
@@ -39,7 +39,7 @@
 - [Reference image decode fallback](reference-image-decode-fallback.md) — preserve HTMLImageElement decode fallback when createImageBitmap rejects valid images.
 - [EFH browser fixture hydration](efh-browser-fixture-hydration.md) — settle settings/catalog, expand panels, open the GPS folder, and inspect species-parameterized EFH cache entries.
 - [Direct auth-router test context](direct-auth-router-test-context.md) — tests mounting requireAuth without clerkMiddleware must mock getAuth explicitly for the unauthenticated branch.
-- [Task-tier lock in validation runs](validation-task-lock.md) — managed validation runs need the assigned plan path explicitly supplied as TASK_PLAN_FILE.
+- [Task-tier lock in validation runs](validation-task-lock.md) — use the plan-bound launcher; bare managed validation callbacks may omit the task plan and fail the lock.
 - [Orval Zod catalog detection](orval-zod-catalog-detection.md) — set the installed Zod major explicitly in Orval; catalog-based auto-detection may emit incompatible code.
 - [Incomplete pnpm install diagnosis](incomplete-pnpm-install.md) — fail early on missing declared test links; avoid installing packages from inside concurrent validation.
 - [Isolated task checkout freshness](isolated-task-checkout-freshness.md) — merged fixes may not appear in an active task checkout; compare against main-repl/main before retrying.

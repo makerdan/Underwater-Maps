@@ -20,14 +20,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // ---------------------------------------------------------------------------
 
 vi.mock("@google-cloud/storage", () => ({
-  Storage: vi.fn().mockImplementation(() => ({
-    bucket: vi.fn().mockReturnValue({
-      file: vi.fn(),
-      getFiles: vi.fn().mockResolvedValue([[]]),
-      getMetadata: vi.fn().mockResolvedValue([{ lifecycle: { rule: [] } }]),
-      setMetadata: vi.fn().mockResolvedValue(undefined),
-    }),
-  })),
+  Storage: vi.fn().mockImplementation(function StorageMock() {
+    return {
+      bucket: vi.fn().mockReturnValue({
+        file: vi.fn(),
+        getFiles: vi.fn().mockResolvedValue([[]]),
+        getMetadata: vi.fn().mockResolvedValue([{ lifecycle: { rule: [] } }]),
+        setMetadata: vi.fn().mockResolvedValue(undefined),
+      }),
+    };
+  }),
 }));
 
 // Use the shared db factory so uploadJobsTable is present and db is fully

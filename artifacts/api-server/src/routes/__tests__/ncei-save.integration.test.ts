@@ -368,19 +368,23 @@ vi.mock("drizzle-orm", () => ({
   }),
 }));
 
-vi.mock("@workspace/db", () => ({
-  db: H.db,
-  userCatalogSavesTable: H.userCatalogSavesTable,
-  customDatasetsTable: H.customDatasetsTable,
-  datasetCatalogTable: H.datasetCatalogTable,
-  datasetFoldersTable: H.datasetFoldersTable,
-  userSettingsTable: H.userSettingsTable,
-  markersTable: H.markersTable,
-  gpsTrailsTable: H.gpsTrailsTable,
-  gpsTrailPointsTable: H.gpsTrailPointsTable,
-  trollingPresetsTable: H.trollingPresetsTable,
-  pool: { query: async () => ({ rows: [] }) },
-}));
+vi.mock("@workspace/db", async () => {
+  const { createDbMock } = await import("../../__tests__/helpers/db-mock.js");
+  return {
+    ...createDbMock(),
+    db: H.db,
+    userCatalogSavesTable: H.userCatalogSavesTable,
+    customDatasetsTable: H.customDatasetsTable,
+    datasetCatalogTable: H.datasetCatalogTable,
+    datasetFoldersTable: H.datasetFoldersTable,
+    userSettingsTable: H.userSettingsTable,
+    markersTable: H.markersTable,
+    gpsTrailsTable: H.gpsTrailsTable,
+    gpsTrailPointsTable: H.gpsTrailPointsTable,
+    trollingPresetsTable: H.trollingPresetsTable,
+    pool: { query: async () => ({ rows: [] }) },
+  };
+});
 
 // Stub the terrain pipeline so tests don't hit NCEI or GEBCO WCS.
 // buildNceiTerrainForBbox is the function called by buildCatalogGrids for
@@ -431,6 +435,8 @@ vi.mock("../../lib/terrain.js", async () => {
 // so we spy on it. seedDatasetCatalog and getCatalogEntries are no-ops here
 // because the test doesn't exercise the catalog listing routes.
 vi.mock("../../lib/catalogSeeder.js", () => ({
+  SYNTHETIC_COVERAGE_ACCESS_NOTE:
+    "Coverage is estimated from the USGS service area. This exact area may have no 3DEP data, so import can fail.",
   seedDatasetCatalog: async () => {},
   getCatalogEntries: async () => [],
   searchCatalog: async () => [],
@@ -620,7 +626,7 @@ describe("POST /api/ncei/save — NCEI portal save end-to-end flow", () => {
 
       // HTTP response is captured before materializeSave (fire-and-forget) updates
       // the row, so the body reflects the initial "processing" status.
-      expect(res.status).toBe(201);
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
       expect(res.body).toMatchObject({
         catalogId: EXPECTED_CATALOG_ID,
         status: "processing",

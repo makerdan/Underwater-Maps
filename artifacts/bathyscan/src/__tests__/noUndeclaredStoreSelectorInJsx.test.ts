@@ -27,9 +27,10 @@ const ruleTester = new RuleTester({
   },
 });
 
-describe("no-undeclared-store-selector-in-jsx — simple selector (s) => s.FIELD", () => {
-  it("passes valid cases and reports invalid cases", () => {
-    ruleTester.run(
+RuleTester.describe = describe;
+RuleTester.it = it;
+
+ruleTester.run(
       "no-undeclared-store-selector-in-jsx",
       noUndeclaredStoreSelectorInJsx,
       {
@@ -68,12 +69,8 @@ describe("no-undeclared-store-selector-in-jsx — simple selector (s) => s.FIELD
         ],
       },
     );
-  });
-});
 
-describe("no-undeclared-store-selector-in-jsx — object expression (s) => ({ key: s.FIELD })", () => {
-  it("passes valid cases and reports invalid cases", () => {
-    ruleTester.run(
+ruleTester.run(
       "no-undeclared-store-selector-in-jsx",
       noUndeclaredStoreSelectorInJsx,
       {
@@ -115,12 +112,8 @@ describe("no-undeclared-store-selector-in-jsx — object expression (s) => ({ ke
         ],
       },
     );
-  });
-});
 
-describe("no-undeclared-store-selector-in-jsx — nullish coalescing (s) => s.FIELD ?? default", () => {
-  it("passes valid cases and reports invalid cases", () => {
-    ruleTester.run(
+ruleTester.run(
       "no-undeclared-store-selector-in-jsx",
       noUndeclaredStoreSelectorInJsx,
       {
@@ -145,12 +138,8 @@ describe("no-undeclared-store-selector-in-jsx — nullish coalescing (s) => s.FI
         ],
       },
     );
-  });
-});
 
-describe("no-undeclared-store-selector-in-jsx — logical OR/AND (s) => s.FIELD || x, (s) => s.FIELD && x", () => {
-  it("passes valid cases and reports invalid cases", () => {
-    ruleTester.run(
+ruleTester.run(
       "no-undeclared-store-selector-in-jsx",
       noUndeclaredStoreSelectorInJsx,
       {
@@ -182,12 +171,8 @@ describe("no-undeclared-store-selector-in-jsx — logical OR/AND (s) => s.FIELD 
         ],
       },
     );
-  });
-});
 
-describe("no-undeclared-store-selector-in-jsx — unary not (s) => !s.FIELD", () => {
-  it("passes valid cases and reports invalid cases", () => {
-    ruleTester.run(
+ruleTester.run(
       "no-undeclared-store-selector-in-jsx",
       noUndeclaredStoreSelectorInJsx,
       {
@@ -212,12 +197,8 @@ describe("no-undeclared-store-selector-in-jsx — unary not (s) => !s.FIELD", ()
         ],
       },
     );
-  });
-});
 
-describe("no-undeclared-store-selector-in-jsx — Boolean() call (s) => Boolean(s.FIELD)", () => {
-  it("passes valid cases and reports invalid cases", () => {
-    ruleTester.run(
+ruleTester.run(
       "no-undeclared-store-selector-in-jsx",
       noUndeclaredStoreSelectorInJsx,
       {
@@ -242,12 +223,8 @@ describe("no-undeclared-store-selector-in-jsx — Boolean() call (s) => Boolean(
         ],
       },
     );
-  });
-});
 
-describe("no-undeclared-store-selector-in-jsx — zero false positives on mixed patterns", () => {
-  it("does not flag identifiers that are fully declared even with complex selectors", () => {
-    ruleTester.run(
+ruleTester.run(
       "no-undeclared-store-selector-in-jsx",
       noUndeclaredStoreSelectorInJsx,
       {
@@ -277,5 +254,3 @@ describe("no-undeclared-store-selector-in-jsx — zero false positives on mixed 
         invalid: [],
       },
     );
-  });
-});

@@ -35,37 +35,37 @@ test("the committed Poe Setup skill satisfies the static contract", () => {
   assert.deepEqual(findPoeSetupContractProblems(canonicalSkill), []);
 });
 
-test("the approved lazy memoized getter is accepted", () => {
-  const rawSdkOnly = `## 5. Raw SDK fallback
-Construct it lazily and memoize it in a server-only module.
-Importing the module must not read or validate optional Poe configuration,
-construct a client, or throw because Poe is not configured. Fail at the
-operation boundary when Poe is first used. If required, an explicit startup
-preflight may call the same getter and fail startup; that preflight is an
-application decision, not a module-import side effect.
+test("the current lazy memoized v1 getter is accepted", () => {
+  const clientSection = `## 6. Keep the credential server-side
+Optional Poe modules must be import-safe. Read and validate configuration only
+when a Poe operation runs. A required service may invoke the same getter from an
+explicit startup preflight; module import must not create a client or fail.
 
 \`\`\`ts
 import OpenAI from "openai";
-let poeClient: OpenAI | undefined;
+let client: OpenAI | undefined;
 export function getPoeClient(): OpenAI {
-  if (poeClient) return poeClient;
-  const apiKey = process.env.POE_API_KEY2;
+  if (client) return client;
+  const apiKey = process.env.POE_API_KEY;
   if (!apiKey) throw new Error("not configured");
-  poeClient = new OpenAI({ apiKey, baseURL: "https://api.poe.com/v1" });
-  return poeClient;
+  client = new OpenAI({ apiKey, baseURL: "https://api.poe.com/v1" });
+  return client;
 }
 \`\`\`
-## 6. Discover live model IDs and capabilities`;
+## 7. Use bounded HTTP and validated responses`;
 
   const guidance = REQUIRED_POE_SETUP_GUIDANCE.flatMap(({ phrases }) => phrases).join("\n");
-  assert.deepEqual(findPoeSetupContractProblems(`${rawSdkOnly}\n${guidance}\nPOE_API_KEY2`), []);
+  assert.deepEqual(findPoeSetupContractProblems(`${clientSection}\n${guidance}`), []);
 });
 
-test("rejects obsolete secret naming and an OpenAI /bot/ base URL", () => {
+test("requires current key precedence and rejects an OpenAI /bot/ base URL", () => {
   expectMutationRejected(
-    "obsolete secret",
-    canonicalSkill.replace("POE_API_KEY2", "POE_API_KEY"),
-    "obsolete POE_API_KEY",
+    "legacy-only secret policy",
+    canonicalSkill.replace(
+      "2. Otherwise use `POE_API_KEY`.",
+      "2. Otherwise use `POE_API_KEY2`.",
+    ),
+    "credential-names: missing required guidance",
   );
   expectMutationRejected(
     "bot protocol",

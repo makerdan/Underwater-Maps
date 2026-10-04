@@ -12,6 +12,31 @@ test("the committed Skill Compression skill satisfies every preview contract", (
   assert.deepEqual(findSkillCompressionContractProblems(skillText), []);
 });
 
+test("complete-candidate contract requires the canonical post-compression labels", () => {
+  const completeCandidateContract =
+    REQUIRED_SKILL_COMPRESSION_PREVIEW_GUIDANCE.find(
+      (contract) => contract.id === "complete-candidate",
+    );
+  assert.ok(completeCandidateContract);
+  assert.ok(
+    completeCandidateContract.phrases.includes(
+      "Label the inline candidate unambiguously as **Post-compression candidate**",
+    ),
+  );
+  assert.ok(
+    completeCandidateContract.phrases.includes(
+      "**Retained strongest candidate — post-compression no-op**",
+    ),
+  );
+  assert.ok(
+    !completeCandidateContract.phrases.some((phrase) =>
+      /P3 — Complete candidate|Retained strongest candidate — Pass 3 no-op/.test(
+        phrase,
+      ),
+    ),
+  );
+});
+
 test("semantic contract failures identify the missing safeguard and wording", () => {
   const contractText = REQUIRED_SKILL_COMPRESSION_PREVIEW_GUIDANCE.flatMap(
     (contract) => contract.phrases,

@@ -13,7 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import test from "node:test";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { canonicalJson, digestJson, sha256 } from "../failure-gate-v4/canonical.mjs";
 import { TIER_POLICY_FILES, getRegisteredValidationPolicy } from "../failure-gate-v4/policy.mjs";
 import { FailureGateStoredClassification } from "../failure-gate-v4/stored-classification.mjs";
@@ -22,7 +22,7 @@ import { validateTestCaseReport } from "../failure-gate-v4/test-case-report.mjs"
 
 // These temporary Git-tracked catalogs and mock canonical store records are
 // algorithm fixtures only; they are never live proof or persisted diagnostics.
-const PROJECT_ROOT = resolve(process.cwd());
+const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const FIXTURE_SUITE = "fixture-suite";
 const FIXTURE_SOURCE = "fixture.spec.mjs";
 const FIXTURE_TITLE = "reports a stable stored failure";

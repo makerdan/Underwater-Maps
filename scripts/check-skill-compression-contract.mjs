@@ -29,11 +29,11 @@ export const SKILL_COMPRESSION_PATH = resolve(
 export const REQUIRED_SKILL_COMPRESSION_PREVIEW_GUIDANCE = [
   {
     id: "complete-candidate",
-    description: "the response returns a complete P3 or clearly retained candidate",
+    description: "the response returns a complete post-compression or clearly retained candidate",
     phrases: [
-      "Label the inline candidate unambiguously as **P3 — Complete candidate**.",
+      "Label the inline candidate unambiguously as **Post-compression candidate**",
       "Return the complete candidate under that label",
-      "**Retained strongest candidate — Pass 3 no-op**",
+      "**Retained strongest candidate — post-compression no-op**",
     ],
   },
   {

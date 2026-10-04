@@ -125,17 +125,18 @@ if ! pnpm run check:docs-stale 2>/dev/null; then
   echo "[post-merge] API route docs updated."
 fi
 # Guardrail: keep artifacts/bathyscan/public/failure-gate-skill.zip in sync
-# with .agents/skills/failure-gate/SKILL.md. Auto-regenerate if stale and
+# with .agents/skills/failure-gate-v4/SKILL.md. Auto-regenerate if stale and
 # commit the result so the check:failure-gate-zip step passes cleanly.
 if ! node scripts/check-failure-gate-zip-stale.mjs 2>/dev/null; then
   echo "[post-merge] failure-gate-skill.zip was stale — regenerating and committing..."
-  (cd .agents/skills && zip ../../artifacts/bathyscan/public/failure-gate-skill.zip failure-gate/SKILL.md)
+  rm -f artifacts/bathyscan/public/failure-gate-skill.zip
+  (cd .agents/skills && zip ../../artifacts/bathyscan/public/failure-gate-skill.zip failure-gate-v4/SKILL.md)
   git add artifacts/bathyscan/public/failure-gate-skill.zip
   if ! git diff --cached --quiet; then
     # Set a fallback identity in case the runner has no global git config.
     git config --local user.email "post-merge@replit.local" 2>/dev/null || true
     git config --local user.name  "BathyScan Post-Merge Bot"  2>/dev/null || true
-    git commit -m "chore: sync failure-gate-skill.zip with SKILL.md [post-merge]"
+    git commit -m "chore: sync failure-gate-skill.zip with failure-gate-v4 [post-merge]"
   fi
   echo "[post-merge] failure-gate-skill.zip updated."
 fi

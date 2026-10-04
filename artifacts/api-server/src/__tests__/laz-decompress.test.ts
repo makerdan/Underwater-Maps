@@ -82,12 +82,12 @@ describe("LAZ decompression — real laz-perf round-trip", () => {
 
   it("includes the depth=0 point at index 10 (intertidal / waterline measurement)", async () => {
     const pts = await parseLasLaz(lazBuf, "survey.laz");
-    // 15 records total; depth=0 is a valid intertidal measurement, so all 15
-    // are returned. The zero-depth-is-valid contract is enforced by
+    // The fixture generator writes a 64×64 grid; depth=0 is a valid
+    // intertidal measurement, so all 4096 records are returned. The
+    // zero-depth-is-valid contract is enforced by
     // parser-zero-depth-projected-crs.test.ts — do NOT filter depth=0 here.
-    expect(pts.length).toBe(15);
-    const zeroPt = pts.find((p) => p.depth === 0);
-    expect(zeroPt).toBeDefined();
+    expect(pts).toHaveLength(64 * 64);
+    expect(pts[10]?.depth).toBe(0);
   });
 
   it("derives correct lon/lat from scale and offset in the LAS header", async () => {
@@ -100,12 +100,12 @@ describe("LAZ decompression — real laz-perf round-trip", () => {
     }
   });
 
-  it("produces depth values spanning the full fixture range (0–2400 m)", async () => {
+  it("produces depth values spanning the full fixture range (0–1880 m)", async () => {
     const pts = await parseLasLaz(lazBuf, "survey.laz");
     const depths = pts.map((p) => p.depth);
-    // Fixture has depths 1250–2400 m plus one depth=0 intertidal point
+    // Fixture has depths 1250–1880 m plus one depth=0 intertidal point.
     expect(Math.min(...depths)).toBeCloseTo(0, 0);
-    expect(Math.max(...depths)).toBeCloseTo(2400, 0);
+    expect(Math.max(...depths)).toBeCloseTo(1880, 0);
     // Non-zero depths should cover the survey range
     const nonZero = depths.filter((d) => d > 0);
     expect(Math.min(...nonZero)).toBeCloseTo(1250, 0);

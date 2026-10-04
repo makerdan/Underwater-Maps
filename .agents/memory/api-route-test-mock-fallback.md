@@ -3,13 +3,16 @@ name: API route test mock fallback
 description: Route tests need complete fallback mocks because app.ts mounts every router during module initialization.
 ---
 
-Route tests that mock `@workspace/api-zod` or `@workspace/db` should wrap their
-stateful overrides in a complete-export fallback. New route imports otherwise
-crash unrelated tests during app initialization before the suite can collect.
+Route tests that mock shared modules should account for every runtime export
+consumed during app initialization and by transitive domain-service imports,
+including constants as well as schema and table exports. Wrap stateful
+`@workspace/api-zod` and `@workspace/db` overrides in a complete-export
+fallback; explicit mocks for other shared modules must also retain required
+exports.
 
-**Why:** Adding a route or generated schema changes the app-wide import surface,
-while individual route tests only exercise a small subset of that surface.
+**Why:** Route refactors can add transitive imports without changing a test's
+local endpoint, so partial mocks may turn a valid request into a generic 500.
 
-**How to apply:** Preserve test-specific stateful implementations, but use a
-Proxy fallback for missing schema/table exports and keep a static route-import
-drift check in the fast validation tier.
+**How to apply:** Preserve test-specific stateful behavior, use Proxy fallbacks
+where appropriate for evolving generated schema and table surfaces, and keep
+static route-import drift checks in the fast validation tier.

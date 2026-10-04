@@ -91,7 +91,7 @@ let mockWorkerInstance: MockWorker;
 
 vi.mock("worker_threads", () => {
   return {
-    Worker: vi.fn().mockImplementation(() => {
+    Worker: vi.fn().mockImplementation(function MockWorkerFactory() {
       mockWorkerInstance = new MockWorker();
       return mockWorkerInstance;
     }),

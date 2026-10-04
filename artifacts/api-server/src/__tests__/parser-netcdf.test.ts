@@ -35,7 +35,7 @@ afterAll(() => {
   ncBuf = null!;
 });
 
-describe("NetCDF — realistic GEBCO-style fixture", () => {
+describe("NetCDF — 64×64 CDF-1 fixture", () => {
   it("parses the fixture and returns non-empty depth points", () => {
     const pts = parseNetCdf(ncBuf);
     assertValidBathyPoints(pts, 10);
@@ -43,30 +43,30 @@ describe("NetCDF — realistic GEBCO-style fixture", () => {
 
   it("skips cells matching _FillValue=-32767", () => {
     const pts = parseNetCdf(ncBuf);
-    // Fixture has 10×10=100 cells with 1 fill cell → at most 99 valid points
-    expect(pts.length).toBeLessThanOrEqual(99);
+    // Fixture has 64×64=4096 cells with 1 fill cell.
+    expect(pts).toHaveLength(64 * 64 - 1);
     for (const p of pts) {
       expect(p.depth).not.toBe(32767);
     }
   });
 
-  it("covers the expected geographic region (Mariana Trench area)", () => {
+  it("covers the expected geographic extent", () => {
     const pts = parseNetCdf(ncBuf);
-    // lon: 142.0–142.9, lat: 11.0–11.9
+    // The coordinate vectors contain 64 values at 0.1° spacing.
     for (const p of pts) {
-      expect(p.lon).toBeGreaterThanOrEqual(141.9);
-      expect(p.lon).toBeLessThanOrEqual(143.0);
-      expect(p.lat).toBeGreaterThanOrEqual(10.9);
-      expect(p.lat).toBeLessThanOrEqual(12.0);
+      expect(p.lon).toBeGreaterThanOrEqual(141.99);
+      expect(p.lon).toBeLessThanOrEqual(148.31);
+      expect(p.lat).toBeGreaterThanOrEqual(10.99);
+      expect(p.lat).toBeLessThanOrEqual(17.31);
     }
   });
 
   it("extracts depth values from a 2D grid layout (lat×lon)", () => {
     const pts = parseNetCdf(ncBuf);
-    // Depth values in fixture range from 4050 m (min at [0,1]) to ~8950 m
+    // Valid depth values range from 4050 m (min at [0,1]) to 208750 m.
     const depths = pts.map((p) => p.depth);
     expect(Math.min(...depths)).toBeGreaterThan(0);
-    expect(Math.max(...depths)).toBeLessThan(20000);
+    expect(Math.max(...depths)).toBe(208750);
   });
 
   it("routes through parseUploadedFile dispatcher for .nc", async () => {

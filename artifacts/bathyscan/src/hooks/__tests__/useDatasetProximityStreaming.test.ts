@@ -20,13 +20,15 @@
  *   - Already-active datasets are not re-activated by onActivate
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { cleanup, renderHook, act } from "@testing-library/react";
 import {
   useDatasetProximityStreaming,
   type DatasetBbox,
 } from "@/hooks/useDatasetProximityStreaming";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useTerrainStore, MAX_ACTIVE_DATASETS } from "@/lib/terrainStore";
+
+const originalAutoEvict = useTerrainStore.getState().autoEvict;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -143,11 +145,19 @@ function addVisible(datasetId: string, source: "preset" | "user" = "preset") {
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
+  vi.restoreAllMocks();
+  useTerrainStore.setState({ autoEvict: originalAutoEvict });
   resetStores();
   vi.useFakeTimers();
 });
 
 afterEach(() => {
+  // Unmount hooks while fake timers are still installed so each hook's
+  // interval cleanup clears the timer it created.
+  cleanup();
+  vi.restoreAllMocks();
+  vi.clearAllTimers();
+  useTerrainStore.setState({ autoEvict: originalAutoEvict });
   vi.useRealTimers();
 });
 

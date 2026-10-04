@@ -22,49 +22,53 @@ export const POE_SETUP_SKILL_PATH = resolve(
 
 export const REQUIRED_POE_SETUP_GUIDANCE = [
   {
-    id: "lazy-client",
+    id: "model-registry",
     phrases: [
-      "Construct it lazily and memoize it in a server-only module.",
-      "Importing the module must not read or validate optional Poe configuration, construct a client, or throw because Poe is not configured.",
-      "operation boundary when Poe is first used.",
+      "Use only exact model IDs declared in the application's code-owned static Poe registry.",
+      "Production code, startup checks, health checks, setup flows, and administrator operations must never call Poe's full `GET /v1/models` catalogue",
+      "Every Poe probe, Poe primary route, Poe-model fallback, and Poe completion must fail closed before Poe transport when its exact model ID is absent from the code-owned registry or lacks the route's required capabilities.",
     ],
   },
   {
-    id: "preflight-boundary",
+    id: "explicit-probing",
     phrases: [
-      "an explicit startup preflight may call the same getter and fail startup",
-      "that preflight is an application decision, not a module-import side effect.",
+      "Probing remains optional, administrator-triggered, and bounded.",
+      "only enabled static-registry models relevant to an active route.",
+      "A probe cannot add a model, enable a capability, alter fallback ordering, or expand approved use automatically.",
+      "Bound probe model count, concurrency, request and aggregate deadlines, cancellation, retries, response size, and cost.",
+      "Never probe the full registry automatically at startup, deployment, health check, or ordinary request time.",
+    ],
+  },
+  {
+    id: "credential-names",
+    phrases: [
+      "1. Reuse the host application's existing Poe/provider configuration name.",
+      "2. Otherwise use `POE_API_KEY`.",
+      "3. Treat `POE_API_KEY2` only as an explicitly documented legacy name during a controlled migration.",
+      "Do not keep two active names without deterministic precedence and tests.",
+      "Store the value in Replit Secrets. Never hard-code, commit, log, return, place in a URL, expose to browser code, or ask the user to paste it into chat.",
+    ],
+  },
+  {
+    id: "import-safe-client",
+    phrases: [
+      "Optional Poe modules must be import-safe.",
+      "Read and validate configuration only when a Poe operation runs.",
+      "A required service may invoke the same getter from an explicit startup preflight; module import must not create a client or fail.",
     ],
   },
   {
     id: "protocol-boundary",
     phrases: [
-      "The OpenAI SDK in this guide is a caller for Poe's OpenAI-compatible `/v1` surface.",
-      "The legacy `/bot/` paths use Poe's bot-server protocol and SSE envelopes",
-      "for implementing a bot server that Poe calls, not for calling Poe models through the OpenAI SDK.",
+      "Do not set the OpenAI-compatible client's base URL to `https://api.poe.com/bot/`.",
+      "The `/bot/` protocol is for implementing a bot server that Poe calls, not for calling Poe models through `/v1`.",
     ],
   },
   {
-    id: "zero-completion-discovery",
+    id: "authorized-health-probes",
     phrases: [
-      "Ordinary application startup, deployment startup, readiness checks, health checks, and catalogue refreshes must send zero model-completion requests.",
-      "Catalogue discovery and live inference verification are separate operations.",
-    ],
-  },
-  {
-    id: "protected-verification",
-    phrases: [
-      "Live inference verification requires an explicit, authenticated and authorized administrator or operator action.",
-      "A single-model verification must have a fixed timeout and bounded retry policy.",
-    ],
-  },
-  {
-    id: "bounded-bulk-verification",
-    phrases: [
-      "restrict it to models actively used by application routing",
-      "model count, concurrency, attempts per model, per-request timeout, aggregate request count, and aggregate operation deadline.",
-      "Return safe partial or budget-limited results when a ceiling is reached.",
-      "Never scale probing directly with the size of the provider catalogue.",
+      "Health checks may perform a bounded request against an approved registry model only when explicitly authorized; they must never list models.",
+      "Live paid inference is an explicit, bounded, opt-in smoke test and must not be required by ordinary CI.",
     ],
   },
 ];
@@ -145,13 +149,6 @@ export function findPoeSetupContractProblems(skillText) {
   const problems = [];
   const normalized = normalizeWhitespace(skillText);
 
-  if (/\bPOE_API_KEY\b/.test(skillText)) {
-    problems.push("secret-name: obsolete POE_API_KEY reference");
-  }
-  if (!/\bPOE_API_KEY2\b/.test(skillText)) {
-    problems.push("secret-name: missing POE_API_KEY2 guidance");
-  }
-
   for (const contract of REQUIRED_POE_SETUP_GUIDANCE) {
     for (const phrase of contract.phrases) {
       if (!normalized.includes(normalizeWhitespace(phrase))) {
@@ -160,22 +157,24 @@ export function findPoeSetupContractProblems(skillText) {
     }
   }
 
-  const rawSdkSection = getSection(
+  const clientExampleSection = getSection(
     skillText,
-    "## 5. Raw SDK fallback",
-    "## 6. Discover live model IDs and capabilities",
+    "## 6. Keep the credential server-side",
+    "## 7. Use bounded HTTP and validated responses",
   );
-  if (!rawSdkSection) {
-    problems.push("raw-sdk-example: missing Raw SDK fallback section");
+  if (!clientExampleSection) {
+    problems.push("client-example: missing credential and client example section");
   } else {
-    const rawCode = getCodeBlocks(rawSdkSection).join("\n");
-    if (!/let\s+poeClient\s*:/.test(rawCode) ||
-        !/function\s+getPoeClient\s*\(/.test(rawCode) ||
-        !/if\s*\(\s*poeClient\s*\)\s*return\s+poeClient/.test(rawCode) ||
-        !/poeClient\s*=\s*new\s+OpenAI\s*\(/.test(rawCode)) {
-      problems.push("raw-sdk-example: missing approved lazy memoized client getter");
+    const exampleCode = getCodeBlocks(clientExampleSection).join("\n");
+    if (!/let\s+client\s*:\s*OpenAI\s*\|\s*undefined\s*;/.test(exampleCode) ||
+        !/function\s+getPoeClient\s*\(/.test(exampleCode) ||
+        !/if\s*\(\s*client\s*\)\s*return\s+client/.test(exampleCode) ||
+        !/client\s*=\s*new\s+OpenAI\s*\(/.test(exampleCode) ||
+        !/baseURL\s*:\s*["'`]https:\/\/api\.poe\.com\/v1["'`]/.test(exampleCode) ||
+        !/process\.env\.POE_API_KEY\b/.test(exampleCode)) {
+      problems.push("client-example: missing approved lazy memoized v1 client getter");
     }
-    problems.push(...findUnsafeRawSdkExamples(rawSdkSection));
+    problems.push(...findUnsafeRawSdkExamples(clientExampleSection));
   }
 
   for (const block of getCodeBlocks(skillText)) {

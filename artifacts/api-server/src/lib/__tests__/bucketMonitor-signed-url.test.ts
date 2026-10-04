@@ -16,9 +16,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // bucketMonitor doesn't fail in a unit-test environment.
 // ---------------------------------------------------------------------------
 vi.mock("@google-cloud/storage", () => ({
-  Storage: vi.fn().mockImplementation(() => ({
+  Storage: vi.fn().mockImplementation(function StorageMock() { return ({
     bucket: vi.fn().mockReturnValue({ file: vi.fn() }),
-  })),
+  }); }),
 }));
 
 vi.mock("@workspace/db", () => ({

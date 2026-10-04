@@ -16,7 +16,7 @@
 
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, act } from "@testing-library/react";
+import { cleanup, render, act } from "@testing-library/react";
 import { useOfflineStore } from "@/lib/offlineStore";
 
 // ── Hoisted mock values — must be declared before any vi.mock() call ──────────
@@ -134,7 +134,9 @@ describe("ClerkAuthTokenWirer — reconnect clears the offline banner", () => {
   });
 
   afterEach(() => {
+    cleanup();
     vi.useRealTimers();
+    vi.restoreAllMocks();
     resetOfflineStore();
   });
 
@@ -317,7 +319,9 @@ describe("ClerkAuthTokenWirer — null session guard (subscription inert)", () =
   });
 
   afterEach(() => {
+    cleanup();
     vi.useRealTimers();
+    vi.restoreAllMocks();
     // Restore session so other suites are unaffected.
     sessionRef.current = mockSession;
     resetOfflineStore();
@@ -331,7 +335,7 @@ describe("ClerkAuthTokenWirer — null session guard (subscription inert)", () =
       useOfflineStore.getState().setOfflineReadOnly(true);
     });
 
-    const spy = vi.spyOn(useOfflineStore.getState(), "setOfflineReadOnly");
+    const spy = vi.spyOn(useOfflineStore.getState(), "setOfflineReadOnly").mockClear();
 
     // Reconnect with null session — subscription was never registered.
     await act(async () => {
