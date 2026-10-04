@@ -109,7 +109,8 @@ export const GITHUB_CI_COVERAGE = {
   "check:skill-mirror-sync": {
     tokens: ["pnpm run check:skill-mirror-sync"],
   },
-  "check:failure-gate-zip": { tokens: ["pnpm run check:failure-gate-zip"] },
+  "check:failure-gate-v4-bundle": { tokens: ["pnpm run check:failure-gate-v4-bundle"] },
+  "check:skill-zip-retention": { tokens: ["pnpm run check:skill-zip-retention"] },
   "check:poe-setup-zip": { tokens: ["pnpm run check:poe-setup-zip"] },
   "check:port-authority-zip": { tokens: ["pnpm run check:port-authority-zip"] },
   "check:port-authority-heavy-zip": { tokens: ["pnpm run check:port-authority-heavy-zip"] },

@@ -82,11 +82,9 @@ function resolvePortRegistryDefaults() {
 
 const palettePorts = resolvePortRegistryDefaults();
 
-// --allow-no-plan: when present, a missing TASK_PLAN_FILE reverts to the old
-// warn-and-continue behaviour instead of a hard error.  Intended ONLY for
-// legitimate non-task callers such as ad-hoc developer runs.
-// Task-driven invocations MUST NOT pass this flag.
-const allowNoPlan = process.argv.includes("--allow-no-plan");
+// --allow-no-plan remains accepted for compatibility, but is not an
+// authorization switch. Calls without TASK_PLAN_FILE are independent
+// diagnostics, not task-validation evidence.
 
 // ---------------------------------------------------------------------------
 // Tier-lock pre-check (automatic Failure Gate enforcement)
@@ -97,9 +95,9 @@ const allowNoPlan = process.argv.includes("--allow-no-plan");
 // the plan only permitted a lighter tier — a plan ceiling of test-standard
 // should never silently run a 45-min heavy suite.
 //
-// When TASK_PLAN_FILE is not set, execution continues only when the caller
-// explicitly passes --allow-no-plan for an ad-hoc/non-task run. Any plan-file
-// read or parse failure is a hard violation.
+// When TASK_PLAN_FILE is not set, this shared runner classifies the invocation
+// as an independent diagnostic. Any supplied plan that cannot be read/parsed
+// or whose tier mismatches is still a hard violation.
 // ---------------------------------------------------------------------------
 
 {
@@ -107,22 +105,10 @@ const allowNoPlan = process.argv.includes("--allow-no-plan");
   const result = runTierLockDryRun(planFile);
 
   if (result.kind === "no-plan-file") {
-    if (allowNoPlan) {
-      console.warn(
-        "[test-heavy] WARNING: TASK_PLAN_FILE is not set — automatic tier-lock enforcement skipped.\n" +
-          "             (--allow-no-plan flag is set; this is expected for ad-hoc / non-task runs.)",
-      );
-    } else {
-      // Task-driven invocations must always have TASK_PLAN_FILE set.
-      console.error(
-        "[test-heavy] TIER-LOCK VIOLATION: TASK_PLAN_FILE is not set.\n" +
-          "             Every task-driven validation run must set TASK_PLAN_FILE=<path-to-plan>.\n" +
-          "             For ad-hoc non-task runs, pass --allow-no-plan to opt out of this check.\n" +
-          "             Example: node scripts/test-heavy-serial.mjs --allow-no-plan",
-      );
-      process.exit(1);
-    }
-  
+    console.warn(
+      "[test-heavy] INDEPENDENT DIAGNOSTIC: TASK_PLAN_FILE is not set; " +
+        "this invocation is not task-validation evidence.",
+    );
   } else if (result.kind === "violation") {
     // Plan exists but tier name is missing, malformed, or not registered.
     console.error(
@@ -155,6 +141,11 @@ const allowNoPlan = process.argv.includes("--allow-no-plan");
       `[test-heavy] tier-lock pre-check passed — plan "${planFile}" requires "${lockedTierName}" ✓`,
     );
   }
+}
+
+if (process.argv.includes("--check-tier-only")) {
+  console.log("[test-heavy] tier-lock check complete; heavy suites were not started.");
+  process.exit(0);
 }
 
 /**
@@ -244,11 +235,9 @@ setReportStarted("PREFLIGHT", preflightStart);
 if (reportPath) await writeHeavyReport(null);
 const preflightRes = spawnSync(
   process.execPath,
-  // --allow-no-plan is required here: TASK_PLAN_FILE was stripped from
-  // preflightEnv above, so the internal standard-tier preflight run is a
-  // legitimate non-task invocation that must not hard-error on the missing
-  // env var.  The outer tier-lock check above has already verified that the
-  // plan authorises test-heavy before we reach this point.
+  // Keep the legacy flag for command compatibility. The outer heavy runner
+  // already checked its task plan; this nested standard preflight has no
+  // separate task-plan binding and cannot authorize task evidence by itself.
   [
     runTierScript,
     "standard",

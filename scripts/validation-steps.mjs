@@ -78,8 +78,10 @@ export function getValidationSteps(logPrefix) {
     { name: "check:lock-skill-sync", resource: null, cmd: "pnpm run check:lock-skill-sync", tiers: FAST },
     // no resource: fixture-driven workspace source/projection/runtime-metadata contract; never writes .local/
     { name: "check:skill-mirror-sync", resource: null, cmd: "pnpm run check:skill-mirror-sync", tiers: FAST },
-    // no resource: binary-diff check, sub-second — catches stale failure-gate-skill.zip
-    { name: "check:failure-gate-zip", resource: null, cmd: "pnpm run check:failure-gate-zip", tiers: FAST },
+    // no resource: byte-level bundle check plus legacy-copy guard, sub-second
+    { name: "check:failure-gate-v4-bundle", resource: null, cmd: "pnpm run check:failure-gate-v4-bundle", tiers: FAST },
+    // no resource: current skill ZIPs must match canonical sources; private superseded copies expire after seven days
+    { name: "check:skill-zip-retention", resource: null, cmd: "pnpm run check:skill-zip-retention", tiers: FAST },
     { name: "check:api-route-schema-drift", resource: null, cmd: "pnpm run check:api-route-schema-drift", tiers: FAST },
     // no resource: route-test startup guard for catalog facade dependency drift
     { name: "check:catalog-facade-mocks", resource: null, cmd: "pnpm run check:catalog-facade-mocks", tiers: FAST },

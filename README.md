@@ -459,7 +459,7 @@ All routes are served under the `/api` prefix by the Express 5 server.
 | GET | `/healthz` | Health check |
 | GET | `/healthz/deep` | Deep health probe — checks DB, Poe, and AOOS subsystems |
 | GET | `/admin/bucket-monitor` | GCS dataset landing bucket processing summary |
-| GET | `/admin/skill/failure-gate` | Download the failure-gate skill zip with no-cache headers |
+| GET | `/admin/skill/failure-gate-v4` | Download the Failure Gate v4 bundle with no-cache headers |
 | GET | `/admin/large-datasets-diff` | Detect Large_Datasets files that have changed since last import |
 | GET | `/admin/users` | List user approval records (paginated) |
 | GET | `/admin/users/pending-count` | Count of users awaiting approval |

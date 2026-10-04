@@ -89,22 +89,6 @@ description = "Zipped SKILL.md for the Task Triage skill."
 logical_id = "96e9281f-34fd-48f6-8ff1-48505507269e"
 
 [[outputs]]
-id = "59L0NvQ1Aw5Kgz5LmyS5r"
-uri = "file://failure-gate-skill.zip"
-type = "unspecified"
-title = "Failure Gate SKILL.md"
-description = "Zipped SKILL.md for the Failure Gate skill."
-logical_id = "9db46845-e63a-4b97-9b59-68323c5688bb"
-
-[[outputs]]
-id = "iSzY6YJd8_VmiWOGIgVxd"
-uri = "file://exports/failure-gate.zip"
-type = "unspecified"
-title = "Failure Gate Skill (updated)"
-description = "Single SKILL.md at the root — rename the file to failure-gate/SKILL.md after extracting, or drop it straight into .agents/skills/failure-gate/."
-logical_id = "ca59ec5e-6ae8-430d-a263-55ad280bcf03"
-
-[[outputs]]
 id = "FSalpYkaizkimC0VKhG1z"
 uri = "file://exports/task-sorting.zip"
 type = "unspecified"
@@ -151,20 +135,6 @@ type = "unspecified"
 title = "Poe Setup Skill (ZIP)"
 description = "Standalone ZIP containing the canonical Poe Setup skill."
 logical_id = "a0df70f8-cb2a-4747-ac5a-5c8698ed3e9a"
-
-[[outputs]]
-id = "Z5MxuXGrVL1C8stjedZam"
-uri = "file://artifacts/bathyscan/public/failure-gate-skill.zip"
-type = "unspecified"
-title = "Failure Gate skill"
-description = "Canonical Failure Gate skill from .agents/skills, packaged as a ZIP download."
-logical_id = "9c568ec0-14cb-4b40-89e2-244525f24ee8"
-content_hash = "sha256:a703f15ebe31b990476d284f63a4d14fcbe5e66cf9b5e6de9ee9f6f6835e1304"
-size = 3854
-mtime_ms = 1787881448348
-storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:3cbc8e82-485c-4459-8b4c-d6abbd1a4049/9c568ec0-14cb-4b40-89e2-244525f24ee8/b5328020-1e94-4005-9a7f-c708d54446d8"
-storage_version_token = "1787888650782247"
-content_type = "application/octet-stream"
 
 [[outputs]]
 id = "A76dT5badLvnw6YJiflxW"
@@ -221,14 +191,6 @@ storage_version_token = "1788385772815347"
 content_type = "application/octet-stream"
 
 [[outputs]]
-id = "VcDmPiOcuHP3q1PILJicH"
-uri = "file://exports/failure-gate-skill.zip"
-type = "unspecified"
-title = "Failure Gate skill ZIP"
-description = "Direct download of the canonical Failure Gate skill packaged from .agents/skills/failure-gate/SKILL.md. The archived file was verified byte-for-byte against the canonical source."
-logical_id = "9a2ab87e-d90e-4c89-b85a-0fdcbe9075d6"
-
-[[outputs]]
 id = "fKLQihg4JTReJK-losZBr"
 uri = "file://exports/skill-compression-skill.zip"
 type = "unspecified"
@@ -277,15 +239,3 @@ description = "Direct download of the canonical Poe Setup skill packaged from .a
 logical_id = "d9580347-4af3-4495-84b5-6dfa52e931c7"
 
 [[outputs]]
-id = "Bew91zodZHtNbuPzVsv_-"
-uri = "file://exports/failure-gate-v4.zip"
-type = "unspecified"
-title = "Download revised Failure Gate v4 skill ZIP"
-description = "Contains SKILL.md, README.md, reference/implementation.md, and reference/acceptance.md."
-logical_id = "117f3600-33fc-4d93-948e-98fe11c4ba4f"
-content_hash = "sha256:52a9064a3629357acb22217587a5ba1de6bc91fd4a7ac6765ee96fd04bbd2ada"
-size = 22466
-mtime_ms = 1790561780528
-storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:3cbc8e82-485c-4459-8b4c-d6abbd1a4049/117f3600-33fc-4d93-948e-98fe11c4ba4f/c69a118c-9dac-4223-a31c-df43c42b7f3a"
-storage_version_token = "1790562080899723"
-content_type = "application/octet-stream"

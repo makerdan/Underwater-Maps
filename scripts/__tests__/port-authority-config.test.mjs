@@ -28,10 +28,15 @@ test(".replit keeps Project isolated from the four registered validation workflo
   for (const { name, command } of tierCommands) {
     const workflow = workflows.find((candidate) => candidate.name === name);
     assert.equal(workflow.isValidation, true, `${name} must be registered as a validation check`);
+    assert.doesNotMatch(
+      workflow.tasks[0]?.args ?? "",
+      /--allow-no-plan/,
+      `${name} must retain its existing independent invocation without a bypass flag`,
+    );
     assert.deepEqual(
       workflow.tasks,
       [{ task: "shell.exec", args: command }],
-      `${name} must run its registered command without launching other workflows`,
+      `${name} must keep its registered command unchanged`,
     );
   }
 });

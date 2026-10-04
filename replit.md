@@ -494,7 +494,7 @@ Every new sign-in is held as **pending** until an admin approves it (`requireApp
 | GET | `/healthz` | Health check |
 | GET | `/healthz/deep` | Deep health probe — checks DB, Poe, and AOOS subsystems |
 | GET | `/admin/bucket-monitor` | GCS dataset landing bucket processing summary |
-| GET | `/admin/skill/failure-gate` | Download the failure-gate skill zip with no-cache headers |
+| GET | `/admin/skill/failure-gate-v4` | Download the Failure Gate v4 bundle with no-cache headers |
 | GET | `/admin/large-datasets-diff` | Detect Large_Datasets files that have changed since last import |
 | GET | `/admin/users` | List user approval records (paginated) |
 | GET | `/admin/users/pending-count` | Count of users awaiting approval |
@@ -601,7 +601,9 @@ validation with `nohup`, `setsid`, background shells, or one-off port clones.
 ## Agent rules
 
 > **HARD GATE — applies before writing any plan.**
-> Read `.agents/skills/failure-gate-v4/SKILL.md` now if you have not already done so this session.
+> Read `.agents/skills/failure-gate-v4/SKILL.md` now if you have not already done so this session. This is the authoritative Failure Gate definition.
+
+> **Skill ZIP retention:** `.agents/skills/` is the source of truth. Keep current ZIPs synchronized with their canonical skill packages; move superseded skill ZIPs out of active download paths and retain them under `.agents/skill-zip-archive/` for seven days. Run `pnpm run skill-zips:reconcile` to synchronize packages and prune expired archives.
 
 
 ### Progress checkpoints
@@ -657,17 +659,18 @@ records never authorize an ignore. Put temporary limitations under
 `## Task-local environment observations`; they are not durable provenance.
 A passing retry means intermittency only, never pre-existing provenance.
 
-> **BUILD AGENT:** Set `TASK_PLAN_FILE` for every task-driven validation run.
+> **BUILD AGENT:** Run task validation through the checked plan-file route.
 > The plan's validation command is the ceiling; never escalate. Missing,
-> malformed, unreadable, or unparseable plan/tier data is a hard tier-lock
-> violation. Only an explicit `--allow-no-plan` on an ad-hoc/non-task run may
-> bypass a missing plan.
+> malformed, unreadable, or unparseable plan/tier data in that checked request
+> is a hard tier-lock violation. Unscoped shared-runner invocations are
+> independent diagnostics, not task-validation evidence; their missing plan is
+> not a bypass or authorization.
 >
 > For an assigned task, run `pnpm task:validate -- .local/tasks/<active-plan>.md`.
 > This managed entry point reads the tier from that plan and passes the exact
-> plan path as `TASK_PLAN_FILE` to the selected canonical tier. Do not start a
-> task's registered `test-*` workflow directly: those workflow commands do not
-> carry the active plan path. Ad-hoc checks use
+> plan path as `TASK_PLAN_FILE` to the selected canonical tier. Do not treat a
+> registered `test-*` workflow or direct tier command as task evidence: those
+> independent invocations do not carry the active plan path. Ad-hoc checks use
 > `node scripts/run-validation-ad-hoc.mjs <tier>` instead.
 
 `scripts/new-plan.mjs`, `scripts/check-failure-gate.mjs`, and the Failure Gate

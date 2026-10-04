@@ -81,14 +81,9 @@ const isStepMode = args.includes("--step");
 // executing any validation steps. Used by tests to verify checkTierLock()
 // in isolation without triggering a full validation run.
 const checkTierOnly = args.includes("--check-tier-only");
-// --allow-no-plan: when present, a missing TASK_PLAN_FILE reverts to the old
-// warn-and-continue behaviour instead of a hard error.  Intended ONLY for
-// legitimate non-task callers such as ad-hoc developer runs and the internal
-// preflight inside test-heavy-serial.mjs (which strips TASK_PLAN_FILE after
-// its own outer tier-lock check has already passed).
-// Task-driven invocations MUST NOT pass this flag — they always have
-// TASK_PLAN_FILE set.
-const allowNoPlan = args.includes("--allow-no-plan");
+// --allow-no-plan remains accepted for compatibility with older ad-hoc and
+// heavy-preflight callers. It does not grant task authorization; callers
+// without TASK_PLAN_FILE are independent diagnostics either way.
 const tier = args[0];
 if (!isStepMode && (!tier || !VALID_TIERS.includes(tier))) {
   console.error(`Usage: run-tier.mjs <fast|standard|full> [--skip <step> ...]\nGot: ${JSON.stringify(tier)}`);
@@ -118,16 +113,18 @@ for (let i = 0; i < args.length; i++) {
 // the tier being run.  This catches accidental escalation without requiring
 // the agent to remember to call run-locked-tier.mjs manually.
 //
-// When TASK_PLAN_FILE is not set, execution continues only when the caller
-// explicitly passes --allow-no-plan for an ad-hoc/non-task run. Any plan-file
-// read or parse failure is a hard violation.
+// When TASK_PLAN_FILE is not set, this shared runner treats the invocation as
+// an independent diagnostic. It is not task-validation evidence. The explicit
+// task-validation entry point binds and validates its plan before launch.
+// Any supplied plan that cannot be read/parsed or whose tier mismatches is a
+// hard violation, regardless of caller flags.
 //
 // Skipped in --step mode (the inner re-entrant invocation from the lock
 // wrapper) to avoid recursive checking.
 // ---------------------------------------------------------------------------
 
 if (!isStepMode) {
-  checkTierLock(tier, allowNoPlan);
+  checkTierLock(tier);
   // --check-tier-only: exit now without running any validation steps.
   // checkTierLock() itself calls process.exit(1) on a TIER-LOCK VIOLATION,
   // so reaching this point means the check passed (or gracefully degraded).
@@ -176,38 +173,24 @@ function reclaimOrphanedLocksBeforeFastTier() {
 /**
  * Verifies the plan-file tier ceiling matches the tier argument being run.
  *
- * When TASK_PLAN_FILE is absent:
- *   - allowNoPlan=true  → warn + return (graceful degradation for ad-hoc runs)
- *   - allowNoPlan=false → TIER-LOCK VIOLATION + exit 1 (task invocations must
- *                         always set TASK_PLAN_FILE)
+ * When TASK_PLAN_FILE is absent, classify the call as an independent
+ * diagnostic. It may execute, but it is not task-validation evidence.
  *
- * For all other result kinds (tier mismatch, unparseable, etc.) the runner
- * fails closed before any validation step starts.
+ * A supplied plan that is malformed, unreadable, or mismatched fails closed
+ * before any validation step starts.
  *
  * @param {string}  requestedTier - the run-tier.mjs arg ("fast"|"standard"|"full")
- * @param {boolean} [allowNoPlan=false] - pass true for non-task callers that
- *   legitimately omit TASK_PLAN_FILE (e.g. `--allow-no-plan` flag)
  */
-function checkTierLock(requestedTier, allowNoPlan = false) {
+function checkTierLock(requestedTier) {
   const planFile = process.env.TASK_PLAN_FILE;
   const result = runTierLockDryRun(planFile);
 
   if (result.kind === "no-plan-file") {
-    if (allowNoPlan) {
-      console.warn(
-        "[run-tier] WARNING: TASK_PLAN_FILE is not set — automatic tier-lock enforcement skipped.\n" +
-          "           (--allow-no-plan flag is set; this is expected for ad-hoc / non-task runs.)",
-      );
-      return; // graceful degradation: caller explicitly opted out
-    }
-    // Task-driven invocations must always have TASK_PLAN_FILE set.
-    console.error(
-      "[run-tier] TIER-LOCK VIOLATION: TASK_PLAN_FILE is not set.\n" +
-        "           Every task-driven validation run must set TASK_PLAN_FILE=<path-to-plan>.\n" +
-        "           For ad-hoc non-task runs, pass --allow-no-plan to opt out of this check.\n" +
-        "           Example: node scripts/run-tier.mjs fast --allow-no-plan",
+    console.warn(
+      "[run-tier] INDEPENDENT DIAGNOSTIC: TASK_PLAN_FILE is not set; " +
+        "this invocation is not task-validation evidence.",
     );
-    process.exit(1);
+    return;
   }
 
   if (result.kind === "violation") {

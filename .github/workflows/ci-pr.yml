@@ -132,8 +132,10 @@ jobs:
       - name: 'check:skill-mirror-sync'
         run: pnpm run check:skill-mirror-sync
 
-      - name: 'check:failure-gate-zip'
-        run: pnpm run check:failure-gate-zip
+      - name: 'check:failure-gate-v4-bundle'
+        run: pnpm run check:failure-gate-v4-bundle
+      - name: 'check:skill-zip-retention'
+        run: pnpm run check:skill-zip-retention
 
       - name: 'check:poe-setup-zip'
         run: pnpm run check:poe-setup-zip

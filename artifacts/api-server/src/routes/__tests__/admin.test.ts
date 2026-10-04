@@ -4,7 +4,7 @@
  * Covers:
  *   GET /admin/bucket-monitor      — auth-gated, admin-only bucket status
  *   GET /admin/large-datasets-diff — auth-gated, admin-only drift detection
- *   GET /admin/skill/failure-gate  — auth-gated, admin-only skill zip download
+ *   GET /admin/skill/failure-gate-v4 — auth-gated, admin-only v4 bundle download
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
@@ -87,14 +87,14 @@ vi.mock("node:fs", async (importOriginal) => {
     ...actual,
     existsSync: (...args: Parameters<typeof actual.existsSync>) => {
       const p = args[0];
-      if (typeof p === "string" && p.includes("failure-gate-skill.zip")) {
+      if (typeof p === "string" && p.includes("failure-gate-v4-skill.zip")) {
         return mockExistsSync(...args) as boolean;
       }
       return actual.existsSync(...args);
     },
     readFileSync: (...args: Parameters<typeof actual.readFileSync>) => {
       const p = args[0];
-      if (typeof p === "string" && p.includes("failure-gate-skill.zip")) {
+      if (typeof p === "string" && p.includes("failure-gate-v4-skill.zip")) {
         return mockReadFileSync(...args) as ReturnType<typeof actual.readFileSync>;
       }
       return (actual.readFileSync as (...a: typeof args) => ReturnType<typeof actual.readFileSync>)(...args);
@@ -315,7 +315,7 @@ describe("GET /admin/rate-limit/usage — query param validation", () => {
   });
 });
 
-describe("GET /admin/skill/failure-gate", () => {
+describe("GET /admin/skill/failure-gate-v4", () => {
   const FAKE_ZIP = Buffer.from("fake-zip-bytes");
 
   beforeEach(() => {
@@ -327,7 +327,7 @@ describe("GET /admin/skill/failure-gate", () => {
 
   it("returns 401 when the request is unauthenticated", async () => {
     vi.stubEnv("E2E_AUTH_BYPASS", "0");
-    const res = await request(makeApp()).get("/admin/skill/failure-gate");
+    const res = await request(makeApp()).get("/admin/skill/failure-gate-v4");
     expect(res.status).toBe(401);
   });
 
@@ -335,7 +335,7 @@ describe("GET /admin/skill/failure-gate", () => {
     vi.stubEnv("BUCKET_MONITOR_ADMIN", "0");
     vi.stubEnv("ADMIN_USER_IDS", "other_user");
     const res = await request(makeApp())
-      .get("/admin/skill/failure-gate")
+      .get("/admin/skill/failure-gate-v4")
       .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(403);
@@ -346,7 +346,7 @@ describe("GET /admin/skill/failure-gate", () => {
     vi.stubEnv("BUCKET_MONITOR_ADMIN", "1");
     mockExistsSync.mockReturnValue(false);
     const res = await request(makeApp())
-      .get("/admin/skill/failure-gate")
+      .get("/admin/skill/failure-gate-v4")
       .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(404);
@@ -356,7 +356,7 @@ describe("GET /admin/skill/failure-gate", () => {
   it("returns 200 with zip bytes and correct headers for admin", async () => {
     vi.stubEnv("BUCKET_MONITOR_ADMIN", "1");
     const res = await request(makeApp())
-      .get("/admin/skill/failure-gate")
+      .get("/admin/skill/failure-gate-v4")
       .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .buffer(true)
@@ -368,7 +368,7 @@ describe("GET /admin/skill/failure-gate", () => {
     expect(res.status).toBe(200);
     expect(res.headers["content-type"]).toMatch(/application\/zip/);
     expect(res.headers["cache-control"]).toBe("no-store");
-    expect(res.headers["content-disposition"]).toContain("failure-gate-skill.zip");
+    expect(res.headers["content-disposition"]).toContain("failure-gate-v4-skill.zip");
     expect(Buffer.from(res.body as Buffer).equals(FAKE_ZIP)).toBe(true);
   });
 });
@@ -431,8 +431,8 @@ describe("Admin 403 responses — ADMIN_USER_IDS not leaked in body", () => {
     expect(JSON.stringify(res.body)).not.toContain(SENTINEL);
   });
 
-  it("GET /admin/skill/failure-gate — sentinel absent from 403 body", async () => {
-    const res = await adminGet("/admin/skill/failure-gate");
+  it("GET /admin/skill/failure-gate-v4 — sentinel absent from 403 body", async () => {
+    const res = await adminGet("/admin/skill/failure-gate-v4");
     expect(res.status).toBe(403);
     expect(JSON.stringify(res.body)).not.toContain(SENTINEL);
   });

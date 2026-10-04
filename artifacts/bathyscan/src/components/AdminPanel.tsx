@@ -722,10 +722,10 @@ function SkillDownloadCard({ adminStatus }: { adminStatus: "loading" | "ok" | "f
   const handleDownload = async () => {
     setDownloadState("downloading");
     try {
-      const res = await authorizedFetch(`${basePath}/api/admin/skill/failure-gate`);
+      const res = await authorizedFetch(`${basePath}/api/admin/skill/failure-gate-v4`);
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
       const blob = await res.blob();
-      triggerBlobDownload(blob, "failure-gate-skill.zip");
+      triggerBlobDownload(blob, "failure-gate-v4-skill.zip");
       setDownloadState("idle");
     } catch {
       setDownloadState("error");
@@ -736,7 +736,7 @@ function SkillDownloadCard({ adminStatus }: { adminStatus: "loading" | "ok" | "f
 
   return (
     <div style={{ ...S.card, marginTop: 12 }}>
-      <div style={S.cardTitle}>Skill Download</div>
+      <div style={S.cardTitle}>Failure Gate v4 Download</div>
 
       {adminStatus === "forbidden" ? (
         <div style={S.note}>Admin access required to download skills.</div>
@@ -758,7 +758,7 @@ function SkillDownloadCard({ adminStatus }: { adminStatus: "loading" | "ok" | "f
               opacity: downloadState === "downloading" ? 0.6 : 1,
             }}
           >
-            {downloadState === "downloading" ? "DOWNLOADING…" : "DOWNLOAD FAILURE GATE SKILL"}
+            {downloadState === "downloading" ? "DOWNLOADING…" : "DOWNLOAD FAILURE GATE V4 BUNDLE"}
           </button>
           {downloadState === "error" && (
             <>

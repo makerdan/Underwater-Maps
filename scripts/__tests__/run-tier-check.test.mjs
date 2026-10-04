@@ -7,8 +7,8 @@
  * no actual validation steps execute, making this fast and self-contained.
  *
  * Covers:
- *   (a) TASK_PLAN_FILE absent + --allow-no-plan → warn + exit 0 (opt-out for non-task runs)
- *   (a2) TASK_PLAN_FILE absent, no --allow-no-plan → TIER-LOCK VIOLATION, exit 1
+ *   (a) TASK_PLAN_FILE absent → independent diagnostic warning + exit 0
+ *   (a2) legacy --allow-no-plan does not change independent classification
  *   (b) Plan has no ## Validation section → TIER-LOCK VIOLATION, exit 1 (the
  *       Failure Gate mandate requires every active plan to carry a Validation
  *       section; run-locked-tier --dry-run exits non-zero for missing sections)
@@ -105,36 +105,34 @@ function writePlanWithoutValidation(name) {
 // ── (a) TASK_PLAN_FILE absent ───────────────────────────────────────────────
 
 describe("TASK_PLAN_FILE absent", () => {
-  it("exits 1 with TIER-LOCK VIOLATION when --allow-no-plan is NOT passed", () => {
-    // Task-driven invocations always have TASK_PLAN_FILE set.  When it is
-    // missing and the caller has not explicitly opted out with --allow-no-plan,
-    // run-tier.mjs must hard-error so agents cannot bypass tier enforcement
-    // simply by omitting the env var.
+  it("runs as an independent diagnostic when no plan is supplied", () => {
+    // The shared runner remains usable by independent final-check callers.
+    // This result is not accepted as task-validation evidence.
     const result = runCheck("fast", undefined);
     assert.equal(
       result.status,
-      1,
-      `expected exit 1 (hard error) when TASK_PLAN_FILE is unset and --allow-no-plan absent, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+      0,
+      `expected exit 0 for an independent diagnostic without TASK_PLAN_FILE, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
     );
     assert.ok(
-      result.stderr.includes("TIER-LOCK VIOLATION") && result.stderr.includes("TASK_PLAN_FILE"),
-      `stderr should emit TIER-LOCK VIOLATION mentioning TASK_PLAN_FILE.\nstderr: ${result.stderr}`,
+      result.stderr.includes("INDEPENDENT DIAGNOSTIC") &&
+        result.stderr.includes("not task-validation evidence"),
+      `stderr should distinguish an independent diagnostic from task evidence.\nstderr: ${result.stderr}`,
     );
   });
 
-  it("warns and exits 0 when --allow-no-plan IS passed (opt-out for ad-hoc / non-task runs)", () => {
-    // Non-task callers (ad-hoc developer runs, test-heavy-serial.mjs internal
-    // preflight after stripping TASK_PLAN_FILE) pass --allow-no-plan to revert
-    // to the old warn-and-continue behaviour.
+  it("keeps the legacy flag non-authoritative", () => {
+    // The compatibility flag cannot turn an unscoped run into task evidence.
     const result = runCheck("fast", undefined, { allowNoPlan: true });
     assert.equal(
       result.status,
       0,
-      `expected exit 0 when TASK_PLAN_FILE is unset but --allow-no-plan is set, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+      `expected exit 0 for an independent diagnostic, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
     );
     assert.ok(
-      result.stderr.includes("WARNING") && result.stderr.includes("TASK_PLAN_FILE"),
-      `stderr should warn about missing TASK_PLAN_FILE.\nstderr: ${result.stderr}`,
+      result.stderr.includes("INDEPENDENT DIAGNOSTIC") &&
+        result.stderr.includes("not task-validation evidence"),
+      `stderr should not treat the flag as task authorization.\nstderr: ${result.stderr}`,
     );
   });
 });
@@ -154,7 +152,7 @@ describe("unparseable tier-lock output", () => {
 describe("registered validation entrypoints", () => {
   const tierCommands = VALIDATION_COMMANDS.filter(({ name }) => name.startsWith("test-"));
 
-  it("contains only the four canonical task-locked tiers", () => {
+  it("contains only the four canonical validation tiers", () => {
     assert.deepEqual(
       tierCommands.map(({ name }) => name),
       ["test-fast", "test-standard", "test-standard-plus", "test-heavy"],
@@ -162,11 +160,11 @@ describe("registered validation entrypoints", () => {
   });
 
   for (const { name, command } of tierCommands) {
-    it(`${name} remains fail-closed when TASK_PLAN_FILE is absent`, () => {
+    it(`${name} retains its canonical command without a bypass flag`, () => {
       assert.doesNotMatch(
         command,
         /--allow-no-plan/,
-        "registered task entrypoints must not opt out of tier enforcement",
+        "the managed task entry point supplies the checked plan; independent callers keep the original command",
       );
     });
   }
@@ -272,20 +270,21 @@ describe("heavy-runner internal preflight regression", () => {
     );
   });
 
-  it("run-tier standard WITHOUT TASK_PLAN_FILE and WITH --allow-no-plan exits 0 (simulates preflight after env-var strip)", () => {
+  it("run-tier standard WITHOUT TASK_PLAN_FILE remains an independent preflight diagnostic", () => {
     // After the outer heavy-runner tier-lock check passes, test-heavy-serial
-    // strips TASK_PLAN_FILE and passes --allow-no-plan before invoking the
-    // internal standard preflight.  This test confirms that the stripped-env
-    // call with --allow-no-plan is not blocked.
+    // strips TASK_PLAN_FILE before invoking the internal standard preflight.
+    // The shared runner permits that independent child invocation without
+    // changing the registered external caller.
     const result = runCheck("standard", undefined, { allowNoPlan: true });
     assert.equal(
       result.status,
       0,
-      `expected exit 0 when TASK_PLAN_FILE is absent (stripped env) + --allow-no-plan, got ${result.status}\nstderr: ${result.stderr}`,
+      `expected exit 0 when TASK_PLAN_FILE is absent, got ${result.status}\nstderr: ${result.stderr}`,
     );
     assert.ok(
-      result.stderr.includes("WARNING") && result.stderr.includes("TASK_PLAN_FILE"),
-      `stderr should warn about absent TASK_PLAN_FILE (graceful degradation).\nstderr: ${result.stderr}`,
+      result.stderr.includes("INDEPENDENT DIAGNOSTIC") &&
+        result.stderr.includes("not task-validation evidence"),
+      `stderr should classify the child preflight as independent.\nstderr: ${result.stderr}`,
     );
   });
 });
@@ -295,7 +294,7 @@ describe("heavy-runner internal preflight regression", () => {
 describe("tier mismatch — TIER-LOCK VIOLATION", () => {
   it("plan requires test-standard but tier=fast → exit 1 with TIER-LOCK VIOLATION", () => {
     const planFile = writePlanWithTier("plan-mismatch-standard-vs-fast.md", "test-standard");
-    const result = runCheck("fast", planFile);
+    const result = runCheck("fast", planFile, { allowNoPlan: true });
     assert.equal(
       result.status,
       1,

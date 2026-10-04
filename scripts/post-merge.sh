@@ -124,21 +124,50 @@ if ! pnpm run check:docs-stale 2>/dev/null; then
   fi
   echo "[post-merge] API route docs updated."
 fi
-# Guardrail: keep artifacts/bathyscan/public/failure-gate-skill.zip in sync
-# with .agents/skills/failure-gate-v4/SKILL.md. Auto-regenerate if stale and
-# commit the result so the check:failure-gate-zip step passes cleanly.
-if ! node scripts/check-failure-gate-zip-stale.mjs 2>/dev/null; then
-  echo "[post-merge] failure-gate-skill.zip was stale — regenerating and committing..."
-  rm -f artifacts/bathyscan/public/failure-gate-skill.zip
-  (cd .agents/skills && zip ../../artifacts/bathyscan/public/failure-gate-skill.zip failure-gate-v4/SKILL.md)
-  git add artifacts/bathyscan/public/failure-gate-skill.zip
+# Keep current ZIPs generated from .agents/skills in sync and retain
+# superseded versions privately for seven days. Older public/source copies are
+# never left available from their previous paths.
+if ! node scripts/skill-zip-retention.mjs reconcile; then
+  echo "[post-merge] Skill ZIP reconciliation failed." >&2
+  exit 1
+fi
+git add -u -- attached_assets exports downloads artifacts/bathyscan/public 2>/dev/null || true
+if [ -d ".agents/skill-zip-archive" ]; then
+  git add .agents/skill-zip-archive
+fi
+if ! git diff --cached --quiet; then
+  git config --local user.email "post-merge@replit.local" 2>/dev/null || true
+  git config --local user.name "BathyScan Post-Merge Bot" 2>/dev/null || true
+  git commit -m "chore: reconcile skill ZIP versions [post-merge]"
+fi
+# Guardrail: keep all distributed Failure Gate v4 bundles in sync with the
+# canonical complete package. Auto-regenerate if stale and commit the result.
+if ! node scripts/check-failure-gate-v4-bundle.mjs 2>/dev/null; then
+  echo "[post-merge] Failure Gate v4 bundle was stale — regenerating and committing..."
+  bundle_tmp=$(mktemp --suffix=.zip)
+  if ! (cd .agents/skills/failure-gate-v4 && zip -qr "$bundle_tmp" SKILL.md README.md reference); then
+    rm -f "$bundle_tmp"
+    echo "[post-merge] Could not package the canonical Failure Gate v4 bundle." >&2
+    exit 1
+  fi
+  cp "$bundle_tmp" artifacts/bathyscan/public/failure-gate-v4-skill.zip
+  cp "$bundle_tmp" exports/failure-gate-v4.zip
+  rm -f "$bundle_tmp"
+  rm -rf exports/failure-gate-v4
+  mkdir -p exports/failure-gate-v4
+  cp -a .agents/skills/failure-gate-v4/. exports/failure-gate-v4/
+  if ! node scripts/check-failure-gate-v4-bundle.mjs; then
+    echo "[post-merge] Failure Gate v4 package integrity check failed after regeneration." >&2
+    exit 1
+  fi
+  git add artifacts/bathyscan/public/failure-gate-v4-skill.zip exports/failure-gate-v4.zip exports/failure-gate-v4
   if ! git diff --cached --quiet; then
     # Set a fallback identity in case the runner has no global git config.
     git config --local user.email "post-merge@replit.local" 2>/dev/null || true
     git config --local user.name  "BathyScan Post-Merge Bot"  2>/dev/null || true
-    git commit -m "chore: sync failure-gate-skill.zip with failure-gate-v4 [post-merge]"
+    git commit -m "chore: sync Failure Gate v4 bundles [post-merge]"
   fi
-  echo "[post-merge] failure-gate-skill.zip updated."
+  echo "[post-merge] Failure Gate v4 bundle updated."
 fi
 # Guardrail: keep artifacts/bathyscan/public/poe-setup-skill.zip in sync
 # with .agents/skills/poe-setup/SKILL.md. Auto-regenerate if stale and

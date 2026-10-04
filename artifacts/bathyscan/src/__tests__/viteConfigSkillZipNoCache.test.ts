@@ -36,11 +36,11 @@ function makeRes() {
 }
 
 describe("skillZipNoCachePlugin middleware", () => {
-  it("sets Cache-Control: no-store for failure-gate-skill.zip", () => {
+  it("sets Cache-Control: no-store for failure-gate-v4-skill.zip", () => {
     const res = makeRes();
     let nextCalled = false;
     skillZipNoCacheMiddleware(
-      { url: "/failure-gate-skill.zip" },
+      { url: "/failure-gate-v4-skill.zip" },
       res,
       () => { nextCalled = true; },
     );
@@ -61,7 +61,7 @@ describe("skillZipNoCachePlugin middleware", () => {
   it("sets Cache-Control: no-store when a query string is present", () => {
     const res = makeRes();
     skillZipNoCacheMiddleware(
-      { url: "/failure-gate-skill.zip?v=abc123" },
+      { url: "/failure-gate-v4-skill.zip?v=abc123" },
       res,
       () => {},
     );
@@ -81,7 +81,7 @@ describe("skillZipNoCachePlugin middleware", () => {
   it("does NOT set Cache-Control for a path that contains but does not end with -skill.zip", () => {
     const res = makeRes();
     skillZipNoCacheMiddleware(
-      { url: "/failure-gate-skill.zip.bak" },
+      { url: "/failure-gate-v4-skill.zip.bak" },
       res,
       () => {},
     );
@@ -91,7 +91,7 @@ describe("skillZipNoCachePlugin middleware", () => {
   it("always calls next()", () => {
     let count = 0;
     const noop = makeRes();
-    skillZipNoCacheMiddleware({ url: "/failure-gate-skill.zip" }, noop, () => { count++; });
+    skillZipNoCacheMiddleware({ url: "/failure-gate-v4-skill.zip" }, noop, () => { count++; });
     skillZipNoCacheMiddleware({ url: "/logo.png" }, makeRes(), () => { count++; });
     expect(count).toBe(2);
   });

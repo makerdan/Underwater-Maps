@@ -1,0 +1,173 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "skills": [
+        "failure-gate-v4"
+      ],
+      "sha256": "04426a4dd06f72fa9cae976a1f8d02c033f701b72304b18c8238be767847b5f3",
+      "archivePath": ".agents/skill-zip-archive/failure-gate-v4/04426a4dd06f72fa9cae976a1f8d02c033f701b72304b18c8238be767847b5f3.zip",
+      "sources": [
+        "attached_assets/Failure_Gate_v4_(10.01.2026)_1790902511443.zip"
+      ],
+      "supersededAt": "2026-10-04T01:18:03.411Z",
+      "expiresAt": "2026-10-11T01:18:03.411Z"
+    },
+    {
+      "skills": [
+        "failure-gate-v4"
+      ],
+      "sha256": "52a9064a3629357acb22217587a5ba1de6bc91fd4a7ac6765ee96fd04bbd2ada",
+      "archivePath": ".agents/skill-zip-archive/failure-gate-v4/52a9064a3629357acb22217587a5ba1de6bc91fd4a7ac6765ee96fd04bbd2ada.zip",
+      "sources": [
+        "exports/failure-gate-v4.zip"
+      ],
+      "supersededAt": "2026-10-04T01:18:03.411Z",
+      "expiresAt": "2026-10-11T01:18:03.411Z"
+    },
+    {
+      "skills": [
+        "failure-gate-v4"
+      ],
+      "sha256": "ac08f1a68ba2f647420bcca1ca9f82b28fcfba9bea610364a6c5013d8b3aaef9",
+      "archivePath": ".agents/skill-zip-archive/failure-gate-v4/ac08f1a68ba2f647420bcca1ca9f82b28fcfba9bea610364a6c5013d8b3aaef9.zip",
+      "sources": [
+        "attached_assets/Failure_Gate_v4_(09.27.2026)_1790561592000.zip"
+      ],
+      "supersededAt": "2026-10-04T01:18:03.411Z",
+      "expiresAt": "2026-10-11T01:18:03.411Z"
+    },
+    {
+      "skills": [
+        "failure-gate-v4"
+      ],
+      "sha256": "ac3313c8fa8dc9b22e605297fc29ed5a2d8bb2d5d757933e837151f1114a6e7d",
+      "archivePath": ".agents/skill-zip-archive/failure-gate-v4/ac3313c8fa8dc9b22e605297fc29ed5a2d8bb2d5d757933e837151f1114a6e7d.zip",
+      "sources": [
+        "attached_assets/Failure_Gate_v4_(10.03.2026)_1791071265080.zip"
+      ],
+      "supersededAt": "2026-10-04T01:18:03.411Z",
+      "expiresAt": "2026-10-11T01:18:03.411Z"
+    },
+    {
+      "skills": [
+        "Poe-Setup"
+      ],
+      "sha256": "3add560626e3c83afb9aa611b74dadac66dfeaf0ecd21a4c996a02e4b517b78d",
+      "archivePath": ".agents/skill-zip-archive/Poe-Setup/3add560626e3c83afb9aa611b74dadac66dfeaf0ecd21a4c996a02e4b517b78d.zip",
+      "sources": [
+        "downloads/poe-setup-skill.zip"
+      ],
+      "supersededAt": "2026-10-04T01:18:03.411Z",
+      "expiresAt": "2026-10-11T01:18:03.411Z"
+    },
+    {
+      "skills": [
+        "Poe-Setup"
+      ],
+      "sha256": "ac18242d9e1fc54a19d14ad18bb25307e944d1429ade91bf7a4e86a63cc4cd0a",
+      "archivePath": ".agents/skill-zip-archive/Poe-Setup/ac18242d9e1fc54a19d14ad18bb25307e944d1429ade91bf7a4e86a63cc4cd0a.zip",
+      "sources": [
+        "exports/poe-setup-skill.zip"
+      ],
+      "supersededAt": "2026-10-04T01:18:03.411Z",
+      "expiresAt": "2026-10-11T01:18:03.411Z"
+    },
+    {
+      "skills": [
+        "task-sorting"
+      ],
+      "sha256": "61a6211b9a940f6e4f0f71b91e2166bcb8eb4c9a85f90a573741db75e7ac365a",
+      "archivePath": ".agents/skill-zip-archive/task-sorting/61a6211b9a940f6e4f0f71b91e2166bcb8eb4c9a85f90a573741db75e7ac365a.zip",
+      "sources": [
+        "exports/task-sorting.zip"
+      ],
+      "supersededAt": "2026-10-04T01:18:03.411Z",
+      "expiresAt": "2026-10-11T01:18:03.411Z"
+    },
+    {
+      "skills": [
+        "app-support-ops"
+      ],
+      "sha256": "57c5dff65453c37d8756acd5d8a65f669bf3d497ed525d91d16cbc804d268699",
+      "archivePath": ".agents/skill-zip-archive/app-support-ops/57c5dff65453c37d8756acd5d8a65f669bf3d497ed525d91d16cbc804d268699.zip",
+      "sources": [
+        "attached_assets/app-support-ops-skill_(08.29.2026)_1790902551214.zip"
+      ],
+      "supersededAt": "2026-10-04T01:18:55.672Z",
+      "expiresAt": "2026-10-11T01:18:55.672Z"
+    },
+    {
+      "skills": [
+        "failure-gate"
+      ],
+      "sha256": "40fe8b5f7778a2531c0546d4582b89ddf4dad3cec611b644fbe878ef628f2420",
+      "archivePath": ".agents/skill-zip-archive/failure-gate/40fe8b5f7778a2531c0546d4582b89ddf4dad3cec611b644fbe878ef628f2420.zip",
+      "sources": [
+        "exports/failure-gate-skill.zip"
+      ],
+      "supersededAt": "2026-10-04T01:18:55.672Z",
+      "expiresAt": "2026-10-11T01:18:55.672Z"
+    },
+    {
+      "skills": [
+        "failure-gate"
+      ],
+      "sha256": "a86b7d629e74f4b439d6315c97385ba818585f3afb9b6c8cc4df88d25478e937",
+      "archivePath": ".agents/skill-zip-archive/failure-gate/a86b7d629e74f4b439d6315c97385ba818585f3afb9b6c8cc4df88d25478e937.zip",
+      "sources": [
+        "artifacts/bathyscan/public/failure-gate-skill.zip"
+      ],
+      "supersededAt": "2026-10-04T01:18:55.672Z",
+      "expiresAt": "2026-10-11T01:18:55.672Z"
+    },
+    {
+      "skills": [
+        "failure-gate"
+      ],
+      "sha256": "c1fb77c3fb526b395df045c30e625503e4129f4544e724428033acc523e42677",
+      "archivePath": ".agents/skill-zip-archive/failure-gate/c1fb77c3fb526b395df045c30e625503e4129f4544e724428033acc523e42677.zip",
+      "sources": [
+        "exports/failure-gate.zip"
+      ],
+      "supersededAt": "2026-10-04T01:18:55.672Z",
+      "expiresAt": "2026-10-11T01:18:55.672Z"
+    },
+    {
+      "skills": [
+        "install-github-actions"
+      ],
+      "sha256": "7ca7d7db1a69fce1723ef3fe1d0ec5f2e822fe450eab5be3e635a8ba05666b93",
+      "archivePath": ".agents/skill-zip-archive/install-github-actions/7ca7d7db1a69fce1723ef3fe1d0ec5f2e822fe450eab5be3e635a8ba05666b93.zip",
+      "sources": [
+        "exports/install-github-actions-skill.zip"
+      ],
+      "supersededAt": "2026-10-04T01:18:55.672Z",
+      "expiresAt": "2026-10-11T01:18:55.672Z"
+    },
+    {
+      "skills": [
+        "skill-compression"
+      ],
+      "sha256": "77766bde3c93d3588d27e0d6ab165e16fc2e8bc9c327949c335e299742e33d58",
+      "archivePath": ".agents/skill-zip-archive/skill-compression/77766bde3c93d3588d27e0d6ab165e16fc2e8bc9c327949c335e299742e33d58.zip",
+      "sources": [
+        "exports/skill-compression-skill.zip"
+      ],
+      "supersededAt": "2026-10-04T01:18:55.672Z",
+      "expiresAt": "2026-10-11T01:18:55.672Z"
+    },
+    {
+      "skills": [
+        "skill-mirror-sync"
+      ],
+      "sha256": "d3ea35c1888edd1e7ab9cc0d13c3fabb5e0ced01a8fd518fe73851eb33e144a1",
+      "archivePath": ".agents/skill-zip-archive/skill-mirror-sync/d3ea35c1888edd1e7ab9cc0d13c3fabb5e0ced01a8fd518fe73851eb33e144a1.zip",
+      "sources": [
+        "exports/skill-mirror-sync-skill.zip"
+      ],
+      "supersededAt": "2026-10-04T01:18:55.672Z",
+      "expiresAt": "2026-10-11T01:18:55.672Z"
+    }
+  ]
+}
