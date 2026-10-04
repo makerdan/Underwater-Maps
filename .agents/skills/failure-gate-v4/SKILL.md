@@ -233,6 +233,9 @@ tier, or authorization fail before launch; never downgrade them to independent
 execution. Independent checks remain subject to their existing safety/access
 policy, preserve real failures/incomplete results, and cannot supply accepted
 required-tier evidence. Ordinary task work must still use its checked route.
+An existing plan-file-only ordinary-task route may remain in force until its
+approved cutover; preserving independent callers does not require changing or
+replacing that route. Do not run other task tiers using a fast-only task plan.
 Do not accept a direct pass, variable, or bypass flag as checked authorization.
 
 Preserve existing command strings, coverage, timeouts, resource locks, reports,

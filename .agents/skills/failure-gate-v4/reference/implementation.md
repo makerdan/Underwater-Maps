@@ -382,6 +382,17 @@ their own obligations retain those obligations; they cannot replace the task's
 required checked run. No platform-managed completion result is imported.
 This is procedural evidence separation, not resistance to deliberate local forgery.
 
+Compatibility is not a new ordinary-task route or enforcement cutover. If the
+host's verified plan-file interface is the sole approved route for ordinary task
+validation, leave that route, its exact plan bindings, and its change controls
+intact until the separately approved cutover. Keep independent callers working
+through their existing independent invocations; do not demand a task plan for
+them and do not convert their outputs into task evidence. Conversely, do not
+invoke other registered tiers under a plan approved for only one tier, or use
+independent checks to finish a task whose required-tier validation is blocked.
+This compatibility boundary does not waive separately applicable approval for
+an actual wrapper, runner, checker, or authorization-policy change.
+
 Regression verification must show existing independent invocations actually
 execute their intended checks without the optional variable, supported checked
 inputs work, invalid checked requests launch no checks, and evidence separation

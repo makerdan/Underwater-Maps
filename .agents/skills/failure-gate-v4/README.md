@@ -114,7 +114,10 @@ entry point. Invalid checked requests cannot fall back to independent execution;
 independent results cannot replace required-tier evidence. Preserve original
 commands, checks, timeouts, locks, reports, heavy-suite serialization, workflows,
 and Run-button definitions unless separately authorized to change them.
-The implementation reference and seven added acceptance cases cover this
+An existing plan-file-only ordinary-task route may remain unchanged until its
+approved cutover. Keeping independent checks working does not replace that route,
+authorize other tiers, or let independent results close a task.
+The implementation reference and added acceptance cases cover this
 project-neutral compatibility amendment; actual host execution remains unverified
 here. A host's separately planned original installation/confirmation must retain
 its pinned source and record this amendment as a later distinct change.
